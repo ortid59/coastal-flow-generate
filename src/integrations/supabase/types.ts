@@ -14,7 +14,285 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      allowed_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          note: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          note?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
+      campaigns: {
+        Row: {
+          campaign_date: string | null
+          campaign_name: string
+          canva_design_url: string | null
+          client_logo_url: string | null
+          client_name: string
+          created_at: string | null
+          flight_end: string | null
+          flight_start: string | null
+          id: string
+          margin_pct: number | null
+          markets: string[] | null
+          portal_token: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_date?: string | null
+          campaign_name: string
+          canva_design_url?: string | null
+          client_logo_url?: string | null
+          client_name: string
+          created_at?: string | null
+          flight_end?: string | null
+          flight_start?: string | null
+          id?: string
+          margin_pct?: number | null
+          markets?: string[] | null
+          portal_token?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_date?: string | null
+          campaign_name?: string
+          canva_design_url?: string | null
+          client_logo_url?: string | null
+          client_name?: string
+          created_at?: string | null
+          flight_end?: string | null
+          flight_start?: string | null
+          id?: string
+          margin_pct?: number | null
+          markets?: string[] | null
+          portal_token?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      jobs: {
+        Row: {
+          campaign_id: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          kind: string | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          artwork_due_date: string | null
+          billboard_photo_url: string | null
+          campaign_id: string | null
+          cpm: number | null
+          created_at: string | null
+          current_advertisers: number | null
+          end_date: string | null
+          facing: string | null
+          format: string | null
+          four_week_impressions: number | null
+          four_week_periods: number | null
+          id: string
+          included: boolean | null
+          inset_map_url: string | null
+          insight_bullets: string[] | null
+          install_cost: number | null
+          latitude: number | null
+          location_description: string | null
+          longitude: number | null
+          loop_length: string | null
+          low_res_flag: boolean | null
+          market: string | null
+          minimap_url: string | null
+          negotiated_rate_4wk: number | null
+          notes: string | null
+          production_cost: number | null
+          rate_4week: number | null
+          rate_card_4wk: number | null
+          read_direction: string | null
+          recommended: boolean | null
+          size: string | null
+          sov_pct: number | null
+          spot_length: string | null
+          start_date: string | null
+          total_cost: number | null
+          unit_count: number | null
+          unit_number: string
+          vendor: string | null
+          weekly_impressions: number | null
+        }
+        Insert: {
+          artwork_due_date?: string | null
+          billboard_photo_url?: string | null
+          campaign_id?: string | null
+          cpm?: number | null
+          created_at?: string | null
+          current_advertisers?: number | null
+          end_date?: string | null
+          facing?: string | null
+          format?: string | null
+          four_week_impressions?: number | null
+          four_week_periods?: number | null
+          id?: string
+          included?: boolean | null
+          inset_map_url?: string | null
+          insight_bullets?: string[] | null
+          install_cost?: number | null
+          latitude?: number | null
+          location_description?: string | null
+          longitude?: number | null
+          loop_length?: string | null
+          low_res_flag?: boolean | null
+          market?: string | null
+          minimap_url?: string | null
+          negotiated_rate_4wk?: number | null
+          notes?: string | null
+          production_cost?: number | null
+          rate_4week?: number | null
+          rate_card_4wk?: number | null
+          read_direction?: string | null
+          recommended?: boolean | null
+          size?: string | null
+          sov_pct?: number | null
+          spot_length?: string | null
+          start_date?: string | null
+          total_cost?: number | null
+          unit_count?: number | null
+          unit_number: string
+          vendor?: string | null
+          weekly_impressions?: number | null
+        }
+        Update: {
+          artwork_due_date?: string | null
+          billboard_photo_url?: string | null
+          campaign_id?: string | null
+          cpm?: number | null
+          created_at?: string | null
+          current_advertisers?: number | null
+          end_date?: string | null
+          facing?: string | null
+          format?: string | null
+          four_week_impressions?: number | null
+          four_week_periods?: number | null
+          id?: string
+          included?: boolean | null
+          inset_map_url?: string | null
+          insight_bullets?: string[] | null
+          install_cost?: number | null
+          latitude?: number | null
+          location_description?: string | null
+          longitude?: number | null
+          loop_length?: string | null
+          low_res_flag?: boolean | null
+          market?: string | null
+          minimap_url?: string | null
+          negotiated_rate_4wk?: number | null
+          notes?: string | null
+          production_cost?: number | null
+          rate_4week?: number | null
+          rate_card_4wk?: number | null
+          read_direction?: string | null
+          recommended?: boolean | null
+          size?: string | null
+          sov_pct?: number | null
+          spot_length?: string | null
+          start_date?: string | null
+          total_cost?: number | null
+          unit_count?: number | null
+          unit_number?: string
+          vendor?: string | null
+          weekly_impressions?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_files: {
+        Row: {
+          campaign_id: string | null
+          created_at: string | null
+          id: string
+          kind: string | null
+          original_name: string | null
+          storage_path: string
+          vendor: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string | null
+          id?: string
+          kind?: string | null
+          original_name?: string | null
+          storage_path: string
+          vendor?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string | null
+          id?: string
+          kind?: string | null
+          original_name?: string | null
+          storage_path?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_files_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
