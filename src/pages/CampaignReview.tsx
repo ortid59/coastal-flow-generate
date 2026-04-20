@@ -128,7 +128,8 @@ export default function CampaignReview() {
   const toggleField = async (unit: Unit, field: "recommended" | "included", value: boolean) => {
     // optimistic update
     setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: value } : u)));
-    const { error } = await supabase.from("units").update({ [field]: value }).eq("id", unit.id);
+    const patch = field === "recommended" ? { recommended: value } : { included: value };
+    const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
     if (error) {
       toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
       // revert
