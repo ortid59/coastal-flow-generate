@@ -1,0 +1,2 @@
+ALTER TABLE public.vendor_files DROP CONSTRAINT vendor_files_kind_check;
+ALTER TABLE public.vendor_files ADD CONSTRAINT vendor_files_kind_check CHECK (kind = ANY (ARRAY['excel'::text, 'pdf'::text, 'image'::text, 'logo'::text]));
