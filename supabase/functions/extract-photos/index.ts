@@ -42,6 +42,38 @@ type PdfImage = {
 // Locate every "stream ... endstream" object that is an /XObject Image.
 // We only support /DCTDecode (JPEG) reliably. PNG-from-FlateDecode requires
 // reconstruction; we skip it (rare in vendor billboard decks — they're JPEG).
+// Read width/height from a standalone JPEG file by scanning SOF markers.
+function readJpegDimensions(buf: Uint8Array): { width: number; height: number } {
+  // Must start with SOI (FFD8)
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return { width: 0, height: 0 };
+  let i = 2;
+  while (i < buf.length - 9) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    // Skip fill bytes
+    while (i < buf.length && buf[i] === 0xff) i++;
+    const marker = buf[i]; i++;
+    // Standalone markers (no length): D0-D9, 01
+    if (marker === 0xd9 || marker === 0xda) break;
+    if (marker >= 0xd0 && marker <= 0xd7) continue;
+    if (marker === 0x01) continue;
+    if (i + 1 >= buf.length) break;
+    const segLen = (buf[i] << 8) | buf[i + 1];
+    // SOF markers: C0–C3, C5–C7, C9–CB, CD–CF (skip C4, C8, CC)
+    const isSOF =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+    if (isSOF && i + 7 < buf.length) {
+      const height = (buf[i + 3] << 8) | buf[i + 4];
+      const width = (buf[i + 5] << 8) | buf[i + 6];
+      return { width, height };
+    }
+    i += segLen;
+  }
+  return { width: 0, height: 0 };
+}
+
 function extractJpegImages(buf: Uint8Array): PdfImage[] {
   const images: PdfImage[] = [];
   // Convert to latin1 string for header scanning; preserve byte indices 1:1.
