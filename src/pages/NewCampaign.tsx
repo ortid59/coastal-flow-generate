@@ -141,11 +141,21 @@ export default function NewCampaign() {
       }
 
       toast({ title: "Campaign created", description: "Parsing vendor Excel…" });
-      // Fire and forget — Review screen will poll status
+      // Fire and forget: parse excel, then extract photos. Review screen polls status.
       supabase.functions
         .invoke("parse-excel", { body: { campaign_id: campaignId } })
         .then(({ error }) => {
-          if (error) console.error("parse-excel invoke error", error);
+          if (error) {
+            console.error("parse-excel invoke error", error);
+            return;
+          }
+          if (pdfs.length > 0) {
+            supabase.functions
+              .invoke("extract-photos", { body: { campaign_id: campaignId } })
+              .then(({ error: pErr }) => {
+                if (pErr) console.error("extract-photos invoke error", pErr);
+              });
+          }
         });
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
