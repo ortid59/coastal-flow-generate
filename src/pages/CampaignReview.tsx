@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, MapPin, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Sparkles, AlertTriangle, RefreshCw, Image as ImageIcon, ImageOff, AlertCircle } from "lucide-react";
 
 type Campaign = {
   id: string;
@@ -27,6 +27,8 @@ type Unit = {
   total_cost: number | null;
   cpm: number | null;
   recommended: boolean | null;
+  billboard_photo_url: string | null;
+  low_res_flag: boolean | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -41,6 +43,7 @@ export default function CampaignReview() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [reparsing, setReparsing] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -48,7 +51,7 @@ export default function CampaignReview() {
       supabase.from("campaigns").select("id, client_name, campaign_name, status, markets").eq("id", id).single(),
       supabase
         .from("units")
-        .select("id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended")
+        .select("id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, billboard_photo_url, low_res_flag")
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
         .order("market", { ascending: true })
@@ -87,11 +90,29 @@ export default function CampaignReview() {
     }
   };
 
+  const extractPhotos = async () => {
+    if (!id) return;
+    setExtracting(true);
+    const { data, error } = await supabase.functions.invoke("extract-photos", { body: { campaign_id: id } });
+    setExtracting(false);
+    if (error) {
+      toast({ title: "Photo extraction failed", description: error.message, variant: "destructive" });
+    } else {
+      const s = (data as any)?.summary;
+      toast({
+        title: "Photos extracted",
+        description: s ? `${s.units_with_photo} units matched · ${s.low_res_count} low-res` : "Done",
+      });
+      load();
+    }
+  };
+
   const stats = useMemo(() => {
     const recs = units.filter((u) => u.recommended).length;
     const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
     const cost = units.reduce((s, u) => s + (u.total_cost ?? 0), 0);
-    return { total: units.length, recs, imps, cost };
+    const photos = units.filter((u) => u.billboard_photo_url).length;
+    return { total: units.length, recs, imps, cost, photos };
   }, [units]);
 
   if (loading) {
