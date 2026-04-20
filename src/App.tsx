@@ -10,6 +10,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import NewCampaign from "./pages/NewCampaign";
 import CampaignReview from "./pages/CampaignReview";
+import Settings from "./pages/Settings";
+import PortalGate from "./pages/PortalGate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
           <AppHeader />
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            {/* Public, password-gated proposal page */}
+            <Route path="/p/:token" element={<PortalGate />} />
             <Route
               path="/"
               element={
@@ -45,6 +49,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CampaignReview />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />
