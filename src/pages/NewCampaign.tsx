@@ -12,7 +12,8 @@ import { Link } from "react-router-dom";
 
 type Picked = { file: File };
 
-const MAX_FILES = 10;
+const MAX_EXCELS = 50;
+const MAX_PHOTOS = 50;
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB per file
 
 export default function NewCampaign() {
@@ -44,6 +45,7 @@ export default function NewCampaign() {
     current: Picked[],
     accept: (name: string) => boolean,
     label: string,
+    maxFiles: number,
   ) => {
     if (!list) return;
     const incoming = Array.from(list)
@@ -56,9 +58,9 @@ export default function NewCampaign() {
         return true;
       })
       .map((file) => ({ file }));
-    const next = [...current, ...incoming].slice(0, MAX_FILES);
-    if (current.length + incoming.length > MAX_FILES) {
-      toast({ title: `Limit ${MAX_FILES} ${label} files`, description: "Extra files were ignored." });
+    const next = [...current, ...incoming].slice(0, maxFiles);
+    if (current.length + incoming.length > maxFiles) {
+      toast({ title: `Limit ${maxFiles} ${label} files`, description: "Extra files were ignored." });
     }
     setter(next);
   };
@@ -113,7 +115,7 @@ export default function NewCampaign() {
       // Upload xlsx + pdf to private uploads bucket
       const total = excels.length + pdfs.length;
       let done = 0;
-      const records: Array<{ kind: "excel" | "pdf"; storage_path: string; original_name: string }> = [];
+      const records: Array<{ kind: "excel" | "pdf" | "image"; storage_path: string; original_name: string }> = [];
 
       for (const { file } of excels) {
         done += 1;
@@ -126,10 +128,12 @@ export default function NewCampaign() {
       for (const { file } of pdfs) {
         done += 1;
         setProgress(`Uploading file ${done}/${total} — ${file.name}`);
-        const path = `${campaignId}/pdf/${Date.now()}-${safeName(file.name)}`;
+        const isPdf = /\.pdf$/i.test(file.name);
+        const folder = isPdf ? "pdf" : "image";
+        const path = `${campaignId}/${folder}/${Date.now()}-${safeName(file.name)}`;
         const up = await supabase.storage.from("uploads").upload(path, file, { upsert: false });
         if (up.error) throw up.error;
-        records.push({ kind: "pdf", storage_path: path, original_name: file.name });
+        records.push({ kind: isPdf ? "pdf" : "image", storage_path: path, original_name: file.name });
       }
 
       if (records.length) {
@@ -249,22 +253,33 @@ export default function NewCampaign() {
         <aside className="space-y-6">
           <FileDropZone
             title="Vendor Excels"
-            hint="Up to 10 .xlsx files (Clear Channel / OutFront RFP Template)"
+            hint={`Up to ${MAX_EXCELS} .xlsx files (Clear Channel / OutFront RFP Template)`}
             icon={<FileSpreadsheet className="h-5 w-5" />}
             inputRef={xlsxRef}
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             files={excels}
-            onAdd={(fl) => addFiles(fl, setExcels, excels, (n) => n.endsWith(".xlsx"), "Excel")}
+            maxFiles={MAX_EXCELS}
+            onAdd={(fl) => addFiles(fl, setExcels, excels, (n) => n.endsWith(".xlsx"), "Excel", MAX_EXCELS)}
             onRemove={(i) => setExcels(excels.filter((_, idx) => idx !== i))}
           />
           <FileDropZone
-            title="Vendor photo PDFs"
-            hint="Up to 10 .pdf files"
+            title="Vendor photos"
+            hint={`Up to ${MAX_PHOTOS} files — .pdf, .jpg, .png, .webp`}
             icon={<FileText className="h-5 w-5" />}
             inputRef={pdfRef}
-            accept=".pdf,application/pdf"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
             files={pdfs}
-            onAdd={(fl) => addFiles(fl, setPdfs, pdfs, (n) => n.endsWith(".pdf"), "PDF")}
+            maxFiles={MAX_PHOTOS}
+            onAdd={(fl) =>
+              addFiles(
+                fl,
+                setPdfs,
+                pdfs,
+                (n) => /\.(pdf|jpe?g|png|webp)$/i.test(n),
+                "photo",
+                MAX_PHOTOS,
+              )
+            }
             onRemove={(i) => setPdfs(pdfs.filter((_, idx) => idx !== i))}
           />
         </aside>
@@ -299,6 +314,7 @@ function FileDropZone({
   accept,
   files,
   inputRef,
+  maxFiles,
   onAdd,
   onRemove,
 }: {
@@ -308,6 +324,7 @@ function FileDropZone({
   accept: string;
   files: Picked[];
   inputRef: React.RefObject<HTMLInputElement>;
+  maxFiles: number;
   onAdd: (fl: FileList | null) => void;
   onRemove: (index: number) => void;
 }) {
@@ -352,7 +369,7 @@ function FileDropZone({
       >
         <Upload className="h-5 w-5 text-muted-foreground" />
         <span className="font-medium text-foreground">Click or drag files here</span>
-        <span className="text-xs text-muted-foreground">{files.length} / {MAX_FILES} added</span>
+        <span className="text-xs text-muted-foreground">{files.length} / {maxFiles} added</span>
       </button>
 
       {files.length > 0 && (

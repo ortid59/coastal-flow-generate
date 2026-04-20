@@ -42,6 +42,38 @@ type PdfImage = {
 // Locate every "stream ... endstream" object that is an /XObject Image.
 // We only support /DCTDecode (JPEG) reliably. PNG-from-FlateDecode requires
 // reconstruction; we skip it (rare in vendor billboard decks — they're JPEG).
+// Read width/height from a standalone JPEG file by scanning SOF markers.
+function readJpegDimensions(buf: Uint8Array): { width: number; height: number } {
+  // Must start with SOI (FFD8)
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return { width: 0, height: 0 };
+  let i = 2;
+  while (i < buf.length - 9) {
+    if (buf[i] !== 0xff) { i++; continue; }
+    // Skip fill bytes
+    while (i < buf.length && buf[i] === 0xff) i++;
+    const marker = buf[i]; i++;
+    // Standalone markers (no length): D0-D9, 01
+    if (marker === 0xd9 || marker === 0xda) break;
+    if (marker >= 0xd0 && marker <= 0xd7) continue;
+    if (marker === 0x01) continue;
+    if (i + 1 >= buf.length) break;
+    const segLen = (buf[i] << 8) | buf[i + 1];
+    // SOF markers: C0–C3, C5–C7, C9–CB, CD–CF (skip C4, C8, CC)
+    const isSOF =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+    if (isSOF && i + 7 < buf.length) {
+      const height = (buf[i + 3] << 8) | buf[i + 4];
+      const width = (buf[i + 5] << 8) | buf[i + 6];
+      return { width, height };
+    }
+    i += segLen;
+  }
+  return { width: 0, height: 0 };
+}
+
 function extractJpegImages(buf: Uint8Array): PdfImage[] {
   const images: PdfImage[] = [];
   // Convert to latin1 string for header scanning; preserve byte indices 1:1.
@@ -212,9 +244,8 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } },
   );
 
-  const token = authHeader.replace("Bearer ", "");
-  const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
-  if (authErr || !claims?.claims) {
+  const { data: userData, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !userData?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -253,13 +284,15 @@ Deno.serve(async (req) => {
     if (uErr) throw uErr;
     if (!units || units.length === 0) throw new Error("No units to attach photos to. Parse the Excel first.");
 
-    const { data: pdfFiles, error: fErr } = await supabase
+    const { data: vendorFiles, error: fErr } = await supabase
       .from("vendor_files")
-      .select("id, storage_path, original_name")
+      .select("id, storage_path, original_name, kind")
       .eq("campaign_id", campaignId)
-      .eq("kind", "pdf");
+      .in("kind", ["pdf", "image"]);
     if (fErr) throw fErr;
-    if (!pdfFiles || pdfFiles.length === 0) throw new Error("No PDF files uploaded for this campaign.");
+    if (!vendorFiles || vendorFiles.length === 0) {
+      throw new Error("No PDF or image files uploaded for this campaign.");
+    }
 
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
@@ -273,7 +306,7 @@ Deno.serve(async (req) => {
       low_res_count: 0,
     };
 
-    for (const f of pdfFiles) {
+    for (const f of vendorFiles) {
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
         .download(f.storage_path);
@@ -283,10 +316,36 @@ Deno.serve(async (req) => {
       }
       const bytes = new Uint8Array(await blob.arrayBuffer());
 
-      // Raw JPEG extraction
+      // Direct image upload — match purely by filename → unit number
+      if (f.kind === "image") {
+        const fileUnit = findUnitInFilename(f.original_name ?? "", unitNumbers);
+        if (!fileUnit) {
+          summary.pdfs.push({
+            name: f.original_name ?? f.storage_path,
+            pages: 0,
+            images: 1,
+            matched_units: 0,
+          });
+          continue;
+        }
+        const ext: "jpg" | "png" =
+          /\.png$/i.test(f.original_name ?? "") ? "png" : "jpg";
+        const dims = ext === "jpg" ? readJpegDimensions(bytes) : { width: 0, height: 0 };
+        considerImage(bestForUnit, fileUnit, {
+          bytes, ext, width: dims.width, height: dims.height, page: 0,
+        });
+        summary.pdfs.push({
+          name: f.original_name ?? f.storage_path,
+          pages: 0,
+          images: 1,
+          matched_units: 1,
+        });
+        continue;
+      }
+
+      // PDF path
       const rawImages = extractJpegImages(bytes);
 
-      // unpdf for per-page text + per-page image counts
       let perPageText: string[] = [];
       let perPageCounts: number[] = [];
       let pageCount = 0;
