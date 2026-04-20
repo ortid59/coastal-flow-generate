@@ -1,13 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings as SettingsIcon } from "lucide-react";
 import brand from "@/config/brand.json";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
   const location = useLocation();
-  const isPortal = location.pathname.startsWith("/portal");
+  // Hide on portal/public proposal pages
+  const isPortal = location.pathname.startsWith("/portal") || location.pathname.startsWith("/p/");
 
   if (isPortal) return null;
 
@@ -24,8 +25,14 @@ export function AppHeader() {
           </div>
         </Link>
         {user && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/settings" title="Team access">
+                <SettingsIcon className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">Team</span>
+              </Link>
+            </Button>
             <Button variant="ghost" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4" />
               <span className="ml-2 hidden sm:inline">Sign out</span>

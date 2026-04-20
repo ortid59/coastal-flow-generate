@@ -3,8 +3,22 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, MapPin, Sparkles, AlertTriangle, RefreshCw, Image as ImageIcon, ImageOff, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  MapPin,
+  Sparkles,
+  AlertTriangle,
+  RefreshCw,
+  Image as ImageIcon,
+  ImageOff,
+  AlertCircle,
+  Share2,
+} from "lucide-react";
+import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
+import { SharePortalDialog } from "@/components/SharePortalDialog";
 
 type Campaign = {
   id: string;
@@ -27,6 +41,7 @@ type Unit = {
   total_cost: number | null;
   cpm: number | null;
   recommended: boolean | null;
+  included: boolean | null;
   billboard_photo_url: string | null;
   low_res_flag: boolean | null;
 };
@@ -44,6 +59,7 @@ export default function CampaignReview() {
   const [loading, setLoading] = useState(true);
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -51,7 +67,9 @@ export default function CampaignReview() {
       supabase.from("campaigns").select("id, client_name, campaign_name, status, markets").eq("id", id).single(),
       supabase
         .from("units")
-        .select("id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, billboard_photo_url, low_res_flag")
+        .select(
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag",
+        )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
         .order("market", { ascending: true })
@@ -107,12 +125,25 @@ export default function CampaignReview() {
     }
   };
 
+  const toggleField = async (unit: Unit, field: "recommended" | "included", value: boolean) => {
+    // optimistic update
+    setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: value } : u)));
+    const patch = field === "recommended" ? { recommended: value } : { included: value };
+    const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
+    if (error) {
+      toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
+      // revert
+      setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: !value } : u)));
+    }
+  };
+
   const stats = useMemo(() => {
-    const recs = units.filter((u) => u.recommended).length;
-    const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-    const cost = units.reduce((s, u) => s + (u.total_cost ?? 0), 0);
-    const photos = units.filter((u) => u.billboard_photo_url).length;
-    return { total: units.length, recs, imps, cost, photos };
+    const included = units.filter((u) => u.included !== false);
+    const recs = included.filter((u) => u.recommended).length;
+    const imps = included.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+    const cost = included.reduce((s, u) => s + (u.total_cost ?? 0), 0);
+    const photos = included.filter((u) => u.billboard_photo_url).length;
+    return { total: units.length, included: included.length, recs, imps, cost, photos };
   }, [units]);
 
   if (loading) {
@@ -143,7 +174,7 @@ export default function CampaignReview() {
             </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={campaign?.status ?? "draft"} />
           <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
@@ -152,6 +183,14 @@ export default function CampaignReview() {
           <Button variant="outline" size="sm" onClick={reparse} disabled={reparsing || campaign?.status === "parsing"}>
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-parse
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setShareOpen(true)}
+            disabled={units.length === 0}
+            className="bg-gradient-hero hover:opacity-95"
+          >
+            <Share2 className="h-4 w-4" /> Share with client
           </Button>
         </div>
       </header>
@@ -179,12 +218,18 @@ export default function CampaignReview() {
       ) : (
         <>
           <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Stat label="Units" value={String(stats.total)} />
+            <Stat label="Units in proposal" value={`${stats.included} / ${stats.total}`} />
             <Stat label="Recommended" value={String(stats.recs)} />
-            <Stat label="Photos matched" value={`${stats.photos} / ${stats.total}`} />
+            <Stat label="Photos matched" value={`${stats.photos} / ${stats.included}`} />
             <Stat label="4-Week Impressions" value={fmtNum(stats.imps)} />
             <Stat label="Total Cost" value={fmtMoney(stats.cost)} />
           </section>
+
+          <p className="mb-3 text-xs text-muted-foreground">
+            Toggle <span className="font-medium text-foreground">Include</span> to add/remove a unit from the proposal.
+            Toggle <span className="font-medium text-foreground">Recommend</span> to feature it as a hero card on the
+            client page.
+          </p>
 
           <div className="surface-card overflow-hidden">
             <div className="overflow-x-auto">
@@ -199,72 +244,109 @@ export default function CampaignReview() {
                     <th className="px-4 py-3 text-right">4wk Imp</th>
                     <th className="px-4 py-3 text-right">Total</th>
                     <th className="px-4 py-3 text-right">CPM</th>
+                    <th className="px-4 py-3 text-center">Include</th>
+                    <th className="px-4 py-3 text-center">Recommend</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {units.map((u) => (
-                    <tr key={u.id} className={u.recommended ? "bg-success/5" : ""}>
-                      <td className="px-4 py-3 align-top">
-                        {u.billboard_photo_url ? (
-                          <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
-                            <img
-                              src={u.billboard_photo_url}
-                              alt={`Unit ${u.unit_number}`}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                            {u.low_res_flag && (
-                              <span
-                                title="Low-resolution photo"
-                                className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
-                              >
-                                <AlertCircle className="h-3 w-3" />
-                              </span>
+                  {units.map((u) => {
+                    const excluded = u.included === false;
+                    return (
+                      <tr key={u.id} className={`${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""}`}>
+                        <td className="px-4 py-3 align-top">
+                          <div className="space-y-2">
+                            {u.billboard_photo_url ? (
+                              <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
+                                <img
+                                  src={u.billboard_photo_url}
+                                  alt={`Unit ${u.unit_number}`}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                                {u.low_res_flag && (
+                                  <span
+                                    title="Low-resolution photo"
+                                    className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
+                                  >
+                                    <AlertCircle className="h-3 w-3" />
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                <ImageOff className="h-4 w-4" />
+                              </div>
+                            )}
+                            {id && (
+                              <UnitPhotoUpload
+                                campaignId={id}
+                                unitId={u.id}
+                                unitNumber={u.unit_number}
+                                onUploaded={load}
+                              />
                             )}
                           </div>
-                        ) : (
-                          <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                            <ImageOff className="h-4 w-4" />
+                        </td>
+                        <td className="px-4 py-3 align-top font-medium">
+                          <div className="flex items-center gap-2">
+                            {u.unit_number}
+                            {u.recommended && (
+                              <Badge className="bg-success/15 text-success border border-success/30 gap-1">
+                                <Sparkles className="h-3 w-3" /> Rec
+                              </Badge>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top font-medium">
-                        <div className="flex items-center gap-2">
-                          {u.unit_number}
-                          {u.recommended && (
-                            <Badge className="bg-success/15 text-success border border-success/30 gap-1">
-                              <Sparkles className="h-3 w-3" /> Rec
-                            </Badge>
+                          <div className="text-xs text-muted-foreground">{u.vendor}</div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
+                        <td className="px-4 py-3 align-top">
+                          <div>{u.format ?? "—"}</div>
+                          <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
+                        </td>
+                        <td className="px-4 py-3 align-top max-w-md">
+                          {u.insight_bullets && u.insight_bullets.length > 1 ? (
+                            <ul className="list-disc pl-4 space-y-0.5">
+                              {u.insight_bullets.map((b, i) => (
+                                <li key={i}>{b}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span>{u.location_description ?? "—"}</span>
                           )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{u.vendor}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
-                      <td className="px-4 py-3 align-top">
-                        <div>{u.format ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top max-w-md">
-                        {u.insight_bullets && u.insight_bullets.length > 1 ? (
-                          <ul className="list-disc pl-4 space-y-0.5">
-                            {u.insight_bullets.map((b, i) => (
-                              <li key={i}>{b}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span>{u.location_description ?? "—"}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
-                      <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
-                      <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
+                        <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
+                        <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
+                        <td className="px-4 py-3 align-top text-center">
+                          <Switch
+                            checked={u.included !== false}
+                            onCheckedChange={(v) => toggleField(u, "included", v)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-top text-center">
+                          <Switch
+                            checked={!!u.recommended}
+                            onCheckedChange={(v) => toggleField(u, "recommended", v)}
+                            disabled={excluded}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         </>
+      )}
+
+      {campaign && (
+        <SharePortalDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          campaignId={campaign.id}
+          campaignName={campaign.campaign_name}
+        />
       )}
     </main>
   );

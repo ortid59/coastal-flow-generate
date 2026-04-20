@@ -45,6 +45,8 @@ export type Database = {
           id: string
           margin_pct: number | null
           markets: string[] | null
+          portal_password_hash: string | null
+          portal_password_set_at: string | null
           portal_token: string | null
           status: string | null
           user_id: string
@@ -61,6 +63,8 @@ export type Database = {
           id?: string
           margin_pct?: number | null
           markets?: string[] | null
+          portal_password_hash?: string | null
+          portal_password_set_at?: string | null
           portal_token?: string | null
           status?: string | null
           user_id: string
@@ -77,6 +81,8 @@ export type Database = {
           id?: string
           margin_pct?: number | null
           markets?: string[] | null
+          portal_password_hash?: string | null
+          portal_password_set_at?: string | null
           portal_token?: string | null
           status?: string | null
           user_id?: string
@@ -298,7 +304,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_add_allowed_user: {
+        Args: { _email: string; _note?: string }
+        Returns: undefined
+      }
+      admin_remove_allowed_user: {
+        Args: { _email: string }
+        Returns: undefined
+      }
+      is_allowed_admin: { Args: never; Returns: boolean }
+      revoke_campaign_portal: {
+        Args: { _campaign_id: string }
+        Returns: undefined
+      }
+      set_campaign_portal_password: {
+        Args: { _campaign_id: string; _password: string }
+        Returns: string
+      }
+      verify_portal_password: {
+        Args: { _password: string; _token: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
