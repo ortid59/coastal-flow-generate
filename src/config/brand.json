@@ -1,0 +1,14 @@
+{
+  "name": "Coastal Maverick",
+  "colors": {
+    "navy": "#0D1B3E",
+    "softBlue": "#D9E8F5",
+    "gold": "#D4A437",
+    "darkGray": "#2F3640",
+    "offWhite": "#F7F9FC"
+  },
+  "fonts": {
+    "heading": "Montserrat",
+    "body": "Inter"
+  }
+}

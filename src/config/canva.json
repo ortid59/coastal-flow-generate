@@ -1,0 +1,9 @@
+{
+  "template_design_id": "PLACEHOLDER_TEMPLATE_ID",
+  "layout_ids": {
+    "cover": "PLACEHOLDER_COVER_LAYOUT",
+    "market_section": "PLACEHOLDER_MARKET_LAYOUT",
+    "unit_card": "PLACEHOLDER_UNIT_LAYOUT",
+    "summary": "PLACEHOLDER_SUMMARY_LAYOUT"
+  }
+}
