@@ -37,10 +37,11 @@ export default function Auth() {
     setSending(false);
 
     if (error) {
-      // Allowlist trigger raises a clear message — surface it cleanly.
-      const msg = /allowlist/i.test(error.message)
-        ? "This email isn't on the Coastal Maverick allowlist. Contact Heather to request access."
-        : error.message;
+      // Allowlist trigger or disabled-signup blocks unknown emails.
+      const msg =
+        /allowlist|signups? not allowed|disabled/i.test(error.message)
+          ? "This email isn't authorized. Ask the Coastal Maverick team to add you."
+          : error.message;
       toast({ title: "Couldn't send sign-in link", description: msg, variant: "destructive" });
       return;
     }
