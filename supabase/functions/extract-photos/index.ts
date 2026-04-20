@@ -252,13 +252,15 @@ Deno.serve(async (req) => {
     if (uErr) throw uErr;
     if (!units || units.length === 0) throw new Error("No units to attach photos to. Parse the Excel first.");
 
-    const { data: pdfFiles, error: fErr } = await supabase
+    const { data: vendorFiles, error: fErr } = await supabase
       .from("vendor_files")
-      .select("id, storage_path, original_name")
+      .select("id, storage_path, original_name, kind")
       .eq("campaign_id", campaignId)
-      .eq("kind", "pdf");
+      .in("kind", ["pdf", "image"]);
     if (fErr) throw fErr;
-    if (!pdfFiles || pdfFiles.length === 0) throw new Error("No PDF files uploaded for this campaign.");
+    if (!vendorFiles || vendorFiles.length === 0) {
+      throw new Error("No PDF or image files uploaded for this campaign.");
+    }
 
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
@@ -272,7 +274,7 @@ Deno.serve(async (req) => {
       low_res_count: 0,
     };
 
-    for (const f of pdfFiles) {
+    for (const f of vendorFiles) {
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
         .download(f.storage_path);
@@ -282,10 +284,36 @@ Deno.serve(async (req) => {
       }
       const bytes = new Uint8Array(await blob.arrayBuffer());
 
-      // Raw JPEG extraction
+      // Direct image upload — match purely by filename → unit number
+      if (f.kind === "image") {
+        const fileUnit = findUnitInFilename(f.original_name ?? "", unitNumbers);
+        if (!fileUnit) {
+          summary.pdfs.push({
+            name: f.original_name ?? f.storage_path,
+            pages: 0,
+            images: 1,
+            matched_units: 0,
+          });
+          continue;
+        }
+        const ext: "jpg" | "png" =
+          /\.png$/i.test(f.original_name ?? "") ? "png" : "jpg";
+        const dims = ext === "jpg" ? readJpegDimensions(bytes) : { width: 0, height: 0 };
+        considerImage(bestForUnit, fileUnit, {
+          bytes, ext, width: dims.width, height: dims.height, page: 0,
+        });
+        summary.pdfs.push({
+          name: f.original_name ?? f.storage_path,
+          pages: 0,
+          images: 1,
+          matched_units: 1,
+        });
+        continue;
+      }
+
+      // PDF path
       const rawImages = extractJpegImages(bytes);
 
-      // unpdf for per-page text + per-page image counts
       let perPageText: string[] = [];
       let perPageCounts: number[] = [];
       let pageCount = 0;
