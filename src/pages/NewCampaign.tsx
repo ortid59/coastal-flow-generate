@@ -140,7 +140,13 @@ export default function NewCampaign() {
         if (vfErr) throw vfErr;
       }
 
-      toast({ title: "Campaign created", description: "Files uploaded. Parsing comes next." });
+      toast({ title: "Campaign created", description: "Parsing vendor Excel…" });
+      // Fire and forget — Review screen will poll status
+      supabase.functions
+        .invoke("parse-excel", { body: { campaign_id: campaignId } })
+        .then(({ error }) => {
+          if (error) console.error("parse-excel invoke error", error);
+        });
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
       console.error(err);
