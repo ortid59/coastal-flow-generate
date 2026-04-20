@@ -145,6 +145,10 @@ export default function CampaignReview() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={campaign?.status ?? "draft"} />
+          <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
+            {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+            Extract photos
+          </Button>
           <Button variant="outline" size="sm" onClick={reparse} disabled={reparsing || campaign?.status === "parsing"}>
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-parse
@@ -174,9 +178,10 @@ export default function CampaignReview() {
         </div>
       ) : (
         <>
-          <section className="mb-6 grid gap-4 sm:grid-cols-4">
+          <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Stat label="Units" value={String(stats.total)} />
             <Stat label="Recommended" value={String(stats.recs)} />
+            <Stat label="Photos matched" value={`${stats.photos} / ${stats.total}`} />
             <Stat label="4-Week Impressions" value={fmtNum(stats.imps)} />
             <Stat label="Total Cost" value={fmtMoney(stats.cost)} />
           </section>
@@ -186,6 +191,7 @@ export default function CampaignReview() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
+                    <th className="px-4 py-3 text-left">Photo</th>
                     <th className="px-4 py-3 text-left">Unit</th>
                     <th className="px-4 py-3 text-left">Market</th>
                     <th className="px-4 py-3 text-left">Format</th>
@@ -198,6 +204,30 @@ export default function CampaignReview() {
                 <tbody className="divide-y divide-border">
                   {units.map((u) => (
                     <tr key={u.id} className={u.recommended ? "bg-success/5" : ""}>
+                      <td className="px-4 py-3 align-top">
+                        {u.billboard_photo_url ? (
+                          <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
+                            <img
+                              src={u.billboard_photo_url}
+                              alt={`Unit ${u.unit_number}`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                            {u.low_res_flag && (
+                              <span
+                                title="Low-resolution photo"
+                                className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
+                              >
+                                <AlertCircle className="h-3 w-3" />
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                            <ImageOff className="h-4 w-4" />
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 align-top font-medium">
                         <div className="flex items-center gap-2">
                           {u.unit_number}
