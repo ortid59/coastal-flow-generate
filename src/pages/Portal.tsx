@@ -32,6 +32,8 @@ import { UnitMinimap } from "@/components/UnitMinimap";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
+import { Switch } from "@/components/ui/switch";
+import { Label as UILabel } from "@/components/ui/label";
 
 type Campaign = {
   id: string;
@@ -82,9 +84,25 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Admin/edit mode: when ?admin=1 is in the URL OR a Supabase session exists,
+  // Heather sees extra controls (e.g., the investment-summary toggle).
+  const [isAdminView, setIsAdminView] = useState(false);
+  const [showSummary, setShowSummary] = useState(true);
+
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
   const progress = useSpring(scrollYProgress, { stiffness: 90, damping: 24, mass: 0.3 });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("admin") === "1") {
+      setIsAdminView(true);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) setIsAdminView(true);
+    });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -350,8 +368,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </section>
       )}
 
+      {/* ===== UNIT INDEX BAR (sticky chips) ===== */}
+      <PortalIndexBar units={units} />
+
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
       <WhoWeAre />
+
 
       {/* ===== SECTION 3 — MARKET OVERVIEW ===== */}
       {byMarket.length > 0 && (
@@ -460,62 +482,137 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       )}
 
       {/* ===== SECTION 5 — INVESTMENT SUMMARY ===== */}
-      <section className="bg-card">
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="bg-primary text-primary-foreground"
-        >
-          <div className="container-app py-12 md:py-16 text-center">
-            <h2 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight">
-              Campaign Investment Summary
-            </h2>
-            <span className="mx-auto mt-5 block h-[3px] w-16 bg-[hsl(var(--accent-gold))] rounded-full" />
-            <p className="mt-4 text-sm md:text-base text-primary-foreground/80">
-              {primaryMarket} · {flightLabel}
-            </p>
-          </div>
-        </motion.div>
-
-        <div className="container-app py-16 md:py-20">
-          <div className="grid gap-6 md:grid-cols-3">
-            <MetricCard
-              label="Total Impressions"
-              value={<CountUp value={stats.imps} />}
-              delay={0}
-            />
-            <MetricCard
-              label="Total Investment"
-              value={
-                <CountUp
-                  value={stats.cost}
-                  format={(n) =>
-                    new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                      maximumFractionDigits: 0,
-                    }).format(n)
-                  }
-                />
-              }
-              delay={0.12}
-            />
-            <MetricCard
-              label="Premium Placements"
-              value={<CountUp value={stats.units} />}
-              delay={0.24}
-            />
-          </div>
-          {stats.cpm != null && (
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              Blended CPM ·{" "}
-              <span className="font-semibold text-foreground">${stats.cpm.toFixed(2)}</span>
+      {(showSummary || !isAdminView) && showSummary && (
+        <section className="bg-card">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="bg-primary text-primary-foreground"
+          >
+            <div className="container-app py-12 md:py-16 text-center">
+              <h2 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight">
+                Campaign Investment Summary
+              </h2>
+              <span className="mx-auto mt-5 block h-[3px] w-16 bg-[hsl(var(--accent-gold))] rounded-full" />
+              <p className="mt-4 text-sm md:text-base text-primary-foreground/80">
+                {primaryMarket} · {flightLabel}
+              </p>
             </div>
-          )}
-        </div>
-      </section>
+          </motion.div>
+
+          <div className="container-app py-16 md:py-20">
+            {/* Admin-only toggle to hide the summary from clients */}
+            {isAdminView && (
+              <div className="mb-8 flex items-center justify-end gap-3 rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-3">
+                <UILabel htmlFor="show-summary" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Show Investment Summary (admin)
+                </UILabel>
+                <Switch id="show-summary" checked={showSummary} onCheckedChange={setShowSummary} />
+              </div>
+            )}
+
+            <div className="grid gap-6 md:grid-cols-3">
+              <MetricCard
+                label="Total 4-Week Impressions"
+                value={<CountUp value={stats.imps} />}
+                delay={0}
+              />
+              <MetricCard
+                label="Total 4-Week Investment"
+                value={
+                  <CountUp
+                    value={stats.cost}
+                    format={(n) =>
+                      new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        maximumFractionDigits: 0,
+                      }).format(n)
+                    }
+                  />
+                }
+                delay={0.12}
+              />
+              <MetricCard
+                label="Premium Placements"
+                value={<CountUp value={stats.units} />}
+                delay={0.24}
+              />
+            </div>
+
+            {/* Per-unit line items */}
+            <div className="mt-12 overflow-hidden rounded-2xl border border-border bg-card shadow-elev-sm">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-border bg-secondary/40 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                <span>Placement</span>
+                <span className="text-right">Format</span>
+                <span className="text-right">4-Week Rate</span>
+              </div>
+              {units.map((u) => (
+                <div
+                  key={u.id}
+                  className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-border px-6 py-3.5 text-sm last:border-b-0 hover:bg-secondary/30"
+                >
+                  <span className="truncate text-foreground">
+                    {parseShortAddress(u.location_description) || `Unit ${u.unit_number}`}
+                  </span>
+                  <span className="text-right text-muted-foreground">{u.format ?? "—"}</span>
+                  <span className="text-right font-semibold tabular-nums text-foreground">
+                    {fmtMoney(u.total_cost)}
+                  </span>
+                </div>
+              ))}
+              <div className="grid grid-cols-[1fr_auto] gap-4 bg-secondary/60 px-6 py-4 text-sm">
+                <span className="font-bold uppercase tracking-wider text-foreground">
+                  Total 4-Week Investment
+                </span>
+                <span className="text-right font-heading text-lg font-bold tabular-nums text-[hsl(var(--ocean))]">
+                  {fmtMoney(stats.cost)}
+                </span>
+              </div>
+              {(() => {
+                const periods = Math.max(
+                  1,
+                  ...units.map((u) => Number(u.four_week_periods ?? 0)).filter((n) => n > 0),
+                  1,
+                );
+                if (periods <= 1) return null;
+                return (
+                  <div className="grid grid-cols-[1fr_auto] gap-4 bg-primary px-6 py-4 text-sm text-primary-foreground">
+                    <span className="font-bold uppercase tracking-wider">
+                      Total Campaign Investment ({periods} × 4-week periods)
+                    </span>
+                    <span className="text-right font-heading text-lg font-bold tabular-nums text-[hsl(var(--accent-gold))]">
+                      {fmtMoney(stats.cost * periods)}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {stats.cpm != null && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                Blended CPM ·{" "}
+                <span className="font-semibold text-foreground">${stats.cpm.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Admin-only: when summary is hidden, show a slim restore bar */}
+      {isAdminView && !showSummary && (
+        <section className="bg-card border-y print:hidden">
+          <div className="container-app flex items-center justify-end gap-3 py-4">
+            <UILabel htmlFor="show-summary-restore" className="text-xs uppercase tracking-wider text-muted-foreground">
+              Investment Summary hidden (admin) — show
+            </UILabel>
+            <Switch id="show-summary-restore" checked={showSummary} onCheckedChange={setShowSummary} />
+          </div>
+        </section>
+      )}
+
 
       {/* ===== SECTION 6 — NEXT STEPS ===== */}
       <NextSteps />
@@ -873,24 +970,50 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
             </div>
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
-              {unit.format ?? "Premium Placement"}
+              {parseShortAddress(unit.location_description) ||
+                unit.format ||
+                "Premium Placement"}
             </h4>
-            <div className="mt-3 font-mono text-sm text-[hsl(var(--ocean))]">
+            <div className="mt-2 text-xs uppercase tracking-[0.18em] text-[hsl(var(--ocean))]">
+              {unit.format ?? "Premium Placement"}
+            </div>
+            <div className="mt-3 font-mono text-sm text-muted-foreground">
               #{unit.unit_number}
             </div>
-            <p className="mt-4 text-sm md:text-base text-muted-foreground leading-relaxed">
-              {unit.location_description ?? `Unit ${unit.unit_number}`}
-            </p>
+            {unit.highlights && (
+              <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
+                {unit.highlights}
+              </p>
+            )}
           </div>
 
           <div className="mt-8 space-y-5">
             <div>
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-                {fmtMoney(unit.total_cost)} / 4-Week
+                4-Week Rate: {fmtMoney(unit.total_cost)}
               </div>
-              <div className="mt-3 text-xs text-muted-foreground">
-                {unit.size && <>Size: {unit.size} · </>}
-                {unit.vendor && <>Vendor: {unit.vendor}</>}
+              <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+                {unit.weekly_impressions != null && (
+                  <div>
+                    <span className="font-semibold text-foreground">Weekly Impressions:</span>{" "}
+                    {fmtNum(unit.weekly_impressions)}
+                  </div>
+                )}
+                {unit.four_week_impressions != null && (
+                  <div>
+                    <span className="font-semibold text-foreground">4-Week Impressions:</span>{" "}
+                    {fmtNum(unit.four_week_impressions)}
+                  </div>
+                )}
+                <div>{fmtCostLine("Production", unit.production_cost)}</div>
+                <div>{fmtCostLine("Install", unit.install_cost)}</div>
+                {(unit.size || unit.vendor) && (
+                  <div className="pt-1">
+                    {unit.size && <>Size: {unit.size}</>}
+                    {unit.size && unit.vendor && <> · </>}
+                    {unit.vendor && <>Vendor: {unit.vendor}</>}
+                  </div>
+                )}
               </div>
             </div>
             {unit.latitude != null && unit.longitude != null && (
@@ -964,7 +1087,7 @@ function UnitDetails({ unit }: { unit: Unit }) {
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
-          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="Investment" value={fmtMoney(unit.total_cost)} />
+          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Investment" value={fmtMoney(unit.total_cost)} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
             label="CPM"
