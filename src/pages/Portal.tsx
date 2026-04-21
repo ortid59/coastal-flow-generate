@@ -27,6 +27,8 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
+import { MasterMap, type MapPoint } from "@/components/MasterMap";
+import { UnitMinimap } from "@/components/UnitMinimap";
 
 type Campaign = {
   id: string;
@@ -53,6 +55,8 @@ type Unit = {
   recommended: boolean | null;
   included: boolean | null;
   billboard_photo_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -84,7 +88,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url",
+            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, latitude, longitude",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
