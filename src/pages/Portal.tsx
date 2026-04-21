@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
+import { WhoWeAre } from "@/components/WhoWeAre";
 
 type Campaign = {
   id: string;
@@ -161,6 +162,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           </div>
         </div>
       </section>
+
+      {/* Who we are */}
+      <WhoWeAre />
 
       {/* Executive summary */}
       <section className="container-app py-12 md:py-16">
