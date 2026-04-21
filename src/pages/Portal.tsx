@@ -27,6 +27,8 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
+import { MasterMap, type MapPoint } from "@/components/MasterMap";
+import { UnitMinimap } from "@/components/UnitMinimap";
 
 type Campaign = {
   id: string;
@@ -53,6 +55,8 @@ type Unit = {
   recommended: boolean | null;
   included: boolean | null;
   billboard_photo_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -84,7 +88,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url",
+            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, latitude, longitude",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -117,6 +121,38 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     });
     return Array.from(map.entries());
   }, [units]);
+
+  const mapPoints: MapPoint[] = useMemo(
+    () =>
+      units
+        .filter(
+          (u) =>
+            u.latitude != null &&
+            u.longitude != null &&
+            Number.isFinite(Number(u.latitude)) &&
+            Number.isFinite(Number(u.longitude)),
+        )
+        .map((u) => ({
+          id: u.id,
+          unit_number: u.unit_number,
+          lat: Number(u.latitude),
+          lng: Number(u.longitude),
+          title: `Unit ${u.unit_number}${u.format ? ` · ${u.format}` : ""}`,
+          location: u.location_description,
+          impressions: u.four_week_impressions,
+          rate: u.total_cost,
+        })),
+    [units],
+  );
+
+  const handleMarkerClick = (p: MapPoint) => {
+    // Tell the matching MarketSection to scroll its carousel to the right slide.
+    window.dispatchEvent(new CustomEvent("cm:focus-unit", { detail: { id: p.id } }));
+    const el = document.getElementById(`unit-${p.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   if (loading) {
     return (
@@ -266,6 +302,44 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           </div>
         </div>
       </section>
+
+      {/* ===== HERO MAP ===== */}
+      {mapPoints.length > 0 && (
+        <section className="bg-card border-y print:hidden">
+          <div className="container-app py-10 md:py-14">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="mb-6 flex items-end justify-between gap-4 flex-wrap"
+            >
+              <div>
+                <div className="eyebrow">01 · Footprint</div>
+                <h2 className="mt-2 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight text-foreground">
+                  Where Your Brand Will Live
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {mapPoints.length} hand-picked placement{mapPoints.length === 1 ? "" : "s"}.
+                Click a pin to jump to that unit.
+              </p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <MasterMap
+                points={mapPoints}
+                onMarkerClick={handleMarkerClick}
+                className="h-[480px] w-full shadow-elev-md border border-border"
+              />
+            </motion.div>
+          </div>
+        </section>
+      )}
 
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
       <WhoWeAre />
@@ -657,6 +731,19 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
     };
   }, [emblaApi]);
 
+  // Listen for "focus this unit" events from the hero map.
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onFocus = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (!id) return;
+      const idx = units.findIndex((u) => u.id === id);
+      if (idx >= 0) emblaApi.scrollTo(idx);
+    };
+    window.addEventListener("cm:focus-unit", onFocus);
+    return () => window.removeEventListener("cm:focus-unit", onFocus);
+  }, [emblaApi, units]);
+
   const current = units[selected] ?? units[0];
 
   return (
@@ -703,7 +790,7 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
       <div className="overflow-hidden rounded-2xl print:hidden" ref={emblaRef}>
         <div className="flex">
           {units.map((u, i) => (
-            <div key={u.id} className="min-w-0 flex-[0_0_100%] pr-4">
+            <div key={u.id} id={`unit-${u.id}`} className="min-w-0 flex-[0_0_100%] pr-4 scroll-mt-24">
               <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} />
             </div>
           ))}
@@ -787,14 +874,23 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
             </p>
           </div>
 
-          <div className="mt-8">
-            <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-              {fmtMoney(unit.total_cost)} / 4-Week
+          <div className="mt-8 space-y-5">
+            <div>
+              <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
+                {fmtMoney(unit.total_cost)} / 4-Week
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground">
+                {unit.size && <>Size: {unit.size} · </>}
+                {unit.vendor && <>Vendor: {unit.vendor}</>}
+              </div>
             </div>
-            <div className="mt-3 text-xs text-muted-foreground">
-              {unit.size && <>Size: {unit.size} · </>}
-              {unit.vendor && <>Vendor: {unit.vendor}</>}
-            </div>
+            {unit.latitude != null && unit.longitude != null && (
+              <UnitMinimap
+                lat={Number(unit.latitude)}
+                lng={Number(unit.longitude)}
+                unitNumber={unit.unit_number}
+              />
+            )}
           </div>
         </motion.div>
 

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
+import { MasterMap, type MapPoint } from "@/components/MasterMap";
 
 type Campaign = {
   id: string;
@@ -44,6 +45,8 @@ type Unit = {
   included: boolean | null;
   billboard_photo_url: string | null;
   low_res_flag: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -60,6 +63,7 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -68,7 +72,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag, latitude, longitude",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -145,6 +149,30 @@ export default function CampaignReview() {
     const photos = included.filter((u) => u.billboard_photo_url).length;
     return { total: units.length, included: included.length, recs, imps, cost, photos };
   }, [units]);
+
+  const mapPoints: MapPoint[] = useMemo(
+    () =>
+      units
+        .filter(
+          (u) =>
+            u.included !== false &&
+            u.latitude != null &&
+            u.longitude != null &&
+            Number.isFinite(Number(u.latitude)) &&
+            Number.isFinite(Number(u.longitude)),
+        )
+        .map((u) => ({
+          id: u.id,
+          unit_number: u.unit_number,
+          lat: Number(u.latitude),
+          lng: Number(u.longitude),
+          title: `Unit ${u.unit_number}`,
+          location: u.location_description,
+          impressions: u.four_week_impressions,
+          rate: u.total_cost,
+        })),
+    [units],
+  );
 
   if (loading) {
     return (
@@ -231,111 +259,143 @@ export default function CampaignReview() {
             client page.
           </p>
 
-          <div className="surface-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Photo</th>
-                    <th className="px-4 py-3 text-left">Unit</th>
-                    <th className="px-4 py-3 text-left">Market</th>
-                    <th className="px-4 py-3 text-left">Format</th>
-                    <th className="px-4 py-3 text-left">Location</th>
-                    <th className="px-4 py-3 text-right">4wk Imp</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                    <th className="px-4 py-3 text-right">CPM</th>
-                    <th className="px-4 py-3 text-center">Include</th>
-                    <th className="px-4 py-3 text-center">Recommend</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {units.map((u) => {
-                    const excluded = u.included === false;
-                    return (
-                      <tr key={u.id} className={`${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""}`}>
-                        <td className="px-4 py-3 align-top">
-                          <div className="space-y-2">
-                            {u.billboard_photo_url ? (
-                              <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
-                                <img
-                                  src={u.billboard_photo_url}
-                                  alt={`Unit ${u.unit_number}`}
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
+          <div className="grid gap-6 lg:grid-cols-[1fr_minmax(360px,440px)] items-start">
+            <div className="surface-card overflow-hidden min-w-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Photo</th>
+                      <th className="px-4 py-3 text-left">Unit</th>
+                      <th className="px-4 py-3 text-left">Market</th>
+                      <th className="px-4 py-3 text-left">Format</th>
+                      <th className="px-4 py-3 text-left">Location</th>
+                      <th className="px-4 py-3 text-right">4wk Imp</th>
+                      <th className="px-4 py-3 text-right">Total</th>
+                      <th className="px-4 py-3 text-right">CPM</th>
+                      <th className="px-4 py-3 text-center">Include</th>
+                      <th className="px-4 py-3 text-center">Recommend</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {units.map((u) => {
+                      const excluded = u.included === false;
+                      const isHighlighted = u.id === highlightedId;
+                      return (
+                        <tr
+                          key={u.id}
+                          onClick={() => setHighlightedId(u.id)}
+                          className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${isHighlighted ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]" : "hover:bg-muted/30"}`}
+                        >
+                          <td className="px-4 py-3 align-top">
+                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                              {u.billboard_photo_url ? (
+                                <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
+                                  <img
+                                    src={u.billboard_photo_url}
+                                    alt={`Unit ${u.unit_number}`}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  {u.low_res_flag && (
+                                    <span
+                                      title="Low-resolution photo"
+                                      className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
+                                    >
+                                      <AlertCircle className="h-3 w-3" />
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                  <ImageOff className="h-4 w-4" />
+                                </div>
+                              )}
+                              {id && (
+                                <UnitPhotoUpload
+                                  campaignId={id}
+                                  unitId={u.id}
+                                  unitNumber={u.unit_number}
+                                  onUploaded={load}
                                 />
-                                {u.low_res_flag && (
-                                  <span
-                                    title="Low-resolution photo"
-                                    className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
-                                  >
-                                    <AlertCircle className="h-3 w-3" />
-                                  </span>
-                                )}
-                              </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 align-top font-medium">
+                            <div className="flex items-center gap-2">
+                              {u.unit_number}
+                              {u.recommended && (
+                                <Badge className="bg-success/15 text-success border border-success/30 gap-1">
+                                  <Sparkles className="h-3 w-3" /> Rec
+                                </Badge>
+                              )}
+                              {u.latitude != null && u.longitude != null && (
+                                <MapPin className="h-3 w-3 text-[hsl(var(--accent-gold))]" />
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{u.vendor}</div>
+                          </td>
+                          <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
+                          <td className="px-4 py-3 align-top">
+                            <div>{u.format ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
+                          </td>
+                          <td className="px-4 py-3 align-top max-w-md">
+                            {u.insight_bullets && u.insight_bullets.length > 1 ? (
+                              <ul className="list-disc pl-4 space-y-0.5">
+                                {u.insight_bullets.map((b, i) => (
+                                  <li key={i}>{b}</li>
+                                ))}
+                              </ul>
                             ) : (
-                              <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                <ImageOff className="h-4 w-4" />
-                              </div>
+                              <span>{u.location_description ?? "—"}</span>
                             )}
-                            {id && (
-                              <UnitPhotoUpload
-                                campaignId={id}
-                                unitId={u.id}
-                                unitNumber={u.unit_number}
-                                onUploaded={load}
-                              />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 align-top font-medium">
-                          <div className="flex items-center gap-2">
-                            {u.unit_number}
-                            {u.recommended && (
-                              <Badge className="bg-success/15 text-success border border-success/30 gap-1">
-                                <Sparkles className="h-3 w-3" /> Rec
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">{u.vendor}</div>
-                        </td>
-                        <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
-                        <td className="px-4 py-3 align-top">
-                          <div>{u.format ?? "—"}</div>
-                          <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
-                        </td>
-                        <td className="px-4 py-3 align-top max-w-md">
-                          {u.insight_bullets && u.insight_bullets.length > 1 ? (
-                            <ul className="list-disc pl-4 space-y-0.5">
-                              {u.insight_bullets.map((b, i) => (
-                                <li key={i}>{b}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span>{u.location_description ?? "—"}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
-                        <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
-                        <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
-                        <td className="px-4 py-3 align-top text-center">
-                          <Switch
-                            checked={u.included !== false}
-                            onCheckedChange={(v) => toggleField(u, "included", v)}
-                          />
-                        </td>
-                        <td className="px-4 py-3 align-top text-center">
-                          <Switch
-                            checked={!!u.recommended}
-                            onCheckedChange={(v) => toggleField(u, "recommended", v)}
-                            disabled={excluded}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
+                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
+                          <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
+                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={u.included !== false}
+                              onCheckedChange={(v) => toggleField(u, "included", v)}
+                            />
+                          </td>
+                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={!!u.recommended}
+                              onCheckedChange={(v) => toggleField(u, "recommended", v)}
+                              disabled={excluded}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {/* Sticky master map */}
+            <aside className="lg:sticky lg:top-20 print:hidden">
+              <div className="surface-card overflow-hidden">
+                <div className="border-b bg-muted/30 px-4 py-2.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
+                  Unit map
+                  <span className="ml-auto normal-case font-normal tracking-normal text-[11px]">
+                    {mapPoints.length} mapped
+                  </span>
+                </div>
+                <MasterMap
+                  points={mapPoints}
+                  highlightedId={highlightedId}
+                  onMarkerClick={(p) => setHighlightedId(p.id)}
+                  className="h-[60vh] min-h-[420px] rounded-none"
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Click a row or pin to highlight. Pins use unit numbers from your Excel.
+              </p>
+            </aside>
           </div>
         </>
       )}
