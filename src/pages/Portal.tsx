@@ -146,6 +146,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   );
 
   const handleMarkerClick = (p: MapPoint) => {
+    // Tell the matching MarketSection to scroll its carousel to the right slide.
+    window.dispatchEvent(new CustomEvent("cm:focus-unit", { detail: { id: p.id } }));
     const el = document.getElementById(`unit-${p.id}`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -728,6 +730,19 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
       emblaApi.off("select", onSelect);
     };
   }, [emblaApi]);
+
+  // Listen for "focus this unit" events from the hero map.
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onFocus = (e: Event) => {
+      const id = (e as CustomEvent<{ id: string }>).detail?.id;
+      if (!id) return;
+      const idx = units.findIndex((u) => u.id === id);
+      if (idx >= 0) emblaApi.scrollTo(idx);
+    };
+    window.addEventListener("cm:focus-unit", onFocus);
+    return () => window.removeEventListener("cm:focus-unit", onFocus);
+  }, [emblaApi, units]);
 
   const current = units[selected] ?? units[0];
 
