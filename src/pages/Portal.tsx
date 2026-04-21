@@ -368,8 +368,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </section>
       )}
 
+      {/* ===== UNIT INDEX BAR (sticky chips) ===== */}
+      <PortalIndexBar units={units} />
+
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
       <WhoWeAre />
+
 
       {/* ===== SECTION 3 — MARKET OVERVIEW ===== */}
       {byMarket.length > 0 && (
