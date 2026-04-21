@@ -27,8 +27,6 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
-import { MasterMap, type MapPoint } from "@/components/MasterMap";
-import { UnitMinimap } from "@/components/UnitMinimap";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
