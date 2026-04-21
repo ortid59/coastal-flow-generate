@@ -29,11 +29,15 @@ import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
 import { MasterMap, type MapPoint } from "@/components/MasterMap";
 import { UnitMinimap } from "@/components/UnitMinimap";
+import { PortalIndexBar } from "@/components/PortalIndexBar";
+import { parseShortAddress } from "@/lib/shortAddress";
+import { fmtCostLine } from "@/lib/format";
 
 type Campaign = {
   id: string;
   client_name: string;
   campaign_name: string;
+  proposal_name: string | null;
   client_logo_url: string | null;
   flight_start: string | null;
   flight_end: string | null;
@@ -49,8 +53,13 @@ type Unit = {
   size: string | null;
   location_description: string | null;
   insight_bullets: string[] | null;
+  highlights: string | null;
+  weekly_impressions: number | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  production_cost: number | null;
+  install_cost: number | null;
+  four_week_periods: number | null;
   cpm: number | null;
   recommended: boolean | null;
   included: boolean | null;

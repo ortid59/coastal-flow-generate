@@ -387,15 +387,23 @@ export default function CampaignReview() {
                             <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
                           </td>
                           <td className="px-4 py-3 align-top max-w-md">
-                            {u.insight_bullets && u.insight_bullets.length > 1 ? (
-                              <ul className="list-disc pl-4 space-y-0.5">
-                                {u.insight_bullets.map((b, i) => (
-                                  <li key={i}>{b}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <span>{u.location_description ?? "—"}</span>
-                            )}
+                            <div className="font-medium text-foreground">
+                              {parseShortAddress(u.location_description) || "—"}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                              {u.location_description ?? ""}
+                            </div>
+                            <div className="mt-2">
+                              <HighlightsEditor
+                                unitId={u.id}
+                                initial={u.highlights}
+                                onSaved={(next) =>
+                                  setUnits((prev) =>
+                                    prev.map((x) => (x.id === u.id ? { ...x, highlights: next } : x)),
+                                  )
+                                }
+                              />
+                            </div>
                           </td>
                           <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
                           <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
