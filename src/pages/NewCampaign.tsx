@@ -5,9 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, FileSpreadsheet, FileText, Image as ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, FileText, Image as ImageIcon, Loader2, Upload, X, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 type Picked = { file: File };
@@ -23,6 +22,7 @@ export default function NewCampaign() {
 
   const [clientName, setClientName] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  const [proposalName, setProposalName] = useState("");
   const [marketsRaw, setMarketsRaw] = useState("");
   const [flightStart, setFlightStart] = useState("");
   const [flightEnd, setFlightEnd] = useState("");
@@ -30,6 +30,7 @@ export default function NewCampaign() {
 
   const [excels, setExcels] = useState<Picked[]>([]);
   const [pdfs, setPdfs] = useState<Picked[]>([]);
+  const [photoSheets, setPhotoSheets] = useState<File | null>(null);
   const [logo, setLogo] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +38,7 @@ export default function NewCampaign() {
 
   const xlsxRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+  const photoSheetsRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (
@@ -76,6 +78,14 @@ export default function NewCampaign() {
       toast({ title: "Add at least one Excel", description: "Vendor RFP Template (.xlsx).", variant: "destructive" });
       return;
     }
+    if (!photoSheets) {
+      toast({
+        title: "Vendor Photo Sheets PDF required",
+        description: "Upload the Maps/Photosheets PDF from your vendor.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -88,6 +98,7 @@ export default function NewCampaign() {
           user_id: user.id,
           client_name: clientName.trim(),
           campaign_name: campaignName.trim(),
+          proposal_name: proposalName.trim() || null,
           markets: markets.length ? markets : null,
           flight_start: flightStart || null,
           flight_end: flightEnd || null,
@@ -113,9 +124,9 @@ export default function NewCampaign() {
       }
 
       // Upload xlsx + pdf to private uploads bucket
-      const total = excels.length + pdfs.length;
+      const total = excels.length + pdfs.length + 1; // +1 for photosheets
       let done = 0;
-      const records: Array<{ kind: "excel" | "pdf" | "image"; storage_path: string; original_name: string }> = [];
+      const records: Array<{ kind: "excel" | "pdf" | "image" | "photosheets"; storage_path: string; original_name: string }> = [];
 
       for (const { file } of excels) {
         done += 1;
@@ -136,6 +147,14 @@ export default function NewCampaign() {
         records.push({ kind: isPdf ? "pdf" : "image", storage_path: path, original_name: file.name });
       }
 
+      // Photo sheets PDF — fixed path so the highlights extractor can find it
+      done += 1;
+      setProgress(`Uploading file ${done}/${total} — ${photoSheets.name}`);
+      const psPath = `${campaignId}/photosheets.pdf`;
+      const psUp = await supabase.storage.from("uploads").upload(psPath, photoSheets, { upsert: true });
+      if (psUp.error) throw psUp.error;
+      records.push({ kind: "photosheets", storage_path: psPath, original_name: photoSheets.name });
+
       if (records.length) {
         setProgress("Saving file records…");
         const { error: vfErr } = await supabase.from("vendor_files").insert(
@@ -145,7 +164,7 @@ export default function NewCampaign() {
       }
 
       toast({ title: "Campaign created", description: "Parsing vendor Excel…" });
-      // Fire and forget: parse excel, then extract photos. Review screen polls status.
+      // Fire and forget: parse excel, then extract photos & highlights. Review screen polls status.
       supabase.functions
         .invoke("parse-excel", { body: { campaign_id: campaignId } })
         .then(({ error }) => {
@@ -160,6 +179,12 @@ export default function NewCampaign() {
                 if (pErr) console.error("extract-photos invoke error", pErr);
               });
           }
+          // Always run highlights extraction since photosheets is required
+          supabase.functions
+            .invoke("extract-highlights", { body: { campaign_id: campaignId } })
+            .then(({ error: hErr }) => {
+              if (hErr) console.error("extract-highlights invoke error", hErr);
+            });
         });
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
@@ -202,7 +227,24 @@ export default function NewCampaign() {
             <div className="space-y-2">
               <Label htmlFor="campaign">Campaign name *</Label>
               <Input id="campaign" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="Spring 2026 Launch" required />
+              <p className="text-[11px] text-muted-foreground">Internal reference name.</p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="proposal" className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
+              Proposal name
+            </Label>
+            <Input
+              id="proposal"
+              value={proposalName}
+              onChange={(e) => setProposalName(e.target.value)}
+              placeholder="Your Bridge to the Mountains — Jacksonville Advertising Opportunities"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The catchy, client-facing title. Shown as the headline on the proposal cover.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -212,11 +254,11 @@ export default function NewCampaign() {
 
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="start">Flight start</Label>
+              <Label htmlFor="start">Campaign Dates — start</Label>
               <Input id="start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="end">Flight end</Label>
+              <Label htmlFor="end">Campaign Dates — end</Label>
               <Input id="end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
             </div>
             <div className="space-y-2">
@@ -248,6 +290,48 @@ export default function NewCampaign() {
               )}
             </div>
           </div>
+
+          {/* Vendor Photo Sheets PDF — required, single file */}
+          <div className="space-y-2 rounded-lg border border-[hsl(var(--accent-gold)/0.4)] bg-[hsl(var(--accent-gold)/0.04)] p-4">
+            <Label className="flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
+              Vendor Photo Sheets PDF *
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              The Maps/Photosheets PDF from your vendor — used to extract location highlights for each unit.
+            </p>
+            <input
+              ref={photoSheetsRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f && f.size > MAX_BYTES) {
+                  toast({ title: "File too large", description: "Max 50 MB.", variant: "destructive" });
+                  return;
+                }
+                setPhotoSheets(f);
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => photoSheetsRef.current?.click()}>
+                <Upload className="h-4 w-4" /> {photoSheets ? "Replace PDF" : "Choose PDF"}
+              </Button>
+              {photoSheets && (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {photoSheets.name}
+                  <button
+                    type="button"
+                    onClick={() => setPhotoSheets(null)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
         </section>
 
         <aside className="space-y-6">
@@ -263,7 +347,7 @@ export default function NewCampaign() {
             onRemove={(i) => setExcels(excels.filter((_, idx) => idx !== i))}
           />
           <FileDropZone
-            title="Vendor photos"
+            title="Vendor billboard photos"
             hint={`Up to ${MAX_PHOTOS} files — .pdf, .jpg, .png, .webp`}
             icon={<FileText className="h-5 w-5" />}
             inputRef={pdfRef}

@@ -48,6 +48,7 @@ export type Database = {
           portal_password_hash: string | null
           portal_password_set_at: string | null
           portal_token: string | null
+          proposal_name: string | null
           status: string | null
           user_id: string
         }
@@ -66,6 +67,7 @@ export type Database = {
           portal_password_hash?: string | null
           portal_password_set_at?: string | null
           portal_token?: string | null
+          proposal_name?: string | null
           status?: string | null
           user_id: string
         }
@@ -84,6 +86,7 @@ export type Database = {
           portal_password_hash?: string | null
           portal_password_set_at?: string | null
           portal_token?: string | null
+          proposal_name?: string | null
           status?: string | null
           user_id?: string
         }
@@ -140,6 +143,7 @@ export type Database = {
           format: string | null
           four_week_impressions: number | null
           four_week_periods: number | null
+          highlights: string | null
           id: string
           included: boolean | null
           inset_map_url: string | null
@@ -181,6 +185,7 @@ export type Database = {
           format?: string | null
           four_week_impressions?: number | null
           four_week_periods?: number | null
+          highlights?: string | null
           id?: string
           included?: boolean | null
           inset_map_url?: string | null
@@ -222,6 +227,7 @@ export type Database = {
           format?: string | null
           four_week_impressions?: number | null
           four_week_periods?: number | null
+          highlights?: string | null
           id?: string
           included?: boolean | null
           inset_map_url?: string | null

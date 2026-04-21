@@ -21,6 +21,7 @@ type Props = {
   initial: {
     client_name: string;
     campaign_name: string;
+    proposal_name?: string | null;
     markets: string[] | null;
     flight_start: string | null;
     flight_end: string | null;
@@ -33,6 +34,7 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
   const { toast } = useToast();
   const [clientName, setClientName] = useState(initial.client_name);
   const [campaignName, setCampaignName] = useState(initial.campaign_name);
+  const [proposalName, setProposalName] = useState(initial.proposal_name ?? "");
   const [marketsRaw, setMarketsRaw] = useState((initial.markets ?? []).join(", "));
   const [flightStart, setFlightStart] = useState(initial.flight_start ?? "");
   const [flightEnd, setFlightEnd] = useState(initial.flight_end ?? "");
@@ -43,6 +45,7 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
     if (open) {
       setClientName(initial.client_name);
       setCampaignName(initial.campaign_name);
+      setProposalName(initial.proposal_name ?? "");
       setMarketsRaw((initial.markets ?? []).join(", "));
       setFlightStart(initial.flight_start ?? "");
       setFlightEnd(initial.flight_end ?? "");
@@ -62,6 +65,7 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
       .update({
         client_name: clientName.trim(),
         campaign_name: campaignName.trim(),
+        proposal_name: proposalName.trim() || null,
         markets: markets.length ? markets : null,
         flight_start: flightStart || null,
         flight_end: flightEnd || null,
@@ -97,16 +101,25 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
             </div>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="e-proposal">Proposal name</Label>
+            <Input
+              id="e-proposal"
+              value={proposalName}
+              onChange={(e) => setProposalName(e.target.value)}
+              placeholder="Your Bridge to the Mountains — Jacksonville Advertising Opportunities"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="e-markets">Markets (comma separated)</Label>
             <Input id="e-markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="e-start">Flight start</Label>
+              <Label htmlFor="e-start">Campaign Dates — start</Label>
               <Input id="e-start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="e-end">Flight end</Label>
+              <Label htmlFor="e-end">Campaign Dates — end</Label>
               <Input id="e-end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
             </div>
             <div className="space-y-2">
