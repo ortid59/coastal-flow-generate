@@ -34,6 +34,7 @@ type Props = {
     flight_end: string | null;
     margin_pct: number | null;
     client_logo_url?: string | null;
+    cover_image_url?: string | null;
     canva_design_url?: string | null;
     status?: string | null;
     campaign_date?: string | null;
@@ -56,10 +57,12 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
   const [canvaUrl, setCanvaUrl] = useState(initial.canva_design_url ?? "");
   const [status, setStatus] = useState(initial.status ?? "draft");
   const [logoUrl, setLogoUrl] = useState(initial.client_logo_url ?? "");
-  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [coverUrl, setCoverUrl] = useState(initial.cover_image_url ?? "");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [saving, setSaving] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -74,28 +77,34 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
       setCanvaUrl(initial.canva_design_url ?? "");
       setStatus(initial.status ?? "draft");
       setLogoUrl(initial.client_logo_url ?? "");
-      setLogoFile(null);
+      setCoverUrl(initial.cover_image_url ?? "");
     }
   }, [open, initial]);
 
-  const uploadLogo = async (file: File) => {
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "Logo too large", description: "Max 2 MB.", variant: "destructive" });
+  const uploadAsset = async (
+    file: File,
+    bucket: "logos",
+    folder: "logo" | "cover",
+    setUrl: (s: string) => void,
+    setBusy: (b: boolean) => void,
+    maxMB: number,
+  ) => {
+    if (file.size > maxMB * 1024 * 1024) {
+      toast({ title: "Image too large", description: `Max ${maxMB} MB.`, variant: "destructive" });
       return;
     }
-    setUploadingLogo(true);
+    setBusy(true);
     const ext = file.name.split(".").pop() ?? "png";
-    const path = `${campaignId}/logo-${Date.now()}.${ext}`;
-    const up = await supabase.storage.from("logos").upload(path, file, { upsert: false });
+    const path = `${campaignId}/${folder}-${Date.now()}.${ext}`;
+    const up = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
     if (up.error) {
-      setUploadingLogo(false);
+      setBusy(false);
       toast({ title: "Upload failed", description: up.error.message, variant: "destructive" });
       return;
     }
-    const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
-    setLogoUrl(pub.publicUrl);
-    setLogoFile(file);
-    setUploadingLogo(false);
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+    setUrl(pub.publicUrl);
+    setBusy(false);
   };
 
   const save = async () => {
@@ -119,6 +128,7 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
         canva_design_url: canvaUrl.trim() || null,
         status: status || "draft",
         client_logo_url: logoUrl || null,
+        cover_image_url: coverUrl || null,
       })
       .eq("id", campaignId);
     setSaving(false);
@@ -237,7 +247,7 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) uploadLogo(f);
+                    if (f) uploadAsset(f, "logos", "logo", setLogoUrl, setUploadingLogo, 2);
                   }}
                 />
                 <Button type="button" variant="outline" size="sm" onClick={() => logoRef.current?.click()} disabled={uploadingLogo}>
@@ -245,16 +255,52 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
                   {logoUrl ? "Replace logo" : "Upload logo"}
                 </Button>
                 {logoUrl && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => { setLogoUrl(""); setLogoFile(null); }}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setLogoUrl("")}>
                     <X className="h-4 w-4" /> Remove
                   </Button>
-                )}
-                {logoFile && (
-                  <span className="text-xs text-muted-foreground">{logoFile.name}</span>
                 )}
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">PNG, JPG, SVG, or WEBP. Max 2 MB.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Presentation cover image</Label>
+            <p className="text-[11px] text-muted-foreground">
+              The hero photo on the first section of the proposal. If empty, the first unit's billboard
+              photo is used. Different from the client logo.
+            </p>
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-28 items-center justify-center rounded-md border bg-secondary/40 overflow-hidden">
+                {coverUrl ? (
+                  <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" />
+                ) : (
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 flex flex-wrap items-center gap-2">
+                <input
+                  ref={coverRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadAsset(f, "logos", "cover", setCoverUrl, setUploadingCover, 8);
+                  }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => coverRef.current?.click()} disabled={uploadingCover}>
+                  {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {coverUrl ? "Replace cover" : "Upload cover"}
+                </Button>
+                {coverUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCoverUrl("")}>
+                    <X className="h-4 w-4" /> Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">PNG, JPG, or WEBP. Max 8 MB. Wide images work best.</p>
           </div>
         </div>
 
