@@ -770,8 +770,15 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           className="p-8 md:p-10 flex flex-col justify-between"
         >
           <div>
-            <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-[0.18em]">
-              Unit {indexLabel}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-[0.18em]">
+                Unit {indexLabel}
+              </div>
+              {unit.recommended && (
+                <div className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--ocean))] text-[hsl(var(--ocean-foreground))] px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.18em] shadow-elev-sm">
+                  <Sparkles className="h-3 w-3" /> Recommended
+                </div>
+              )}
             </div>
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
@@ -789,6 +796,53 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
                 {unit.highlights}
               </p>
+            )}
+
+            {/* Structured details strip — extracted from photosheet */}
+            {(unit.location_description ||
+              unit.geopath_id ||
+              unit.media_type ||
+              unit.facing ||
+              unit.size ||
+              unit.city ||
+              unit.zip ||
+              (unit.latitude != null && unit.longitude != null)) && (
+              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border bg-secondary/40 p-4 text-[11px]">
+                {unit.location_description && (
+                  <div className="col-span-2">
+                    <dt className="font-semibold uppercase tracking-wider text-muted-foreground">Description</dt>
+                    <dd className="mt-0.5 text-foreground">{unit.location_description}</dd>
+                  </div>
+                )}
+                {unit.geopath_id && (
+                  <DetailKV label="Geopath ID" value={unit.geopath_id} />
+                )}
+                {unit.media_type && (
+                  <DetailKV label="Media Type" value={unit.media_type} />
+                )}
+                {unit.facing && <DetailKV label="Facing" value={unit.facing} />}
+                {unit.size && <DetailKV label="Size" value={unit.size} />}
+                {unit.city && <DetailKV label="City" value={unit.city} />}
+                {unit.zip && <DetailKV label="Zip" value={unit.zip} />}
+                {unit.latitude != null && (
+                  <DetailKV label="Latitude" value={unit.latitude.toFixed(5)} />
+                )}
+                {unit.longitude != null && (
+                  <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
+                )}
+              </dl>
+            )}
+
+            {/* Map image extracted from photosheet */}
+            {unit.inset_map_url && (
+              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                <img
+                  src={unit.inset_map_url}
+                  alt={`Location map for unit ${unit.unit_number}`}
+                  className="h-auto w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
             )}
           </div>
 
