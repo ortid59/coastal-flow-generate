@@ -31,6 +31,7 @@ type Campaign = {
   portal_token: string | null;
   portal_password_hash: string | null;
   client_logo_url: string | null;
+  cover_image_url: string | null;
   canva_design_url: string | null;
 };
 
@@ -53,7 +54,7 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from("campaigns")
       .select(
-        "id, client_name, campaign_name, proposal_name, campaign_date, markets, flight_start, flight_end, margin_pct, status, created_at, portal_token, portal_password_hash, client_logo_url, canva_design_url",
+        "id, client_name, campaign_name, proposal_name, campaign_date, markets, flight_start, flight_end, margin_pct, status, created_at, portal_token, portal_password_hash, client_logo_url, cover_image_url, canva_design_url",
       )
       .order("created_at", { ascending: false });
     if (error) {
@@ -213,6 +214,7 @@ export default function Dashboard() {
             flight_end: editTarget.flight_end,
             margin_pct: editTarget.margin_pct,
             client_logo_url: editTarget.client_logo_url,
+            cover_image_url: editTarget.cover_image_url,
             canva_design_url: editTarget.canva_design_url,
             status: editTarget.status,
             campaign_date: editTarget.campaign_date,

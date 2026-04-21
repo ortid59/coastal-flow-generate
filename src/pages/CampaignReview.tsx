@@ -17,8 +17,10 @@ import {
   AlertCircle,
   Share2,
   FileText,
+  Eye,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
+import { UnitMapUpload } from "@/components/UnitMapUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
 
 import { HighlightsEditor } from "@/components/HighlightsEditor";
@@ -51,6 +53,7 @@ type Unit = {
   recommended: boolean | null;
   included: boolean | null;
   billboard_photo_url: string | null;
+  inset_map_url: string | null;
   low_res_flag: boolean | null;
   latitude: number | null;
   longitude: number | null;
@@ -84,7 +87,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag, latitude, longitude",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -235,6 +238,11 @@ export default function CampaignReview() {
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-parse
           </Button>
+          <Button variant="outline" size="sm" asChild disabled={units.length === 0}>
+            <Link to={`/campaigns/${id}/preview`}>
+              <Eye className="h-4 w-4" /> Preview presentation
+            </Link>
+          </Button>
           <Button
             size="sm"
             onClick={() => setShareOpen(true)}
@@ -341,6 +349,19 @@ export default function CampaignReview() {
                                   unitNumber={u.unit_number}
                                   onUploaded={load}
                                 />
+                              )}
+                              {id && (
+                                <UnitMapUpload
+                                  campaignId={id}
+                                  unitId={u.id}
+                                  unitNumber={u.unit_number}
+                                  onUploaded={load}
+                                />
+                              )}
+                              {u.inset_map_url && (
+                                <div className="h-10 w-20 overflow-hidden rounded border border-border">
+                                  <img src={u.inset_map_url} alt="Map" className="h-full w-full object-cover" />
+                                </div>
                               )}
                             </div>
                           </td>

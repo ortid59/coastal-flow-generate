@@ -37,6 +37,7 @@ type Campaign = {
   campaign_name: string;
   proposal_name: string | null;
   client_logo_url: string | null;
+  cover_image_url: string | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
@@ -62,8 +63,14 @@ type Unit = {
   recommended: boolean | null;
   included: boolean | null;
   billboard_photo_url: string | null;
+  inset_map_url: string | null;
   latitude: number | null;
   longitude: number | null;
+  geopath_id: string | null;
+  media_type: string | null;
+  facing: string | null;
+  city: string | null;
+  zip: string | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -89,13 +96,13 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, flight_start, flight_end, markets")
           .eq("id", campaignId)
           .single(),
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, latitude, longitude",
+            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -103,11 +110,23 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       ]);
       if (c.data) setCampaign(c.data as Campaign);
       // Only INCLUDED + RECOMMENDED units appear in the client presentation.
-      setUnits(
-        ((u.data ?? []) as Unit[]).filter(
-          (x) => x.included !== false && x.recommended === true,
-        ),
+      // Dedupe by unit_number — keep the first occurrence (rows are already sorted).
+      const filtered = ((u.data ?? []) as Unit[]).filter(
+        (x) => x.included !== false && x.recommended === true,
       );
+      const seen = new Set<string>();
+      const deduped: Unit[] = [];
+      for (const unit of filtered) {
+        const key = (unit.unit_number || "").trim().toLowerCase();
+        if (!key) {
+          deduped.push(unit);
+          continue;
+        }
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(unit);
+      }
+      setUnits(deduped);
       setLoading(false);
     })();
   }, [campaignId]);
@@ -146,7 +165,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     );
   }
 
-  const heroPhoto = units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
+  // Hero photo priority: explicit campaign cover image > first unit photo
+  const heroPhoto =
+    campaign.cover_image_url ?? units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
   const flightLabel = `${fmtDateShort(campaign.flight_start)} – ${fmtDateShort(campaign.flight_end)}`;
   const primaryMarket = campaign.markets?.[0] ?? byMarket[0]?.[0] ?? "—";
 
@@ -214,11 +235,10 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <span className="font-semibold text-foreground">{campaign.client_name}</span>
               </motion.p>
 
-              {/* Stat pills */}
-              <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {/* Stat pills — Units pill removed per spec; keep dates + market */}
+              <div className="mt-10 grid gap-4 sm:grid-cols-2">
                 <CoverPill icon={<Calendar className="h-4 w-4" />} label="Campaign Dates" value={flightLabel} delay={0.7} />
                 <CoverPill icon={<MapPin className="h-4 w-4" />} label="Market" value={primaryMarket} delay={0.78} />
-                <CoverPill icon={<Sparkles className="h-4 w-4" />} label="Units" value={String(units.length)} delay={0.86} />
               </div>
 
               {/* Logo & tagline */}
@@ -585,13 +605,20 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 
           <ul className="mt-6 space-y-2 text-sm">
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
-              <Mail className="h-4 w-4" /> heather.waisanen@gmail.com
+              <Mail className="h-4 w-4" />
+              <a href="mailto:heather.waisanen@gmail.com">heather.waisanen@gmail.com</a>
             </li>
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
-              <Instagram className="h-4 w-4" /> @coastalmaverick
+              <Instagram className="h-4 w-4" />
+              <a href="https://www.instagram.com/coastalmaverick/" target="_blank" rel="noreferrer">
+                @coastalmaverick
+              </a>
             </li>
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
-              <Globe className="h-4 w-4" /> coastalmaverickmedia.com
+              <Globe className="h-4 w-4" />
+              <a href="https://www.coastalmaverick.com/" target="_blank" rel="noreferrer">
+                coastalmaverick.com
+              </a>
             </li>
           </ul>
         </motion.div>
@@ -743,8 +770,15 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           className="p-8 md:p-10 flex flex-col justify-between"
         >
           <div>
-            <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-[0.18em]">
-              Unit {indexLabel}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-[0.18em]">
+                Unit {indexLabel}
+              </div>
+              {unit.recommended && (
+                <div className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--ocean))] text-[hsl(var(--ocean-foreground))] px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.18em] shadow-elev-sm">
+                  <Sparkles className="h-3 w-3" /> Recommended
+                </div>
+              )}
             </div>
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
@@ -762,6 +796,53 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
                 {unit.highlights}
               </p>
+            )}
+
+            {/* Structured details strip — extracted from photosheet */}
+            {(unit.location_description ||
+              unit.geopath_id ||
+              unit.media_type ||
+              unit.facing ||
+              unit.size ||
+              unit.city ||
+              unit.zip ||
+              (unit.latitude != null && unit.longitude != null)) && (
+              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border bg-secondary/40 p-4 text-[11px]">
+                {unit.location_description && (
+                  <div className="col-span-2">
+                    <dt className="font-semibold uppercase tracking-wider text-muted-foreground">Description</dt>
+                    <dd className="mt-0.5 text-foreground">{unit.location_description}</dd>
+                  </div>
+                )}
+                {unit.geopath_id && (
+                  <DetailKV label="Geopath ID" value={unit.geopath_id} />
+                )}
+                {unit.media_type && (
+                  <DetailKV label="Media Type" value={unit.media_type} />
+                )}
+                {unit.facing && <DetailKV label="Facing" value={unit.facing} />}
+                {unit.size && <DetailKV label="Size" value={unit.size} />}
+                {unit.city && <DetailKV label="City" value={unit.city} />}
+                {unit.zip && <DetailKV label="Zip" value={unit.zip} />}
+                {unit.latitude != null && (
+                  <DetailKV label="Latitude" value={unit.latitude.toFixed(5)} />
+                )}
+                {unit.longitude != null && (
+                  <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
+                )}
+              </dl>
+            )}
+
+            {/* Map image extracted from photosheet */}
+            {unit.inset_map_url && (
+              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                <img
+                  src={unit.inset_map_url}
+                  alt={`Location map for unit ${unit.unit_number}`}
+                  className="h-auto w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
             )}
           </div>
 
@@ -906,3 +987,13 @@ function DetailStat({ icon, label, value }: { icon: React.ReactNode; label: stri
     </div>
   );
 }
+
+function DetailKV({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-mono text-foreground">{value}</dd>
+    </div>
+  );
+}
+

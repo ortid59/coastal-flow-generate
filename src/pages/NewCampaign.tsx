@@ -32,6 +32,7 @@ export default function NewCampaign() {
   const [pdfs, setPdfs] = useState<Picked[]>([]);
   const [photoSheets, setPhotoSheets] = useState<File | null>(null);
   const [logo, setLogo] = useState<File | null>(null);
+  const [cover, setCover] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<string>("");
@@ -40,6 +41,7 @@ export default function NewCampaign() {
   const pdfRef = useRef<HTMLInputElement>(null);
   const photoSheetsRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (
     list: FileList | null,
@@ -120,7 +122,25 @@ export default function NewCampaign() {
         if (up.error) throw up.error;
         const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
         logoUrl = pub.publicUrl;
-        await supabase.from("campaigns").update({ client_logo_url: logoUrl }).eq("id", campaignId);
+      }
+      // Upload cover image (public bucket)
+      let coverUrl: string | null = null;
+      if (cover) {
+        setProgress("Uploading cover image…");
+        const path = `${campaignId}/cover-${Date.now()}-${safeName(cover.name)}`;
+        const up = await supabase.storage.from("logos").upload(path, cover, { upsert: false });
+        if (up.error) throw up.error;
+        const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
+        coverUrl = pub.publicUrl;
+      }
+      if (logoUrl || coverUrl) {
+        await supabase
+          .from("campaigns")
+          .update({
+            ...(logoUrl ? { client_logo_url: logoUrl } : {}),
+            ...(coverUrl ? { cover_image_url: coverUrl } : {}),
+          })
+          .eq("id", campaignId);
       }
 
       // Upload xlsx + pdf to private uploads bucket
@@ -282,27 +302,56 @@ export default function NewCampaign() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Client logo (optional)</Label>
-            <input
-              ref={logoRef}
-              type="file"
-              accept="image/png,image/jpeg,image/svg+xml"
-              className="hidden"
-              onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
-            />
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="outline" onClick={() => logoRef.current?.click()}>
-                <ImageIcon className="h-4 w-4" /> Choose logo
-              </Button>
-              {logo && (
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {logo.name}
-                  <button type="button" onClick={() => setLogo(null)} className="text-muted-foreground hover:text-destructive">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Client logo (optional)</Label>
+              <input
+                ref={logoRef}
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml"
+                className="hidden"
+                onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
+              />
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="outline" onClick={() => logoRef.current?.click()}>
+                  <ImageIcon className="h-4 w-4" /> Choose logo
+                </Button>
+                {logo && (
+                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                    {logo.name}
+                    <button type="button" onClick={() => setLogo(null)} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Presentation cover image (optional)</Label>
+              <input
+                ref={coverRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => setCover(e.target.files?.[0] ?? null)}
+              />
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="outline" onClick={() => coverRef.current?.click()}>
+                  <ImageIcon className="h-4 w-4" /> Choose cover image
+                </Button>
+                {cover && (
+                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                    {cover.name}
+                    <button type="button" onClick={() => setCover(null)} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Hero image for the proposal cover. Different from the client logo.
+              </p>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { ImageOff, MapPin } from "lucide-react";
+import { ImageOff, MapPin, Sparkles } from "lucide-react";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCompactImpressions, fmtRateShort } from "@/lib/format";
 
@@ -12,6 +12,7 @@ type ChipUnit = {
   total_cost: number | null;
   format?: string | null;
   market?: string | null;
+  recommended?: boolean | null;
 };
 
 type Props = {
@@ -60,7 +61,11 @@ export function PortalIndexBar({ units }: Props) {
               <li key={u.id}>
                 <button
                   onClick={() => onClick(u.id)}
-                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-all hover:border-[hsl(var(--accent-gold))] hover:shadow-elev-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent-gold))]"
+                  className={`group flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left transition-all hover:border-[hsl(var(--accent-gold))] hover:shadow-elev-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent-gold))] ${
+                    u.recommended
+                      ? "border-[hsl(var(--accent-gold)/0.6)] bg-[hsl(var(--accent-gold)/0.05)]"
+                      : "border-border"
+                  }`}
                 >
                   {/* Index number */}
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--primary))] font-mono text-xs font-bold text-[hsl(var(--accent-gold))]">
@@ -81,12 +86,27 @@ export function PortalIndexBar({ units }: Props) {
                         <ImageOff className="h-3.5 w-3.5" />
                       </div>
                     )}
+                    {u.recommended && (
+                      <span
+                        title="Recommended"
+                        className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] shadow-elev-sm"
+                      >
+                        <Sparkles className="h-2.5 w-2.5" />
+                      </span>
+                    )}
                   </div>
 
                   {/* Content */}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-foreground group-hover:text-[hsl(var(--ocean))]">
-                      {short}
+                    <div className="flex items-center gap-1.5">
+                      <div className="truncate text-sm font-semibold text-foreground group-hover:text-[hsl(var(--ocean))]">
+                        {short}
+                      </div>
+                      {u.recommended && (
+                        <span className="shrink-0 rounded-sm bg-[hsl(var(--accent-gold))] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--accent-gold-foreground))]">
+                          Rec
+                        </span>
+                      )}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                       {u.format && <span>{u.format}</span>}

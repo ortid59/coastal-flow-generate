@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import NewCampaign from "./pages/NewCampaign";
 import CampaignReview from "./pages/CampaignReview";
+import PortalPreview from "./pages/PortalPreview";
 import Settings from "./pages/Settings";
 import PortalGate from "./pages/PortalGate";
 import NotFound from "./pages/NotFound";
@@ -49,6 +50,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CampaignReview />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campaigns/:id/preview"
+              element={
+                <ProtectedRoute>
+                  <PortalPreview />
                 </ProtectedRoute>
               }
             />

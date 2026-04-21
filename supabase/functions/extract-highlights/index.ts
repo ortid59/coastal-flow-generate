@@ -18,6 +18,32 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Extract structured fields like Geopath ID, Media Type, Facing, City, Zip
+ * from a page's flat text. Returns only fields that were confidently found.
+ */
+function extractStructuredFields(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const norm = text.replace(/\s+/g, " ");
+
+  const geopath = /Geopath\s*ID\s*[:#]?\s*(\d{4,})/i.exec(norm);
+  if (geopath) out.geopath_id = geopath[1];
+
+  const media = /Media\s*Type\s*[:#]?\s*([A-Za-z][A-Za-z\s/&-]{2,30}?)(?=\s+(?:Facing|Size|City|Zip|Latitude|Longitude|Geopath|$))/i.exec(norm);
+  if (media) out.media_type = media[1].trim();
+
+  const facing = /\bFacing\s*[:#]?\s*([NSEW]{1,3})\b/i.exec(norm);
+  if (facing) out.facing = facing[1].toUpperCase();
+
+  const city = /\bCity\s*[:#]?\s*([A-Z][A-Z\s.'-]{1,40}?)(?=\s+(?:Zip|State|Facing|Size|Latitude|Longitude|Geopath|$))/i.exec(norm);
+  if (city) out.city = city[1].trim();
+
+  const zip = /\bZip\s*(?:Code)?\s*[:#]?\s*(\d{5}(?:-\d{4})?)/i.exec(norm);
+  if (zip) out.zip = zip[1];
+
+  return out;
+}
+
 /** Patterns that identify vendor boilerplate / legal disclaimers we never want
  *  in the client-facing highlights. If any match, the paragraph is dropped. */
 const BOILERPLATE_PATTERNS: RegExp[] = [
@@ -251,10 +277,20 @@ Deno.serve(async (req) => {
           if (!match) continue;
 
           const para = extractLongestParagraph(items);
-          if (!para) continue;
-          const arr = collected.get(match) ?? [];
-          arr.push(para);
-          collected.set(match, arr);
+          if (para) {
+            const arr = collected.get(match) ?? [];
+            arr.push(para);
+            collected.set(match, arr);
+          }
+
+          // Extract structured fields from this page's flat text
+          const structured = extractStructuredFields(flatText);
+          if (Object.keys(structured).length > 0) {
+            const unitId = unitIdByNumber.get(match);
+            if (unitId) {
+              await supabase.from("units").update(structured).eq("id", unitId);
+            }
+          }
         } catch (e) {
           console.warn(`[extract-highlights] page ${p} error: ${(e as Error).message}`);
         }

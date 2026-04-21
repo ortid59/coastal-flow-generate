@@ -39,6 +39,7 @@ export type Database = {
           canva_design_url: string | null
           client_logo_url: string | null
           client_name: string
+          cover_image_url: string | null
           created_at: string | null
           flight_end: string | null
           flight_start: string | null
@@ -58,6 +59,7 @@ export type Database = {
           canva_design_url?: string | null
           client_logo_url?: string | null
           client_name: string
+          cover_image_url?: string | null
           created_at?: string | null
           flight_end?: string | null
           flight_start?: string | null
@@ -77,6 +79,7 @@ export type Database = {
           canva_design_url?: string | null
           client_logo_url?: string | null
           client_name?: string
+          cover_image_url?: string | null
           created_at?: string | null
           flight_end?: string | null
           flight_start?: string | null
@@ -135,6 +138,7 @@ export type Database = {
           artwork_due_date: string | null
           billboard_photo_url: string | null
           campaign_id: string | null
+          city: string | null
           cpm: number | null
           created_at: string | null
           current_advertisers: number | null
@@ -143,6 +147,7 @@ export type Database = {
           format: string | null
           four_week_impressions: number | null
           four_week_periods: number | null
+          geopath_id: string | null
           highlights: string | null
           id: string
           included: boolean | null
@@ -155,6 +160,7 @@ export type Database = {
           loop_length: string | null
           low_res_flag: boolean | null
           market: string | null
+          media_type: string | null
           minimap_url: string | null
           negotiated_rate_4wk: number | null
           notes: string | null
@@ -172,11 +178,13 @@ export type Database = {
           unit_number: string
           vendor: string | null
           weekly_impressions: number | null
+          zip: string | null
         }
         Insert: {
           artwork_due_date?: string | null
           billboard_photo_url?: string | null
           campaign_id?: string | null
+          city?: string | null
           cpm?: number | null
           created_at?: string | null
           current_advertisers?: number | null
@@ -185,6 +193,7 @@ export type Database = {
           format?: string | null
           four_week_impressions?: number | null
           four_week_periods?: number | null
+          geopath_id?: string | null
           highlights?: string | null
           id?: string
           included?: boolean | null
@@ -197,6 +206,7 @@ export type Database = {
           loop_length?: string | null
           low_res_flag?: boolean | null
           market?: string | null
+          media_type?: string | null
           minimap_url?: string | null
           negotiated_rate_4wk?: number | null
           notes?: string | null
@@ -214,11 +224,13 @@ export type Database = {
           unit_number: string
           vendor?: string | null
           weekly_impressions?: number | null
+          zip?: string | null
         }
         Update: {
           artwork_due_date?: string | null
           billboard_photo_url?: string | null
           campaign_id?: string | null
+          city?: string | null
           cpm?: number | null
           created_at?: string | null
           current_advertisers?: number | null
@@ -227,6 +239,7 @@ export type Database = {
           format?: string | null
           four_week_impressions?: number | null
           four_week_periods?: number | null
+          geopath_id?: string | null
           highlights?: string | null
           id?: string
           included?: boolean | null
@@ -239,6 +252,7 @@ export type Database = {
           loop_length?: string | null
           low_res_flag?: boolean | null
           market?: string | null
+          media_type?: string | null
           minimap_url?: string | null
           negotiated_rate_4wk?: number | null
           notes?: string | null
@@ -256,6 +270,7 @@ export type Database = {
           unit_number?: string
           vendor?: string | null
           weekly_impressions?: number | null
+          zip?: string | null
         }
         Relationships: [
           {
