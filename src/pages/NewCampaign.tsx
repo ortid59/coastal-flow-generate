@@ -252,14 +252,29 @@ export default function NewCampaign() {
             <Input id="markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="Jacksonville FL, Orlando FL" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
             <div className="space-y-2">
-              <Label htmlFor="start">Campaign Dates — start</Label>
-              <Input id="start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="end">Campaign Dates — end</Label>
-              <Input id="end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
+              <Label>Campaign Dates</Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Input
+                    id="start"
+                    type="date"
+                    value={flightStart}
+                    onChange={(e) => setFlightStart(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground pl-1">Start date</p>
+                </div>
+                <div className="space-y-1">
+                  <Input
+                    id="end"
+                    type="date"
+                    value={flightEnd}
+                    onChange={(e) => setFlightEnd(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground pl-1">End date</p>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="margin">Margin %</Label>
