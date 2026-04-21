@@ -32,6 +32,8 @@ import { UnitMinimap } from "@/components/UnitMinimap";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
+import { Switch } from "@/components/ui/switch";
+import { Label as UILabel } from "@/components/ui/label";
 
 type Campaign = {
   id: string;
