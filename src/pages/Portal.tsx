@@ -970,24 +970,50 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
             </div>
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
-              {unit.format ?? "Premium Placement"}
+              {parseShortAddress(unit.location_description) ||
+                unit.format ||
+                "Premium Placement"}
             </h4>
-            <div className="mt-3 font-mono text-sm text-[hsl(var(--ocean))]">
+            <div className="mt-2 text-xs uppercase tracking-[0.18em] text-[hsl(var(--ocean))]">
+              {unit.format ?? "Premium Placement"}
+            </div>
+            <div className="mt-3 font-mono text-sm text-muted-foreground">
               #{unit.unit_number}
             </div>
-            <p className="mt-4 text-sm md:text-base text-muted-foreground leading-relaxed">
-              {unit.location_description ?? `Unit ${unit.unit_number}`}
-            </p>
+            {unit.highlights && (
+              <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
+                {unit.highlights}
+              </p>
+            )}
           </div>
 
           <div className="mt-8 space-y-5">
             <div>
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-                {fmtMoney(unit.total_cost)} / 4-Week
+                4-Week Rate: {fmtMoney(unit.total_cost)}
               </div>
-              <div className="mt-3 text-xs text-muted-foreground">
-                {unit.size && <>Size: {unit.size} · </>}
-                {unit.vendor && <>Vendor: {unit.vendor}</>}
+              <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+                {unit.weekly_impressions != null && (
+                  <div>
+                    <span className="font-semibold text-foreground">Weekly Impressions:</span>{" "}
+                    {fmtNum(unit.weekly_impressions)}
+                  </div>
+                )}
+                {unit.four_week_impressions != null && (
+                  <div>
+                    <span className="font-semibold text-foreground">4-Week Impressions:</span>{" "}
+                    {fmtNum(unit.four_week_impressions)}
+                  </div>
+                )}
+                <div>{fmtCostLine("Production", unit.production_cost)}</div>
+                <div>{fmtCostLine("Install", unit.install_cost)}</div>
+                {(unit.size || unit.vendor) && (
+                  <div className="pt-1">
+                    {unit.size && <>Size: {unit.size}</>}
+                    {unit.size && unit.vendor && <> · </>}
+                    {unit.vendor && <>Vendor: {unit.vendor}</>}
+                  </div>
+                )}
               </div>
             </div>
             {unit.latitude != null && unit.longitude != null && (
