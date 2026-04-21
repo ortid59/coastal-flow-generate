@@ -282,7 +282,7 @@ export default function CampaignReview() {
             client page.
           </p>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_minmax(360px,440px)] items-start">
+          <div className="items-start">
             <div className="surface-card overflow-hidden min-w-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
