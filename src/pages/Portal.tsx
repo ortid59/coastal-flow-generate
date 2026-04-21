@@ -775,7 +775,7 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
       <div className="overflow-hidden rounded-2xl print:hidden" ref={emblaRef}>
         <div className="flex">
           {units.map((u, i) => (
-            <div key={u.id} className="min-w-0 flex-[0_0_100%] pr-4">
+            <div key={u.id} id={`unit-${u.id}`} className="min-w-0 flex-[0_0_100%] pr-4 scroll-mt-24">
               <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} />
             </div>
           ))}
@@ -859,14 +859,23 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
             </p>
           </div>
 
-          <div className="mt-8">
-            <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-              {fmtMoney(unit.total_cost)} / 4-Week
+          <div className="mt-8 space-y-5">
+            <div>
+              <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
+                {fmtMoney(unit.total_cost)} / 4-Week
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground">
+                {unit.size && <>Size: {unit.size} · </>}
+                {unit.vendor && <>Vendor: {unit.vendor}</>}
+              </div>
             </div>
-            <div className="mt-3 text-xs text-muted-foreground">
-              {unit.size && <>Size: {unit.size} · </>}
-              {unit.vendor && <>Vendor: {unit.vendor}</>}
-            </div>
+            {unit.latitude != null && unit.longitude != null && (
+              <UnitMinimap
+                lat={Number(unit.latitude)}
+                lng={Number(unit.longitude)}
+                unitNumber={unit.unit_number}
+              />
+            )}
           </div>
         </motion.div>
 
