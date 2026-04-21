@@ -69,17 +69,22 @@ export default function CampaignReview() {
   const [loading, setLoading] = useState(true);
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [extractingHl, setExtractingHl] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const load = async () => {
     if (!id) return;
     const [c, u] = await Promise.all([
-      supabase.from("campaigns").select("id, client_name, campaign_name, status, markets").eq("id", id).single(),
+      supabase
+        .from("campaigns")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets")
+        .eq("id", id)
+        .single(),
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag, latitude, longitude",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag, latitude, longitude",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -131,6 +136,23 @@ export default function CampaignReview() {
       toast({
         title: "Photos extracted",
         description: s ? `${s.units_with_photo} units matched · ${s.low_res_count} low-res` : "Done",
+      });
+      load();
+    }
+  };
+
+  const extractHighlights = async () => {
+    if (!id) return;
+    setExtractingHl(true);
+    const { data, error } = await supabase.functions.invoke("extract-highlights", { body: { campaign_id: id } });
+    setExtractingHl(false);
+    if (error) {
+      toast({ title: "Highlights extraction failed", description: error.message, variant: "destructive" });
+    } else {
+      const s = (data as any)?.summary;
+      toast({
+        title: "Highlights extracted",
+        description: s ? `${s.units_with_highlights} units · ${s.pages_processed} pages` : "Done",
       });
       load();
     }
