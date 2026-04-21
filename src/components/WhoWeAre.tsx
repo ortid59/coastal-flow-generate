@@ -1,112 +1,113 @@
 import { motion } from "framer-motion";
-import { Megaphone, Target, Lightbulb, Waves } from "lucide-react";
+import { Megaphone, Target, Lightbulb } from "lucide-react";
 
 export function WhoWeAre() {
   return (
-    <section className="relative overflow-hidden text-primary-foreground">
-      <div className="absolute inset-0 bg-gradient-hero" aria-hidden />
-      <div
-        className="absolute inset-0 opacity-60"
-        aria-hidden
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 80% 20%, hsl(var(--secondary) / 0.35), transparent 55%), radial-gradient(circle at 10% 90%, hsl(var(--accent-gold) / 0.22), transparent 55%)",
-        }}
-      />
+    <section className="relative overflow-hidden bg-[hsl(var(--off-white))]">
+      <div className="container-app relative py-24 md:py-32">
+        <div className="grid gap-16 md:grid-cols-2 md:gap-20 items-start">
+          {/* Left — watermark + bullets */}
+          <div className="relative">
+            <motion.span
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 0.04 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.5 }}
+              aria-hidden
+              className="pointer-events-none select-none absolute -top-8 -left-2 font-heading font-bold leading-[0.85] uppercase text-foreground"
+              style={{ fontSize: "clamp(80px, 12vw, 160px)" }}
+            >
+              Who<br />We Are
+            </motion.span>
 
-      {/* Decorative wave */}
-      <motion.div
-        initial={{ opacity: 0, x: 40 }}
-        whileInView={{ opacity: 1, x: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.2, ease: "easeOut" }}
-        className="absolute bottom-6 right-6 md:right-12"
-        aria-hidden
-      >
-        <Waves className="h-32 w-32 text-primary-foreground/10 animate-float" />
-      </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              className="relative"
+            >
+              <div className="eyebrow">About the Agency</div>
+              <h2 className="mt-3 font-heading text-5xl md:text-6xl font-bold tracking-tight uppercase leading-[0.95] text-foreground">
+                Who<br /><span className="text-[hsl(var(--ocean))]">We Are</span>
+              </h2>
+              <span className="mt-5 gold-rule" />
 
-      <div className="container-app relative py-20 md:py-28">
-        <div className="grid gap-12 md:grid-cols-2 md:gap-16 items-start">
-          {/* Left — title + icons */}
+              <ul className="mt-10 space-y-3 border-l-[3px] border-[hsl(var(--accent-gold))] pl-5">
+                {["Woman-Owned.", "Boutique.", "Built for Impact."].map((t, i) => (
+                  <motion.li
+                    key={t}
+                    initial={{ opacity: 0, x: -16 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                    className="font-heading text-xl md:text-2xl font-semibold uppercase tracking-wide text-foreground"
+                  >
+                    {t}
+                  </motion.li>
+                ))}
+              </ul>
+            </motion.div>
+          </div>
+
+          {/* Right — copy + credential cards */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-5"
           >
-            <div className="text-xs font-bold tracking-[0.4em] text-accent-gold">00</div>
-            <h2 className="mt-3 font-heading text-5xl md:text-7xl font-bold tracking-tight uppercase leading-[0.9]">
-              Who
-              <br />
-              <span className="text-accent-gold">We Are</span>
-            </h2>
-
-            <div className="mt-10 flex flex-wrap gap-6">
-              <IconBubble icon={<Megaphone className="h-6 w-6" />} label="Bold OOH" delay={0.2} />
-              <IconBubble icon={<Target className="h-6 w-6" />} label="Strategy" delay={0.35} />
-              <IconBubble icon={<Lightbulb className="h-6 w-6" />} label="Creative" delay={0.5} />
-            </div>
-          </motion.div>
-
-          {/* Right — copy */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-5 text-base md:text-lg leading-relaxed text-primary-foreground/90"
-          >
-            <p>
-              <span className="font-semibold text-primary-foreground">Coastal Maverick</span>{" "}
-              is a woman-owned boutique out-of-home (OOH) media agency specializing in
-              high-impact, highly customized OOH campaigns.
+            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">Coastal Maverick</span> is a
+              woman-owned boutique out-of-home (OOH) media agency specializing in
+              high-impact, highly customized OOH campaigns. From concept to completion, we
+              serve as a strategic partner for brands looking to make a bold visual
+              statement in the physical world.
             </p>
-            <p>
-              From concept to completion, we serve as a strategic partner for brands looking
-              to make a bold visual statement in the physical world.
-            </p>
-            <p>
+            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
               With 360-degree experience across media owner, client, and agency sides, we
               bring a unique perspective that fuels smarter strategy and greater impact.
             </p>
+
+            <div className="h-px w-full bg-border my-2" />
+
+            <div className="grid gap-4 sm:grid-cols-3 pt-4">
+              <CredentialCard icon={<Megaphone className="h-5 w-5" />} label="Bold OOH" delay={0.2} />
+              <CredentialCard icon={<Target className="h-5 w-5" />} label="Strategy" delay={0.32} />
+              <CredentialCard icon={<Lightbulb className="h-5 w-5" />} label="Creative" delay={0.44} />
+            </div>
           </motion.div>
         </div>
-
-        {/* Bottom line */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7, delay: 0.3 }}
-          className="mt-16 max-w-3xl text-lg md:text-xl leading-relaxed text-primary-foreground/90 border-l-2 border-accent-gold pl-6"
-        >
-          With deep media buying experience, top-tier vendor relationships, and creative
-          insight,{" "}
-          <span className="font-semibold text-accent-gold">we help brands</span> break
-          through the noise and command attention.
-        </motion.div>
       </div>
     </section>
   );
 }
 
-function IconBubble({ icon, label, delay = 0 }: { icon: React.ReactNode; label: string; delay?: number }) {
+function CredentialCard({
+  icon,
+  label,
+  delay = 0,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  delay?: number;
+}) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.6 }}
-      whileInView={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, scale: 0.92, y: 16 }}
+      whileInView={{ opacity: 1, scale: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.5, delay, ease: [0.34, 1.56, 0.64, 1] }}
-      whileHover={{ y: -6, scale: 1.05 }}
-      className="group flex flex-col items-center gap-2"
+      transition={{ duration: 0.55, delay, ease: [0.34, 1.56, 0.64, 1] }}
+      whileHover={{ y: -4 }}
+      className="rounded-2xl bg-card border border-border border-t-[3px] border-t-[hsl(var(--accent-gold))] p-5 shadow-elev-sm transition-shadow hover:shadow-elev-md"
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-foreground text-primary shadow-elev-md ring-1 ring-accent-gold/30 transition-shadow duration-300 group-hover:shadow-elev-lg">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-[hsl(var(--ocean))]">
         {icon}
       </div>
-      <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-primary-foreground/80">
+      <div className="mt-4 font-heading text-base font-semibold uppercase tracking-wide text-foreground">
         {label}
-      </span>
+      </div>
     </motion.div>
   );
 }

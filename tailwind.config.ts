@@ -12,8 +12,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        heading: ['Montserrat', 'system-ui', 'sans-serif'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
+        heading: ['Oswald', 'system-ui', 'sans-serif'],
+        body: ['Montserrat', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -53,6 +53,12 @@ export default {
           DEFAULT: "hsl(var(--accent-gold))",
           foreground: "hsl(var(--accent-gold-foreground))",
         },
+        ocean: {
+          DEFAULT: "hsl(var(--ocean))",
+          foreground: "hsl(var(--ocean-foreground))",
+        },
+        "mid-blue": "hsl(var(--mid-blue))",
+        "off-white": "hsl(var(--off-white))",
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -75,6 +81,7 @@ export default {
       backgroundImage: {
         'gradient-hero': 'var(--gradient-hero)',
         'gradient-gold': 'var(--gradient-gold)',
+        'gradient-ocean': 'var(--gradient-ocean)',
       },
       boxShadow: {
         'elev-sm': 'var(--shadow-elev-sm)',

@@ -10,31 +10,38 @@
 
 @layer base {
   :root {
-    /* Surfaces */
-    --background: 210 30% 98%;            /* offWhite #F7F9FC */
-    --foreground: 222 60% 14%;            /* navy ink */
+    /* Surfaces — light only */
+    --background: 0 0% 100%;              /* white */
+    --foreground: 217 70% 14%;            /* cm-navy #0B1E3A */
 
     --card: 0 0% 100%;
-    --card-foreground: 222 60% 14%;
+    --card-foreground: 217 70% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 60% 14%;
+    --popover-foreground: 217 70% 14%;
 
     /* Brand */
-    --primary: 222 65% 15%;               /* navy #0D1B3E */
-    --primary-foreground: 210 30% 98%;
+    --primary: 217 70% 14%;               /* cm-navy #0B1E3A */
+    --primary-foreground: 0 0% 100%;
 
-    --accent-gold: 42 65% 52%;            /* gold #D4A437 */
-    --accent-gold-foreground: 222 65% 15%;
+    --ocean: 204 100% 25%;                /* cm-ocean #005080 */
+    --ocean-foreground: 0 0% 100%;
 
-    --secondary: 209 60% 91%;             /* softBlue #D9E8F5 */
-    --secondary-foreground: 222 65% 15%;
+    --mid-blue: 207 58% 44%;              /* cm-mid-blue #2F78B0 */
 
-    --accent: 209 60% 91%;
-    --accent-foreground: 222 65% 15%;
+    --accent-gold: 38 60% 47%;            /* cm-gold #C09030 */
+    --accent-gold-foreground: 217 70% 14%;
 
-    --muted: 210 30% 94%;
-    --muted-foreground: 220 12% 38%;      /* darkGray-ish */
+    --secondary: 207 44% 89%;             /* cm-soft-blue #D8E6F0 */
+    --secondary-foreground: 217 70% 14%;
+
+    --accent: 207 44% 89%;
+    --accent-foreground: 217 70% 14%;
+
+    --off-white: 214 33% 98%;             /* cm-off-white #F7F9FC */
+
+    --muted: 214 33% 96%;
+    --muted-foreground: 213 16% 49%;      /* cm-gray-text #6B7A8D */
 
     --destructive: 0 70% 48%;
     --destructive-foreground: 0 0% 100%;
@@ -45,19 +52,22 @@
     --warning: 38 92% 50%;
     --warning-foreground: 222 65% 15%;
 
-    --border: 215 22% 88%;
-    --input: 215 22% 88%;
-    --ring: 222 65% 25%;
+    --border: 214 25% 93%;                /* cm-gray-light #E8EDF3 */
+    --input: 214 25% 93%;
+    --ring: 204 100% 25%;
 
-    --radius: 0.625rem;
+    --radius: 1rem;
 
     /* Gradients & shadows */
-    --gradient-hero: linear-gradient(135deg, hsl(222 65% 15%), hsl(222 65% 25%));
-    --gradient-gold: linear-gradient(135deg, hsl(42 65% 52%), hsl(38 75% 60%));
-    --shadow-elev-sm: 0 1px 2px hsl(222 65% 15% / 0.06), 0 1px 1px hsl(222 65% 15% / 0.04);
-    --shadow-elev-md: 0 8px 24px -8px hsl(222 65% 15% / 0.18);
-    --shadow-elev-lg: 0 24px 48px -16px hsl(222 65% 15% / 0.28);
+    --gradient-hero: linear-gradient(135deg, hsl(217 70% 14%), hsl(204 100% 25%));
+    --gradient-gold: linear-gradient(90deg, hsl(38 60% 47%), hsl(207 44% 89%));
+    --gradient-ocean: linear-gradient(135deg, hsl(204 100% 25%), hsl(207 58% 44%));
+    --shadow-elev-sm: 0 1px 2px hsl(204 60% 20% / 0.06), 0 1px 1px hsl(204 60% 20% / 0.04);
+    --shadow-elev-md: 0 8px 24px -8px hsl(204 80% 25% / 0.16);
+    --shadow-elev-lg: 0 20px 48px -16px hsl(204 80% 25% / 0.18);
 
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     --transition-base: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Sidebar (kept for shadcn defaults) */
@@ -109,20 +119,35 @@
   }
 
   h1, h2, h3, h4, h5 {
-    font-family: 'Montserrat', system-ui, sans-serif;
-    @apply tracking-tight text-foreground;
+    font-family: 'Oswald', system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    @apply text-foreground;
   }
 
   h1 { @apply text-4xl font-bold md:text-5xl; }
-  h2 { @apply text-2xl font-semibold md:text-3xl; }
+  h2 { @apply text-3xl font-bold md:text-4xl; }
   h3 { @apply text-xl font-semibold; }
 }
 
 @layer components {
   .container-app {
-    @apply mx-auto w-full max-w-7xl px-6 md:px-10;
+    @apply mx-auto w-full max-w-7xl px-6 md:px-12;
   }
   .surface-card {
     @apply rounded-[var(--radius)] border bg-card shadow-[var(--shadow-elev-sm)];
+  }
+  .gold-rule {
+    @apply block h-[3px] w-16 bg-[hsl(var(--accent-gold))] rounded-full;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))];
+    font-family: 'Montserrat', sans-serif;
+  }
+  .num-display {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    @apply tabular-nums;
   }
 }
