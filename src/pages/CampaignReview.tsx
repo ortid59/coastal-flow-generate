@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
-import { MasterMap, type MapPoint } from "@/components/MasterMap";
+
 import { HighlightsEditor } from "@/components/HighlightsEditor";
 import { LogoReplace } from "@/components/LogoReplace";
 import { parseShortAddress } from "@/lib/shortAddress";
