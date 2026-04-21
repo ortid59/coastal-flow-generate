@@ -20,6 +20,7 @@ type Campaign = {
   id: string;
   client_name: string;
   campaign_name: string;
+  proposal_name: string | null;
   campaign_date: string | null;
   markets: string[] | null;
   flight_start: string | null;
@@ -50,7 +51,7 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from("campaigns")
       .select(
-        "id, client_name, campaign_name, campaign_date, markets, flight_start, flight_end, margin_pct, status, created_at, portal_token, portal_password_hash",
+        "id, client_name, campaign_name, proposal_name, campaign_date, markets, flight_start, flight_end, margin_pct, status, created_at, portal_token, portal_password_hash",
       )
       .order("created_at", { ascending: false });
     if (error) {
@@ -155,6 +156,11 @@ export default function Dashboard() {
                     <h3 className="mt-1 truncate font-heading text-lg group-hover:text-primary">
                       {c.campaign_name}
                     </h3>
+                    {c.proposal_name && (
+                      <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
+                        {c.proposal_name}
+                      </p>
+                    )}
                   </div>
                   <Badge className={statusStyle[c.status ?? "draft"] ?? statusStyle.draft}>
                     {c.status ?? "draft"}
@@ -199,6 +205,7 @@ export default function Dashboard() {
           initial={{
             client_name: editTarget.client_name,
             campaign_name: editTarget.campaign_name,
+            proposal_name: editTarget.proposal_name,
             markets: editTarget.markets,
             flight_start: editTarget.flight_start,
             flight_end: editTarget.flight_end,
