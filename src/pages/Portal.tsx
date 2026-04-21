@@ -37,6 +37,7 @@ type Campaign = {
   campaign_name: string;
   proposal_name: string | null;
   client_logo_url: string | null;
+  cover_image_url: string | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
@@ -62,8 +63,14 @@ type Unit = {
   recommended: boolean | null;
   included: boolean | null;
   billboard_photo_url: string | null;
+  inset_map_url: string | null;
   latitude: number | null;
   longitude: number | null;
+  geopath_id: string | null;
+  media_type: string | null;
+  facing: string | null;
+  city: string | null;
+  zip: string | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -89,13 +96,13 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, flight_start, flight_end, markets")
           .eq("id", campaignId)
           .single(),
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, latitude, longitude",
+            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -103,11 +110,23 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       ]);
       if (c.data) setCampaign(c.data as Campaign);
       // Only INCLUDED + RECOMMENDED units appear in the client presentation.
-      setUnits(
-        ((u.data ?? []) as Unit[]).filter(
-          (x) => x.included !== false && x.recommended === true,
-        ),
+      // Dedupe by unit_number — keep the first occurrence (rows are already sorted).
+      const filtered = ((u.data ?? []) as Unit[]).filter(
+        (x) => x.included !== false && x.recommended === true,
       );
+      const seen = new Set<string>();
+      const deduped: Unit[] = [];
+      for (const unit of filtered) {
+        const key = (unit.unit_number || "").trim().toLowerCase();
+        if (!key) {
+          deduped.push(unit);
+          continue;
+        }
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(unit);
+      }
+      setUnits(deduped);
       setLoading(false);
     })();
   }, [campaignId]);
@@ -146,7 +165,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     );
   }
 
-  const heroPhoto = units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
+  // Hero photo priority: explicit campaign cover image > first unit photo
+  const heroPhoto =
+    campaign.cover_image_url ?? units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
   const flightLabel = `${fmtDateShort(campaign.flight_start)} – ${fmtDateShort(campaign.flight_end)}`;
   const primaryMarket = campaign.markets?.[0] ?? byMarket[0]?.[0] ?? "—";
 
@@ -214,11 +235,10 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <span className="font-semibold text-foreground">{campaign.client_name}</span>
               </motion.p>
 
-              {/* Stat pills */}
-              <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {/* Stat pills — Units pill removed per spec; keep dates + market */}
+              <div className="mt-10 grid gap-4 sm:grid-cols-2">
                 <CoverPill icon={<Calendar className="h-4 w-4" />} label="Campaign Dates" value={flightLabel} delay={0.7} />
                 <CoverPill icon={<MapPin className="h-4 w-4" />} label="Market" value={primaryMarket} delay={0.78} />
-                <CoverPill icon={<Sparkles className="h-4 w-4" />} label="Units" value={String(units.length)} delay={0.86} />
               </div>
 
               {/* Logo & tagline */}
