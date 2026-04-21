@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -11,8 +11,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image as ImageIcon, Upload, X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -26,9 +33,15 @@ type Props = {
     flight_start: string | null;
     flight_end: string | null;
     margin_pct: number | null;
+    client_logo_url?: string | null;
+    canva_design_url?: string | null;
+    status?: string | null;
+    campaign_date?: string | null;
   };
   onSaved: () => void;
 };
+
+const STATUSES = ["draft", "in_review", "approved", "live", "archived"];
 
 export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, onSaved }: Props) {
   const { toast } = useToast();
@@ -39,7 +52,14 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
   const [flightStart, setFlightStart] = useState(initial.flight_start ?? "");
   const [flightEnd, setFlightEnd] = useState(initial.flight_end ?? "");
   const [marginPct, setMarginPct] = useState(String(initial.margin_pct ?? 20));
+  const [campaignDate, setCampaignDate] = useState(initial.campaign_date ?? "");
+  const [canvaUrl, setCanvaUrl] = useState(initial.canva_design_url ?? "");
+  const [status, setStatus] = useState(initial.status ?? "draft");
+  const [logoUrl, setLogoUrl] = useState(initial.client_logo_url ?? "");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -50,8 +70,33 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
       setFlightStart(initial.flight_start ?? "");
       setFlightEnd(initial.flight_end ?? "");
       setMarginPct(String(initial.margin_pct ?? 20));
+      setCampaignDate(initial.campaign_date ?? "");
+      setCanvaUrl(initial.canva_design_url ?? "");
+      setStatus(initial.status ?? "draft");
+      setLogoUrl(initial.client_logo_url ?? "");
+      setLogoFile(null);
     }
   }, [open, initial]);
+
+  const uploadLogo = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Logo too large", description: "Max 2 MB.", variant: "destructive" });
+      return;
+    }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop() ?? "png";
+    const path = `${campaignId}/logo-${Date.now()}.${ext}`;
+    const up = await supabase.storage.from("logos").upload(path, file, { upsert: false });
+    if (up.error) {
+      setUploadingLogo(false);
+      toast({ title: "Upload failed", description: up.error.message, variant: "destructive" });
+      return;
+    }
+    const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
+    setLogoUrl(pub.publicUrl);
+    setLogoFile(file);
+    setUploadingLogo(false);
+  };
 
   const save = async () => {
     if (!clientName.trim() || !campaignName.trim()) {
@@ -70,6 +115,10 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
         flight_start: flightStart || null,
         flight_end: flightEnd || null,
         margin_pct: marginPct ? Number(marginPct) : 20,
+        campaign_date: campaignDate || null,
+        canva_design_url: canvaUrl.trim() || null,
+        status: status || "draft",
+        client_logo_url: logoUrl || null,
       })
       .eq("id", campaignId);
     setSaving(false);
@@ -84,22 +133,24 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit campaign</DialogTitle>
-          <DialogDescription>Update client, dates, and markets.</DialogDescription>
+          <DialogDescription>Update any campaign detail.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
+
+        <div className="grid gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="e-client">Client</Label>
+              <Label htmlFor="e-client">Client name</Label>
               <Input id="e-client" value={clientName} onChange={(e) => setClientName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="e-campaign">Campaign</Label>
+              <Label htmlFor="e-campaign">Campaign name</Label>
               <Input id="e-campaign" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} />
             </div>
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="e-proposal">Proposal name</Label>
             <Input
@@ -109,25 +160,104 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
               placeholder="Your Bridge to the Mountains — Jacksonville Advertising Opportunities"
             />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="e-markets">Markets (comma separated)</Label>
-            <Input id="e-markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} />
+            <Input id="e-markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="Jacksonville FL, Orlando FL" />
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+
+          <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
             <div className="space-y-2">
-              <Label htmlFor="e-start">Campaign Dates — start</Label>
-              <Input id="e-start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="e-end">Campaign Dates — end</Label>
-              <Input id="e-end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
+              <Label>Campaign Dates</Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Input id="e-start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
+                  <p className="text-[11px] text-muted-foreground pl-1">Start date</p>
+                </div>
+                <div className="space-y-1">
+                  <Input id="e-end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
+                  <p className="text-[11px] text-muted-foreground pl-1">End date</p>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="e-margin">Margin %</Label>
               <Input id="e-margin" type="number" min="0" max="100" value={marginPct} onChange={(e) => setMarginPct(e.target.value)} />
             </div>
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="e-cdate">Campaign date</Label>
+              <Input id="e-cdate" type="date" value={campaignDate} onChange={(e) => setCampaignDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Date the campaign was created/issued.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="e-status">Status</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger id="e-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s.replace("_", " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="e-canva">Canva design URL</Label>
+            <Input
+              id="e-canva"
+              value={canvaUrl}
+              onChange={(e) => setCanvaUrl(e.target.value)}
+              placeholder="https://www.canva.com/design/..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Client logo</Label>
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-md border bg-secondary/40 overflow-hidden">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Client logo" className="h-full w-full object-contain" />
+                ) : (
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 flex flex-wrap items-center gap-2">
+                <input
+                  ref={logoRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadLogo(f);
+                  }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => logoRef.current?.click()} disabled={uploadingLogo}>
+                  {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {logoUrl ? "Replace logo" : "Upload logo"}
+                </Button>
+                {logoUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setLogoUrl(""); setLogoFile(null); }}>
+                    <X className="h-4 w-4" /> Remove
+                  </Button>
+                )}
+                {logoFile && (
+                  <span className="text-xs text-muted-foreground">{logoFile.name}</span>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">PNG, JPG, SVG, or WEBP. Max 2 MB.</p>
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
