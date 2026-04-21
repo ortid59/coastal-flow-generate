@@ -482,62 +482,137 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       )}
 
       {/* ===== SECTION 5 — INVESTMENT SUMMARY ===== */}
-      <section className="bg-card">
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="bg-primary text-primary-foreground"
-        >
-          <div className="container-app py-12 md:py-16 text-center">
-            <h2 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight">
-              Campaign Investment Summary
-            </h2>
-            <span className="mx-auto mt-5 block h-[3px] w-16 bg-[hsl(var(--accent-gold))] rounded-full" />
-            <p className="mt-4 text-sm md:text-base text-primary-foreground/80">
-              {primaryMarket} · {flightLabel}
-            </p>
-          </div>
-        </motion.div>
-
-        <div className="container-app py-16 md:py-20">
-          <div className="grid gap-6 md:grid-cols-3">
-            <MetricCard
-              label="Total Impressions"
-              value={<CountUp value={stats.imps} />}
-              delay={0}
-            />
-            <MetricCard
-              label="Total Investment"
-              value={
-                <CountUp
-                  value={stats.cost}
-                  format={(n) =>
-                    new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                      maximumFractionDigits: 0,
-                    }).format(n)
-                  }
-                />
-              }
-              delay={0.12}
-            />
-            <MetricCard
-              label="Premium Placements"
-              value={<CountUp value={stats.units} />}
-              delay={0.24}
-            />
-          </div>
-          {stats.cpm != null && (
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              Blended CPM ·{" "}
-              <span className="font-semibold text-foreground">${stats.cpm.toFixed(2)}</span>
+      {(showSummary || !isAdminView) && showSummary && (
+        <section className="bg-card">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="bg-primary text-primary-foreground"
+          >
+            <div className="container-app py-12 md:py-16 text-center">
+              <h2 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight">
+                Campaign Investment Summary
+              </h2>
+              <span className="mx-auto mt-5 block h-[3px] w-16 bg-[hsl(var(--accent-gold))] rounded-full" />
+              <p className="mt-4 text-sm md:text-base text-primary-foreground/80">
+                {primaryMarket} · {flightLabel}
+              </p>
             </div>
-          )}
-        </div>
-      </section>
+          </motion.div>
+
+          <div className="container-app py-16 md:py-20">
+            {/* Admin-only toggle to hide the summary from clients */}
+            {isAdminView && (
+              <div className="mb-8 flex items-center justify-end gap-3 rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-3">
+                <UILabel htmlFor="show-summary" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Show Investment Summary (admin)
+                </UILabel>
+                <Switch id="show-summary" checked={showSummary} onCheckedChange={setShowSummary} />
+              </div>
+            )}
+
+            <div className="grid gap-6 md:grid-cols-3">
+              <MetricCard
+                label="Total 4-Week Impressions"
+                value={<CountUp value={stats.imps} />}
+                delay={0}
+              />
+              <MetricCard
+                label="Total 4-Week Investment"
+                value={
+                  <CountUp
+                    value={stats.cost}
+                    format={(n) =>
+                      new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        maximumFractionDigits: 0,
+                      }).format(n)
+                    }
+                  />
+                }
+                delay={0.12}
+              />
+              <MetricCard
+                label="Premium Placements"
+                value={<CountUp value={stats.units} />}
+                delay={0.24}
+              />
+            </div>
+
+            {/* Per-unit line items */}
+            <div className="mt-12 overflow-hidden rounded-2xl border border-border bg-card shadow-elev-sm">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-border bg-secondary/40 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                <span>Placement</span>
+                <span className="text-right">Format</span>
+                <span className="text-right">4-Week Rate</span>
+              </div>
+              {units.map((u) => (
+                <div
+                  key={u.id}
+                  className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-border px-6 py-3.5 text-sm last:border-b-0 hover:bg-secondary/30"
+                >
+                  <span className="truncate text-foreground">
+                    {parseShortAddress(u.location_description) || `Unit ${u.unit_number}`}
+                  </span>
+                  <span className="text-right text-muted-foreground">{u.format ?? "—"}</span>
+                  <span className="text-right font-semibold tabular-nums text-foreground">
+                    {fmtMoney(u.total_cost)}
+                  </span>
+                </div>
+              ))}
+              <div className="grid grid-cols-[1fr_auto] gap-4 bg-secondary/60 px-6 py-4 text-sm">
+                <span className="font-bold uppercase tracking-wider text-foreground">
+                  Total 4-Week Investment
+                </span>
+                <span className="text-right font-heading text-lg font-bold tabular-nums text-[hsl(var(--ocean))]">
+                  {fmtMoney(stats.cost)}
+                </span>
+              </div>
+              {(() => {
+                const periods = Math.max(
+                  1,
+                  ...units.map((u) => Number(u.four_week_periods ?? 0)).filter((n) => n > 0),
+                  1,
+                );
+                if (periods <= 1) return null;
+                return (
+                  <div className="grid grid-cols-[1fr_auto] gap-4 bg-primary px-6 py-4 text-sm text-primary-foreground">
+                    <span className="font-bold uppercase tracking-wider">
+                      Total Campaign Investment ({periods} × 4-week periods)
+                    </span>
+                    <span className="text-right font-heading text-lg font-bold tabular-nums text-[hsl(var(--accent-gold))]">
+                      {fmtMoney(stats.cost * periods)}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {stats.cpm != null && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                Blended CPM ·{" "}
+                <span className="font-semibold text-foreground">${stats.cpm.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Admin-only: when summary is hidden, show a slim restore bar */}
+      {isAdminView && !showSummary && (
+        <section className="bg-card border-y print:hidden">
+          <div className="container-app flex items-center justify-end gap-3 py-4">
+            <UILabel htmlFor="show-summary-restore" className="text-xs uppercase tracking-wider text-muted-foreground">
+              Investment Summary hidden (admin) — show
+            </UILabel>
+            <Switch id="show-summary-restore" checked={showSummary} onCheckedChange={setShowSummary} />
+          </div>
+        </section>
+      )}
+
 
       {/* ===== SECTION 6 — NEXT STEPS ===== */}
       <NextSteps />
