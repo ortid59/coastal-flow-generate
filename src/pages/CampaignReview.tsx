@@ -219,23 +219,40 @@ export default function CampaignReview() {
         </Link>
       </Button>
 
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {campaign?.client_name}
+      <header className="mb-8 surface-card p-6 flex flex-wrap items-start justify-between gap-6">
+        <div className="flex items-start gap-5 min-w-0 flex-1">
+          {id && campaign && (
+            <LogoReplace
+              campaignId={id}
+              currentUrl={campaign.client_logo_url}
+              clientName={campaign.client_name}
+              onUploaded={(url) => setCampaign({ ...campaign, client_logo_url: url })}
+            />
+          )}
+          <div className="min-w-0">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {campaign?.client_name}
+            </div>
+            <h1 className="font-heading mt-1 text-2xl">{campaign?.campaign_name}</h1>
+            {campaign?.proposal_name && (
+              <p className="mt-1 text-sm italic text-[hsl(var(--ocean))]">{campaign.proposal_name}</p>
+            )}
+            {campaign?.markets?.length ? (
+              <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" /> {campaign.markets.join(", ")}
+              </p>
+            ) : null}
           </div>
-          <h1 className="font-heading mt-1">{campaign?.campaign_name}</h1>
-          {campaign?.markets?.length ? (
-            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5" /> {campaign.markets.join(", ")}
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={campaign?.status ?? "draft"} />
           <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
+          </Button>
+          <Button variant="outline" size="sm" onClick={extractHighlights} disabled={extractingHl || units.length === 0}>
+            {extractingHl ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            Extract highlights
           </Button>
           <Button variant="outline" size="sm" onClick={reparse} disabled={reparsing || campaign?.status === "parsing"}>
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
