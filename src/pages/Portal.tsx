@@ -5,6 +5,7 @@ import { Loader2, Printer, MapPin, Sparkles, ImageOff, Calendar, TrendingUp, Dol
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
+import { MeetTheTeam } from "@/components/MeetTheTeam";
 
 type Campaign = {
   id: string;
@@ -247,6 +248,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           </div>
         </section>
       )}
+
+      {/* Meet the team */}
+      <MeetTheTeam />
 
       {/* Footer */}
       <footer className="border-t py-10 text-center text-xs text-muted-foreground">
