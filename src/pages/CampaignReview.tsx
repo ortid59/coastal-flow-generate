@@ -370,9 +370,32 @@ export default function CampaignReview() {
                         </tr>
                       );
                     })}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {/* Sticky master map */}
+            <aside className="lg:sticky lg:top-20 print:hidden">
+              <div className="surface-card overflow-hidden">
+                <div className="border-b bg-muted/30 px-4 py-2.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
+                  Unit map
+                  <span className="ml-auto normal-case font-normal tracking-normal text-[11px]">
+                    {mapPoints.length} mapped
+                  </span>
+                </div>
+                <MasterMap
+                  points={mapPoints}
+                  highlightedId={highlightedId}
+                  onMarkerClick={(p) => setHighlightedId(p.id)}
+                  className="h-[60vh] min-h-[420px] rounded-none"
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Click a row or pin to highlight. Pins use unit numbers from your Excel.
+              </p>
+            </aside>
           </div>
         </>
       )}
