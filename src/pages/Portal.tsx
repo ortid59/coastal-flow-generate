@@ -945,13 +945,6 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 )}
               </div>
             </div>
-            {unit.latitude != null && unit.longitude != null && (
-              <UnitMinimap
-                lat={Number(unit.latitude)}
-                lng={Number(unit.longitude)}
-                unitNumber={unit.unit_number}
-              />
-            )}
           </div>
         </motion.div>
 
