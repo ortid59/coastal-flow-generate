@@ -63,6 +63,7 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -148,6 +149,30 @@ export default function CampaignReview() {
     const photos = included.filter((u) => u.billboard_photo_url).length;
     return { total: units.length, included: included.length, recs, imps, cost, photos };
   }, [units]);
+
+  const mapPoints: MapPoint[] = useMemo(
+    () =>
+      units
+        .filter(
+          (u) =>
+            u.included !== false &&
+            u.latitude != null &&
+            u.longitude != null &&
+            Number.isFinite(Number(u.latitude)) &&
+            Number.isFinite(Number(u.longitude)),
+        )
+        .map((u) => ({
+          id: u.id,
+          unit_number: u.unit_number,
+          lat: Number(u.latitude),
+          lng: Number(u.longitude),
+          title: `Unit ${u.unit_number}`,
+          location: u.location_description,
+          impressions: u.four_week_impressions,
+          rate: u.total_cost,
+        })),
+    [units],
+  );
 
   if (loading) {
     return (
