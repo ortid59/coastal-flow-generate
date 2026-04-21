@@ -18,6 +18,33 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Patterns that identify vendor boilerplate / legal disclaimers we never want
+ *  in the client-facing highlights. If any match, the paragraph is dropped. */
+const BOILERPLATE_PATTERNS: RegExp[] = [
+  /geopath/i,
+  /geopath\s+impressions?/i,
+  /audience\s+location\s+measurement/i,
+  /bentley\s+system/i,
+  /©\s*copyright/i,
+  /all\s+rights\s+reserved/i,
+  /intellectual\s+property/i,
+  /proprietary/i,
+  /source\s*:\s*\d{6,}/i,
+  /spot\s+in\s+rotation/i,
+  /this\s+proposal\s*\/\s*photosheet/i,
+];
+
+/** Strip any leading/trailing boilerplate sentences from a paragraph the
+ *  scorer kept (e.g., disclaimer text bleeding into the prose block). */
+function stripBoilerplateSentences(text: string): string {
+  // Split into sentences while keeping terminators.
+  const sentences = text.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) ?? [text];
+  const cleaned = sentences.filter(
+    (s) => !BOILERPLATE_PATTERNS.some((re) => re.test(s)),
+  );
+  return cleaned.join(" ").replace(/\s+/g, " ").trim();
+}
+
 /** Group PDF text items into lines based on Y position, then join lines into
  *  paragraph blocks separated by larger vertical gaps. Return the longest
  *  prose-like block (one with the most word characters and at least one period).
@@ -60,11 +87,13 @@ function extractLongestParagraph(items: Array<{ str: string; transform?: number[
   if (current.trim()) paragraphs.push(current.trim());
 
   // Score each paragraph: prefer many words + presence of sentence punctuation,
-  // and exclude things that look like data fields (mostly numbers, $, "Unit #").
+  // and exclude things that look like data fields (mostly numbers, $, "Unit #")
+  // and any vendor boilerplate / legal disclaimers.
   const scored = paragraphs
     .map((p) => p.replace(/\s+/g, " ").trim())
     .filter((p) => p.length > 60)
     .filter((p) => !/^[\s\d$%.,:/\-]+$/.test(p))
+    .filter((p) => !BOILERPLATE_PATTERNS.some((re) => re.test(p)))
     .map((p) => {
       const words = p.split(/\s+/).length;
       const sentences = (p.match(/[.!?]/g) ?? []).length;
@@ -74,7 +103,9 @@ function extractLongestParagraph(items: Array<{ str: string; transform?: number[
     })
     .sort((a, b) => b.score - a.score);
 
-  return scored[0]?.p ?? "";
+  const best = scored[0]?.p ?? "";
+  // Final pass: strip any boilerplate sentence that may have merged in.
+  return stripBoilerplateSentences(best);
 }
 
 Deno.serve(async (req) => {
