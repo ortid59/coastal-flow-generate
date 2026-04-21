@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Mail, ShieldCheck } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
+import { Logo } from "@/components/Logo";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -65,13 +66,10 @@ export default function Auth() {
       <main className="relative grid min-h-screen place-items-center px-6 py-12">
         <div className="w-full max-w-md animate-fade-in">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-gold text-primary shadow-elev-md">
-              <ShieldCheck className="h-7 w-7" />
+            <div className="mx-auto mb-5 inline-flex rounded-2xl bg-card/95 px-6 py-4 shadow-elev-lg backdrop-blur">
+              <Logo size={88} />
             </div>
-            <h1 className="font-heading text-3xl font-bold text-primary-foreground">
-              Coastal Maverick
-            </h1>
-            <p className="mt-2 text-sm text-primary-foreground/70">
+            <p className="mt-2 text-sm text-primary-foreground/80">
               Sign in to the Proposal Generator
             </p>
           </div>

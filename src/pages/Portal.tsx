@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Printer, MapPin, Sparkles, ImageOff, Calendar, TrendingUp, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
+import { Logo } from "@/components/Logo";
 
 type Campaign = {
   id: string;
@@ -108,7 +109,10 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       {/* Top bar — hidden on print */}
       <div className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur print:hidden">
         <div className="container-app flex h-14 items-center justify-between">
-          <div className="text-xs text-muted-foreground">Private proposal · {brand.name}</div>
+          <div className="flex items-center gap-3">
+            <Logo size={32} />
+            <span className="text-xs text-muted-foreground hidden sm:inline">Private proposal</span>
+          </div>
           <Button size="sm" variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" /> Print / Save PDF
           </Button>

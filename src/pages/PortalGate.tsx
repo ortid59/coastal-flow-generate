@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, KeyRound, Lock } from "lucide-react";
 import Portal from "./Portal";
+import { Logo } from "@/components/Logo";
 
 const sessionKey = (token: string) => `portal:${token}`;
 
@@ -76,13 +77,13 @@ export default function PortalGate() {
       <main className="relative grid min-h-screen place-items-center px-6 py-12">
         <div className="w-full max-w-md animate-fade-in">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-gold text-primary shadow-elev-md">
-              <Lock className="h-7 w-7" />
+            <div className="mx-auto mb-5 inline-flex rounded-2xl bg-card/95 px-6 py-4 shadow-elev-lg backdrop-blur">
+              <Logo size={80} />
             </div>
-            <h1 className="font-heading text-3xl font-bold text-primary-foreground">
-              Private proposal
+            <h1 className="font-heading text-2xl font-bold text-primary-foreground inline-flex items-center gap-2 justify-center">
+              <Lock className="h-5 w-5" /> Private proposal
             </h1>
-            <p className="mt-2 text-sm text-primary-foreground/70">
+            <p className="mt-2 text-sm text-primary-foreground/80">
               Enter the password your account team shared with you.
             </p>
           </div>
