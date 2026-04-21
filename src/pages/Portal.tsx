@@ -91,20 +91,20 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, client_logo_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, flight_start, flight_end, markets")
           .eq("id", campaignId)
           .single(),
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, latitude, longitude",
+            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, latitude, longitude",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
           .order("unit_number", { ascending: true }),
       ]);
       if (c.data) setCampaign(c.data as Campaign);
-      // Only RECOMMENDED units appear in the client presentation.
+      // Only INCLUDED + RECOMMENDED units appear in the client presentation.
       setUnits(
         ((u.data ?? []) as Unit[]).filter(
           (x) => x.included !== false && x.recommended === true,
@@ -225,9 +225,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className="mt-4 font-heading font-bold uppercase leading-[0.95] tracking-tight text-foreground"
-                style={{ fontSize: "clamp(40px, 5vw, 72px)" }}
+                style={{ fontSize: "clamp(36px, 4.6vw, 64px)" }}
               >
-                {campaign.campaign_name}
+                {campaign.proposal_name || campaign.campaign_name}
               </motion.h1>
 
               <motion.span
@@ -249,7 +249,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
               {/* Stat pills */}
               <div className="mt-10 grid gap-4 sm:grid-cols-3">
-                <CoverPill icon={<Calendar className="h-4 w-4" />} label="Flight" value={flightLabel} delay={0.7} />
+                <CoverPill icon={<Calendar className="h-4 w-4" />} label="Campaign Dates" value={flightLabel} delay={0.7} />
                 <CoverPill icon={<MapPin className="h-4 w-4" />} label="Market" value={primaryMarket} delay={0.78} />
                 <CoverPill icon={<Sparkles className="h-4 w-4" />} label="Units" value={String(units.length)} delay={0.86} />
               </div>
