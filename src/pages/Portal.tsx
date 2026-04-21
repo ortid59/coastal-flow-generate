@@ -301,6 +301,44 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </div>
       </section>
 
+      {/* ===== HERO MAP ===== */}
+      {mapPoints.length > 0 && (
+        <section className="bg-card border-y print:hidden">
+          <div className="container-app py-10 md:py-14">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="mb-6 flex items-end justify-between gap-4 flex-wrap"
+            >
+              <div>
+                <div className="eyebrow">01 · Footprint</div>
+                <h2 className="mt-2 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight text-foreground">
+                  Where Your Brand Will Live
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {mapPoints.length} hand-picked placement{mapPoints.length === 1 ? "" : "s"}.
+                Click a pin to jump to that unit.
+              </p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <MasterMap
+                points={mapPoints}
+                onMarkerClick={handleMarkerClick}
+                className="h-[480px] w-full shadow-elev-md border border-border"
+              />
+            </motion.div>
+          </div>
+        </section>
+      )}
+
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
       <WhoWeAre />
 
