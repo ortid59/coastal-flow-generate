@@ -122,6 +122,36 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     return Array.from(map.entries());
   }, [units]);
 
+  const mapPoints: MapPoint[] = useMemo(
+    () =>
+      units
+        .filter(
+          (u) =>
+            u.latitude != null &&
+            u.longitude != null &&
+            Number.isFinite(Number(u.latitude)) &&
+            Number.isFinite(Number(u.longitude)),
+        )
+        .map((u) => ({
+          id: u.id,
+          unit_number: u.unit_number,
+          lat: Number(u.latitude),
+          lng: Number(u.longitude),
+          title: `Unit ${u.unit_number}${u.format ? ` · ${u.format}` : ""}`,
+          location: u.location_description,
+          impressions: u.four_week_impressions,
+          rate: u.total_cost,
+        })),
+    [units],
+  );
+
+  const handleMarkerClick = (p: MapPoint) => {
+    const el = document.getElementById(`unit-${p.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
