@@ -84,9 +84,25 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Admin/edit mode: when ?admin=1 is in the URL OR a Supabase session exists,
+  // Heather sees extra controls (e.g., the investment-summary toggle).
+  const [isAdminView, setIsAdminView] = useState(false);
+  const [showSummary, setShowSummary] = useState(true);
+
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
   const progress = useSpring(scrollYProgress, { stiffness: 90, damping: 24, mass: 0.3 });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("admin") === "1") {
+      setIsAdminView(true);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) setIsAdminView(true);
+    });
+  }, []);
 
   useEffect(() => {
     (async () => {
