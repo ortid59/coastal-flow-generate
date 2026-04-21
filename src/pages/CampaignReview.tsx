@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
+import { MasterMap, type MapPoint } from "@/components/MasterMap";
 
 type Campaign = {
   id: string;
@@ -44,6 +45,8 @@ type Unit = {
   included: boolean | null;
   billboard_photo_url: string | null;
   low_res_flag: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -68,7 +71,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, low_res_flag, latitude, longitude",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
