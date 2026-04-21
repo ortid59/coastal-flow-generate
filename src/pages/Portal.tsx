@@ -27,8 +27,6 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
-import { MasterMap, type MapPoint } from "@/components/MasterMap";
-import { UnitMinimap } from "@/components/UnitMinimap";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
@@ -149,37 +147,6 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     return Array.from(map.entries());
   }, [units]);
 
-  const mapPoints: MapPoint[] = useMemo(
-    () =>
-      units
-        .filter(
-          (u) =>
-            u.latitude != null &&
-            u.longitude != null &&
-            Number.isFinite(Number(u.latitude)) &&
-            Number.isFinite(Number(u.longitude)),
-        )
-        .map((u) => ({
-          id: u.id,
-          unit_number: u.unit_number,
-          lat: Number(u.latitude),
-          lng: Number(u.longitude),
-          title: `Unit ${u.unit_number}${u.format ? ` · ${u.format}` : ""}`,
-          location: u.location_description,
-          impressions: u.four_week_impressions,
-          rate: u.total_cost,
-        })),
-    [units],
-  );
-
-  const handleMarkerClick = (p: MapPoint) => {
-    // Tell the matching MarketSection to scroll its carousel to the right slide.
-    window.dispatchEvent(new CustomEvent("cm:focus-unit", { detail: { id: p.id } }));
-    const el = document.getElementById(`unit-${p.id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
 
   if (loading) {
     return (
@@ -330,45 +297,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </div>
       </section>
 
-      {/* ===== HERO MAP ===== */}
-      {mapPoints.length > 0 && (
-        <section className="bg-card border-y print:hidden">
-          <div className="container-app py-10 md:py-14">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="mb-6 flex items-end justify-between gap-4 flex-wrap"
-            >
-              <div>
-                <div className="eyebrow">01 · Footprint</div>
-                <h2 className="mt-2 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight text-foreground">
-                  Where Your Brand Will Live
-                </h2>
-              </div>
-              <p className="text-sm text-muted-foreground max-w-md">
-                {mapPoints.length} hand-picked placement{mapPoints.length === 1 ? "" : "s"}.
-                Click a pin to jump to that unit.
-              </p>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <MasterMap
-                points={mapPoints}
-                onMarkerClick={handleMarkerClick}
-                className="h-[480px] w-full shadow-elev-md border border-border"
-              />
-            </motion.div>
-          </div>
-        </section>
-      )}
-
-      {/* ===== UNIT INDEX BAR (sticky chips) ===== */}
+      {/* ===== UNIT INDEX (2-column tile listing) ===== */}
       <PortalIndexBar units={units} />
 
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
@@ -1016,13 +945,6 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 )}
               </div>
             </div>
-            {unit.latitude != null && unit.longitude != null && (
-              <UnitMinimap
-                lat={Number(unit.latitude)}
-                lng={Number(unit.longitude)}
-                unitNumber={unit.unit_number}
-              />
-            )}
           </div>
         </motion.div>
 

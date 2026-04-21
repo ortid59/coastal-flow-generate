@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
-import { MasterMap, type MapPoint } from "@/components/MasterMap";
+
 import { HighlightsEditor } from "@/components/HighlightsEditor";
 import { LogoReplace } from "@/components/LogoReplace";
 import { parseShortAddress } from "@/lib/shortAddress";
@@ -179,29 +179,6 @@ export default function CampaignReview() {
     return { total: units.length, included: included.length, recs, imps, cost, photos };
   }, [units]);
 
-  const mapPoints: MapPoint[] = useMemo(
-    () =>
-      units
-        .filter(
-          (u) =>
-            u.included !== false &&
-            u.latitude != null &&
-            u.longitude != null &&
-            Number.isFinite(Number(u.latitude)) &&
-            Number.isFinite(Number(u.longitude)),
-        )
-        .map((u) => ({
-          id: u.id,
-          unit_number: u.unit_number,
-          lat: Number(u.latitude),
-          lng: Number(u.longitude),
-          title: `Unit ${u.unit_number}`,
-          location: u.location_description,
-          impressions: u.four_week_impressions,
-          rate: u.total_cost,
-        })),
-    [units],
-  );
 
   if (loading) {
     return (
@@ -305,7 +282,7 @@ export default function CampaignReview() {
             client page.
           </p>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_minmax(360px,440px)] items-start">
+          <div className="items-start">
             <div className="surface-card overflow-hidden min-w-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -429,27 +406,6 @@ export default function CampaignReview() {
               </div>
             </div>
 
-            {/* Sticky master map */}
-            <aside className="lg:sticky lg:top-20 print:hidden">
-              <div className="surface-card overflow-hidden">
-                <div className="border-b bg-muted/30 px-4 py-2.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
-                  Unit map
-                  <span className="ml-auto normal-case font-normal tracking-normal text-[11px]">
-                    {mapPoints.length} mapped
-                  </span>
-                </div>
-                <MasterMap
-                  points={mapPoints}
-                  highlightedId={highlightedId}
-                  onMarkerClick={(p) => setHighlightedId(p.id)}
-                  className="h-[60vh] min-h-[420px] rounded-none"
-                />
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Click a row or pin to highlight. Pins use unit numbers from your Excel.
-              </p>
-            </aside>
           </div>
         </>
       )}
