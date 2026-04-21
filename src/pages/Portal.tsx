@@ -1087,7 +1087,7 @@ function UnitDetails({ unit }: { unit: Unit }) {
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
-          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="Investment" value={fmtMoney(unit.total_cost)} />
+          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Investment" value={fmtMoney(unit.total_cost)} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
             label="CPM"
