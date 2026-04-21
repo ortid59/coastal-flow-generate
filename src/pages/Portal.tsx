@@ -163,6 +163,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </div>
       </section>
 
+      {/* Who we are */}
+      <WhoWeAre />
+
       {/* Executive summary */}
       <section className="container-app py-12 md:py-16">
         <SectionHeading eyebrow="01" title="Executive summary" />
