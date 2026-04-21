@@ -16,15 +16,21 @@ import {
   ImageOff,
   AlertCircle,
   Share2,
+  FileText,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
 import { MasterMap, type MapPoint } from "@/components/MasterMap";
+import { HighlightsEditor } from "@/components/HighlightsEditor";
+import { LogoReplace } from "@/components/LogoReplace";
+import { parseShortAddress } from "@/lib/shortAddress";
 
 type Campaign = {
   id: string;
   client_name: string;
   campaign_name: string;
+  proposal_name: string | null;
+  client_logo_url: string | null;
   status: string | null;
   markets: string[] | null;
 };
@@ -38,6 +44,7 @@ type Unit = {
   size: string | null;
   location_description: string | null;
   insight_bullets: string[] | null;
+  highlights: string | null;
   four_week_impressions: number | null;
   total_cost: number | null;
   cpm: number | null;
