@@ -987,3 +987,13 @@ function DetailStat({ icon, label, value }: { icon: React.ReactNode; label: stri
     </div>
   );
 }
+
+function DetailKV({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-mono text-foreground">{value}</dd>
+    </div>
+  );
+}
+
