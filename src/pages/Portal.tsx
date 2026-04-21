@@ -249,6 +249,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </section>
       )}
 
+      {/* Meet the team */}
+      <MeetTheTeam />
+
       {/* Footer */}
       <footer className="border-t py-10 text-center text-xs text-muted-foreground">
         Prepared by {brand.name} · This proposal is confidential and intended only for {campaign.client_name}.
