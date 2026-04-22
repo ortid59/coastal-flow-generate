@@ -1006,3 +1006,157 @@ function DetailKV({ label, value }: { label: string; value: string }) {
   );
 }
 
+/* =================== Print helpers =================== */
+
+/**
+ * Print a single quote: temporarily mark every other quote with a class
+ * that hides them via @media print, then call window.print(), then clean up.
+ */
+function printSingleQuote(unitId: string) {
+  const all = document.querySelectorAll<HTMLElement>("[data-print-quote-id]");
+  all.forEach((el) => {
+    if (el.dataset.printQuoteId !== unitId) {
+      el.classList.add("print-hide-when-single");
+    }
+  });
+  document.body.classList.add("print-single");
+  const cleanup = () => {
+    document.body.classList.remove("print-single");
+    all.forEach((el) => el.classList.remove("print-hide-when-single"));
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  // Small delay so DOM updates apply before the print dialog snapshots
+  setTimeout(() => window.print(), 50);
+}
+
+/* =================== Printable Quote (PDF layout) =================== */
+function PrintableQuote({
+  unit,
+  market,
+  indexLabel,
+}: {
+  unit: Unit;
+  market: string;
+  indexLabel: string;
+}) {
+  return (
+    <article
+      data-print-quote-id={unit.id}
+      className="bg-white text-black"
+      style={{ pageBreakInside: "avoid" }}
+    >
+      {/* Header strip */}
+      <header className="mb-4 flex items-end justify-between border-b-2 border-[hsl(var(--accent-gold))] pb-2">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-[hsl(var(--ocean))]">
+            {market} · Quote {indexLabel}
+          </div>
+          <h2 className="mt-1 font-heading text-xl font-bold uppercase tracking-tight">
+            {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+          </h2>
+        </div>
+        <div className="text-right">
+          <div className="font-mono text-xs text-muted-foreground">#{unit.unit_number}</div>
+          {unit.recommended && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--ocean))] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+              ★ Recommended
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Photos row: billboard + map side by side */}
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="overflow-hidden rounded border border-border bg-muted">
+          {unit.billboard_photo_url ? (
+            <img
+              src={unit.billboard_photo_url}
+              alt={`Billboard ${unit.unit_number}`}
+              className="h-56 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
+              No photo
+            </div>
+          )}
+          <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground">
+            Location photo
+          </div>
+        </div>
+        <div className="overflow-hidden rounded border border-border bg-muted">
+          {unit.inset_map_url ? (
+            <img
+              src={unit.inset_map_url}
+              alt={`Map ${unit.unit_number}`}
+              className="h-56 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
+              No map
+            </div>
+          )}
+          <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground">
+            Location map
+          </div>
+        </div>
+      </div>
+
+      {/* Highlights */}
+      {unit.highlights && (
+        <p className="mb-3 text-[11px] leading-relaxed text-foreground">{unit.highlights}</p>
+      )}
+
+      {/* Structured details + investment, two columns */}
+      <div className="grid grid-cols-2 gap-3 text-[10px]">
+        <dl className="rounded border border-border bg-secondary/40 p-3">
+          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
+            Quote details
+          </div>
+          {unit.location_description && (
+            <Row k="Description" v={unit.location_description} />
+          )}
+          {unit.geopath_id && <Row k="Geopath ID" v={unit.geopath_id} />}
+          {unit.media_type && <Row k="Media Type" v={unit.media_type} />}
+          {unit.facing && <Row k="Facing" v={unit.facing} />}
+          {unit.size && <Row k="Size" v={unit.size} />}
+          {unit.city && <Row k="City" v={unit.city} />}
+          {unit.zip && <Row k="Zip" v={unit.zip} />}
+          {unit.latitude != null && <Row k="Latitude" v={unit.latitude.toFixed(5)} />}
+          {unit.longitude != null && <Row k="Longitude" v={unit.longitude.toFixed(5)} />}
+          {unit.vendor && <Row k="Vendor" v={unit.vendor} />}
+        </dl>
+
+        <dl className="rounded border border-border bg-secondary/40 p-3">
+          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
+            Performance
+          </div>
+          {unit.weekly_impressions != null && (
+            <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} />
+          )}
+          {unit.four_week_impressions != null && (
+            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} />
+          )}
+          {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} />}
+          <div className="my-2 border-t border-border" />
+          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
+            Investment
+          </div>
+          {unit.production_cost != null && <Row k="Production" v={fmtMoney(unit.production_cost)} />}
+          {unit.install_cost != null && <Row k="Install" v={fmtMoney(unit.install_cost)} />}
+          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} bold />
+        </dl>
+      </div>
+    </article>
+  );
+}
+
+function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
+  return (
+    <div className="flex justify-between gap-2 py-0.5">
+      <dt className="text-muted-foreground">{k}</dt>
+      <dd className={bold ? "font-bold text-foreground" : "text-foreground"}>{v}</dd>
+    </div>
+  );
+}
+
