@@ -113,10 +113,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .order("unit_number", { ascending: true }),
       ]);
       if (c.data) setCampaign(c.data as Campaign);
-      // Only INCLUDED + RECOMMENDED units appear in the client presentation.
+      // Only INCLUDED units appear in the client presentation.
+      // The `recommended` flag controls whether the unit gets the "Recommended" ribbon,
+      // not whether it appears at all.
       // Dedupe by unit_number — keep the first occurrence (rows are already sorted).
       const filtered = ((u.data ?? []) as Unit[]).filter(
-        (x) => x.included !== false && x.recommended === true,
+        (x) => x.included !== false,
       );
       const seen = new Set<string>();
       const deduped: Unit[] = [];
