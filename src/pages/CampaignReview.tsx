@@ -24,6 +24,7 @@ import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
 import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
+import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
 
 import { HighlightsCell } from "@/components/HighlightsCell";
 import { LogoReplace } from "@/components/LogoReplace";
@@ -202,33 +203,42 @@ export default function CampaignReview() {
         </Link>
       </Button>
 
-      <header className="mb-8 surface-card p-6 flex flex-wrap items-start justify-between gap-6">
-        <div className="flex items-start gap-5 min-w-0 flex-1">
-          {id && campaign && (
-            <LogoReplace
-              campaignId={id}
-              currentUrl={campaign.client_logo_url}
-              clientName={campaign.client_name}
-              onUploaded={(url) => setCampaign({ ...campaign, client_logo_url: url })}
-            />
-          )}
-          <div className="min-w-0">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {campaign?.client_name}
-            </div>
-            <h1 className="font-heading mt-1 text-2xl">{campaign?.campaign_name}</h1>
-            {campaign?.proposal_name && (
-              <p className="mt-1 text-sm italic text-[hsl(var(--ocean))]">{campaign.proposal_name}</p>
+      <header className="surface-card mb-6 p-6">
+        {/* Top row: logo + identity */}
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="flex items-start gap-5 min-w-0 flex-1">
+            {id && campaign && (
+              <LogoReplace
+                campaignId={id}
+                currentUrl={campaign.client_logo_url}
+                clientName={campaign.client_name}
+                onUploaded={(url) => setCampaign({ ...campaign, client_logo_url: url })}
+              />
             )}
-            {campaign?.markets?.length ? (
-              <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" /> {campaign.markets.join(", ")}
-              </p>
-            ) : null}
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {campaign?.client_name}
+              </div>
+              <h1 className="font-heading mt-1 text-xl md:text-2xl leading-tight break-words normal-case tracking-normal">
+                {campaign?.campaign_name}
+              </h1>
+              {campaign?.proposal_name && (
+                <p className="mt-1 text-sm italic text-[hsl(var(--ocean))] break-words">
+                  {campaign.proposal_name}
+                </p>
+              )}
+              {campaign?.markets?.length ? (
+                <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5" /> {campaign.markets.join(", ")}
+                </p>
+              ) : null}
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={campaign?.status ?? "draft"} />
+        </div>
+
+        {/* Toolbar — its own row so the title never collapses to a thin column */}
+        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
           <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
@@ -249,6 +259,7 @@ export default function CampaignReview() {
               <Eye className="h-4 w-4" /> Preview presentation
             </Link>
           </Button>
+          <div className="ml-auto" />
           <Button
             size="sm"
             onClick={() => setShareOpen(true)}
