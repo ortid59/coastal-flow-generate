@@ -311,8 +311,8 @@ export default function CampaignReview() {
                       <th className="px-3 py-3 text-right">4wk Imp</th>
                       <th className="px-3 py-3 text-right">Total</th>
                       <th className="px-3 py-3 text-right">CPM</th>
-                      <th className="px-3 py-3 text-center">Include</th>
-                      <th className="px-3 py-3 text-center">Recommend</th>
+                      <th className="px-3 py-3 text-center sticky right-[110px] bg-muted/40 border-l border-border">Include</th>
+                      <th className="px-3 py-3 text-center sticky right-0 bg-[hsl(var(--accent-gold)/0.15)] border-l border-border min-w-[110px]">Recommend</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -424,18 +424,23 @@ export default function CampaignReview() {
                           <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
                             {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
                           </td>
-                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className={`px-3 py-3 align-top text-center sticky right-[110px] border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.06)]" : u.recommended && !excluded ? "bg-success/5" : "bg-card"}`} onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={u.included !== false}
                               onCheckedChange={(v) => toggleField(u, "included", v)}
                             />
                           </td>
-                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
-                            <Switch
-                              checked={!!u.recommended}
-                              onCheckedChange={(v) => toggleField(u, "recommended", v)}
-                              disabled={excluded}
-                            />
+                          <td className={`px-3 py-3 align-top text-center sticky right-0 border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.12)]" : "bg-[hsl(var(--accent-gold)/0.08)]"}`} onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col items-center gap-1">
+                              <Switch
+                                checked={!!u.recommended}
+                                onCheckedChange={(v) => toggleField(u, "recommended", v)}
+                                disabled={excluded}
+                              />
+                              {u.recommended && !excluded && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-success">★ Hero</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
