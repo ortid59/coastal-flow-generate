@@ -18,6 +18,7 @@ import {
   Share2,
   FileText,
   Eye,
+  Upload,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
@@ -239,6 +240,9 @@ export default function CampaignReview() {
           <Button variant="outline" size="sm" onClick={reparse} disabled={reparsing || campaign?.status === "parsing"}>
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-parse
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setReuploadOpen(true)}>
+            <Upload className="h-4 w-4" /> Re-upload files
           </Button>
           <Button variant="outline" size="sm" asChild disabled={units.length === 0}>
             <Link to={`/campaigns/${id}/preview`}>
