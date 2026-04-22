@@ -496,15 +496,12 @@ export default function CampaignReview() {
                             className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.22)]" : "bg-[hsl(var(--accent-gold)/0.12)]"}`}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex flex-col items-center gap-0.5">
+                            <div className="flex items-center justify-center">
                               <Switch
                                 checked={!!u.recommended}
                                 onCheckedChange={(v) => toggleField(u, "recommended", v)}
                                 disabled={excluded}
                               />
-                              {u.recommended && !excluded && (
-                                <span className="text-[8px] font-bold uppercase tracking-wider text-success whitespace-nowrap">★ Hero</span>
-                              )}
                             </div>
                           </td>
                         </tr>
