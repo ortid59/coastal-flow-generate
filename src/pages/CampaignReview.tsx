@@ -18,12 +18,14 @@ import {
   Share2,
   FileText,
   Eye,
+  Upload,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
+import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
 
-import { HighlightsEditor } from "@/components/HighlightsEditor";
+import { HighlightsCell } from "@/components/HighlightsCell";
 import { LogoReplace } from "@/components/LogoReplace";
 import { parseShortAddress } from "@/lib/shortAddress";
 
@@ -74,6 +76,7 @@ export default function CampaignReview() {
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const load = async () => {
@@ -238,6 +241,9 @@ export default function CampaignReview() {
             {reparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Re-parse
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setReuploadOpen(true)}>
+            <Upload className="h-4 w-4" /> Re-upload files
+          </Button>
           <Button variant="outline" size="sm" asChild disabled={units.length === 0}>
             <Link to={`/campaigns/${id}/preview`}>
               <Eye className="h-4 w-4" /> Preview presentation
@@ -296,16 +302,17 @@ export default function CampaignReview() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-3 text-left">Photo</th>
-                      <th className="px-4 py-3 text-left">Unit</th>
-                      <th className="px-4 py-3 text-left">Market</th>
-                      <th className="px-4 py-3 text-left">Format</th>
-                      <th className="px-4 py-3 text-left">Location</th>
-                      <th className="px-4 py-3 text-right">4wk Imp</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                      <th className="px-4 py-3 text-right">CPM</th>
-                      <th className="px-4 py-3 text-center">Include</th>
-                      <th className="px-4 py-3 text-center">Recommend</th>
+                      <th className="px-3 py-3 text-left">Photo</th>
+                      <th className="px-3 py-3 text-left">Unit</th>
+                      <th className="px-3 py-3 text-left">Market</th>
+                      <th className="px-3 py-3 text-left">Format</th>
+                      <th className="px-3 py-3 text-left w-[260px]">Location</th>
+                      <th className="px-3 py-3 text-left w-[280px]">Highlights</th>
+                      <th className="px-3 py-3 text-right">4wk Imp</th>
+                      <th className="px-3 py-3 text-right">Total</th>
+                      <th className="px-3 py-3 text-right">CPM</th>
+                      <th className="px-3 py-3 text-center">Include</th>
+                      <th className="px-3 py-3 text-center">Recommend</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -318,7 +325,7 @@ export default function CampaignReview() {
                           onClick={() => setHighlightedId(u.id)}
                           className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${isHighlighted ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]" : "hover:bg-muted/30"}`}
                         >
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-3 align-top">
                             <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                               {u.billboard_photo_url ? (
                                 <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
@@ -365,8 +372,8 @@ export default function CampaignReview() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 align-top font-medium">
-                            <div className="flex items-center gap-2">
+                          <td className="px-3 py-3 align-top font-medium">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
                               {u.unit_number}
                               {u.recommended && (
                                 <Badge className="bg-success/15 text-success border border-success/30 gap-1">
@@ -379,40 +386,51 @@ export default function CampaignReview() {
                             </div>
                             <div className="text-xs text-muted-foreground">{u.vendor}</div>
                           </td>
-                          <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
-                          <td className="px-4 py-3 align-top">
-                            <div>{u.format ?? "—"}</div>
-                            <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
+                          <td className="px-3 py-3 align-top text-muted-foreground whitespace-nowrap">
+                            {u.market ?? "—"}
                           </td>
-                          <td className="px-4 py-3 align-top max-w-md">
-                            <div className="font-medium text-foreground">
+                          <td className="px-3 py-3 align-top">
+                            <div className="whitespace-nowrap">{u.format ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              {u.size ?? ""}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top w-[260px] max-w-[260px]">
+                            <div className="font-medium text-foreground break-words">
                               {parseShortAddress(u.location_description) || "—"}
                             </div>
-                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug break-words">
                               {u.location_description ?? ""}
                             </div>
-                            <div className="mt-2">
-                              <HighlightsEditor
-                                unitId={u.id}
-                                initial={u.highlights}
-                                onSaved={(next) =>
-                                  setUnits((prev) =>
-                                    prev.map((x) => (x.id === u.id ? { ...x, highlights: next } : x)),
-                                  )
-                                }
-                              />
-                            </div>
                           </td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
-                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 py-3 align-top w-[280px] max-w-[280px]" onClick={(e) => e.stopPropagation()}>
+                            <HighlightsCell
+                              unitId={u.id}
+                              unitNumber={u.unit_number}
+                              initial={u.highlights}
+                              onSaved={(next) =>
+                                setUnits((prev) =>
+                                  prev.map((x) => (x.id === u.id ? { ...x, highlights: next } : x)),
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {fmtNum(u.four_week_impressions)}
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {fmtMoney(u.total_cost)}
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
+                          </td>
+                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={u.included !== false}
                               onCheckedChange={(v) => toggleField(u, "included", v)}
                             />
                           </td>
-                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={!!u.recommended}
                               onCheckedChange={(v) => toggleField(u, "recommended", v)}
@@ -437,6 +455,14 @@ export default function CampaignReview() {
           onOpenChange={setShareOpen}
           campaignId={campaign.id}
           campaignName={campaign.campaign_name}
+        />
+      )}
+      {campaign && (
+        <ReuploadFilesDialog
+          open={reuploadOpen}
+          onOpenChange={setReuploadOpen}
+          campaignId={campaign.id}
+          onDone={load}
         />
       )}
     </main>

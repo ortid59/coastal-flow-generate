@@ -30,6 +30,8 @@ import { CountUp } from "@/components/CountUp";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
+import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
+import { useToast } from "@/hooks/use-toast";
 
 type Campaign = {
   id: string;
@@ -83,9 +85,11 @@ const fmtDate = (d: string | null) => (d ? format(new Date(d), "MMM d, yyyy") : 
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
 
 export default function Portal({ token, campaignId }: { token: string; campaignId: string }) {
+  const { toast } = useToast();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
@@ -187,8 +191,32 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
             <Logo size={32} />
             <span className="text-xs text-muted-foreground hidden sm:inline">Private proposal</span>
           </div>
-          <Button size="sm" variant="outline" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" /> Print / Save PDF
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={downloading || units.length === 0}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                const nodes = units
+                  .map((u) => document.getElementById(`pdf-quote-${u.id}`))
+                  .filter((n): n is HTMLElement => !!n);
+                if (!nodes.length) {
+                  toast({ title: "No quotes to export", variant: "destructive" });
+                  return;
+                }
+                const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
+                await exportNodesToPdf(nodes, filename);
+                toast({ title: "PDF downloaded" });
+              } catch (e: any) {
+                toast({ title: "PDF export failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+              } finally {
+                setDownloading(false);
+              }
+            }}
+          >
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            {downloading ? "Generating…" : "Download PDF"}
           </Button>
         </div>
       </div>
@@ -741,10 +769,28 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
         </AnimatePresence>
       </div>
 
-      {/* Print fallback — every quote on its own page with photo, map, details, investment */}
-      <div className="hidden print:block">
+      {/*
+        PDF source — always rendered (off-screen) so html2canvas can read each
+        quote node from the DOM. Hidden from users via absolute + clip rect.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none"
+        style={{
+          position: "absolute",
+          left: "-10000px",
+          top: 0,
+          width: "780px",
+          opacity: 0,
+        }}
+      >
         {units.map((u, i) => (
-          <div key={u.id} className="print-quote mb-10">
+          <div
+            key={u.id}
+            id={`pdf-quote-${u.id}`}
+            className="bg-white"
+            style={{ width: "780px", padding: "16px" }}
+          >
             <PrintableQuote
               unit={u}
               market={market}
@@ -782,11 +828,11 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               )}
               <button
                 type="button"
-                onClick={() => printSingleQuote(unit.id)}
+                onClick={() => downloadSingleQuotePdf(unit.id, unit.unit_number)}
                 className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground transition hover:bg-secondary hover:text-foreground print:hidden"
-                title="Print this quote"
+                title="Download this quote as PDF"
               >
-                <Printer className="h-3 w-3" /> Print
+                <Printer className="h-3 w-3" /> PDF
               </button>
             </div>
             <span className="mt-5 gold-rule" />
@@ -1009,25 +1055,15 @@ function DetailKV({ label, value }: { label: string; value: string }) {
 /* =================== Print helpers =================== */
 
 /**
- * Print a single quote: temporarily mark every other quote with a class
- * that hides them via @media print, then call window.print(), then clean up.
+ * Download a single quote as a PDF using the off-screen PrintableQuote node.
  */
-function printSingleQuote(unitId: string) {
-  const all = document.querySelectorAll<HTMLElement>("[data-print-quote-id]");
-  all.forEach((el) => {
-    if (el.dataset.printQuoteId !== unitId) {
-      el.classList.add("print-hide-when-single");
-    }
-  });
-  document.body.classList.add("print-single");
-  const cleanup = () => {
-    document.body.classList.remove("print-single");
-    all.forEach((el) => el.classList.remove("print-hide-when-single"));
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  // Small delay so DOM updates apply before the print dialog snapshots
-  setTimeout(() => window.print(), 50);
+async function downloadSingleQuotePdf(unitId: string, unitNumber: string) {
+  const node = document.getElementById(`pdf-quote-${unitId}`);
+  if (!node) {
+    console.warn("No PDF node for unit", unitId);
+    return;
+  }
+  await exportNodeToPdf(node, `quote-${unitNumber || unitId}.pdf`);
 }
 
 /* =================== Printable Quote (PDF layout) =================== */
