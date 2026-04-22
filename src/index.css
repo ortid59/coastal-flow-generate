@@ -153,24 +153,22 @@
 }
 
 /* ============================================================
-   Print styles — used by Portal "Print / Save PDF" and per-quote print.
-   Goal: clean, paginated PDF where every recommended quote shows
-   photo + map + structured details + investment, one per page.
+   Print styles — used as a fallback if a user uses the browser's native
+   Cmd/Ctrl+P. The primary export path is the in-app "Download PDF" button
+   which uses html2canvas + jsPDF (see src/lib/pdfExport.ts).
    ============================================================ */
 @media print {
   @page {
     size: Letter;
     margin: 0.5in;
   }
-
   html, body {
     background: #fff !important;
     color: #000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-
-  /* Neutralise framer-motion inline opacity/transforms that hide content in PDFs */
+  /* Neutralise framer-motion inline styles that hide content in PDFs */
   [style*="opacity: 0"],
   [style*="opacity:0"] {
     opacity: 1 !important;
@@ -178,22 +176,6 @@
   [style*="transform"] {
     transform: none !important;
   }
-
-  /* Force every unit quote onto its own page */
-  .print-quote {
-    page-break-inside: avoid;
-    break-inside: avoid;
-    page-break-after: always;
-    break-after: page;
-  }
-  .print-quote:last-child {
-    page-break-after: auto;
-    break-after: auto;
-  }
-
-  /* Single-quote print mode (set on body via JS) */
-  body.print-single .print-hide-when-single { display: none !important; }
-
   img { max-width: 100% !important; height: auto !important; }
   article, section { break-inside: avoid; }
 }
