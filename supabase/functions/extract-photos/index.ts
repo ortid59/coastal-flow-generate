@@ -288,7 +288,7 @@ Deno.serve(async (req) => {
       .from("vendor_files")
       .select("id, storage_path, original_name, kind")
       .eq("campaign_id", campaignId)
-      .in("kind", ["pdf", "image"]);
+      .in("kind", ["pdf", "image", "photosheets"]);
     if (fErr) throw fErr;
     if (!vendorFiles || vendorFiles.length === 0) {
       throw new Error("No PDF or image files uploaded for this campaign.");
@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // PDF path
+      // PDF path (covers both 'pdf' and 'photosheets')
       const rawImages = extractJpegImages(bytes);
 
       let perPageText: string[] = [];

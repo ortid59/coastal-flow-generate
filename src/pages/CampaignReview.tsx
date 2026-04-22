@@ -309,21 +309,34 @@ export default function CampaignReview() {
 
           <div className="items-start">
             <div className="surface-card overflow-hidden min-w-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+              <div className="w-full">
+                <table className="w-full table-fixed text-[12px]">
+                  <colgroup>
+                    <col className="w-[120px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[110px]" />
+                    <col />
+                    <col />
+                    <col className="w-[64px]" />
+                    <col className="w-[78px]" />
+                    <col className="w-[56px]" />
+                    <col className="w-[72px]" />
+                    <col className="w-[88px]" />
+                  </colgroup>
+                  <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-3 text-left">Photo</th>
-                      <th className="px-3 py-3 text-left">Unit</th>
-                      <th className="px-3 py-3 text-left">Market</th>
-                      <th className="px-3 py-3 text-left">Format</th>
-                      <th className="px-3 py-3 text-left w-[260px]">Location</th>
-                      <th className="px-3 py-3 text-left w-[280px]">Highlights</th>
-                      <th className="px-3 py-3 text-right whitespace-nowrap">4wk Imp</th>
-                      <th className="px-3 py-3 text-right whitespace-nowrap">Total</th>
-                      <th className="px-3 py-3 text-right whitespace-nowrap">CPM</th>
-                      <th className="px-3 py-3 text-center sticky right-[120px] z-10 bg-muted border-l border-border w-[100px] min-w-[100px] shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.15)]">Include</th>
-                      <th className="px-3 py-3 text-center sticky right-0 z-10 bg-[hsl(var(--accent-gold)/0.25)] border-l border-border w-[120px] min-w-[120px]">Recommend</th>
+                      <th className="px-2 py-2.5 text-left">Photo · Map</th>
+                      <th className="px-2 py-2.5 text-left">Unit</th>
+                      <th className="px-2 py-2.5 text-left">Market</th>
+                      <th className="px-2 py-2.5 text-left">Format</th>
+                      <th className="px-2 py-2.5 text-left">Location</th>
+                      <th className="px-2 py-2.5 text-left">Highlights</th>
+                      <th className="px-2 py-2.5 text-right">4wk Imp</th>
+                      <th className="px-2 py-2.5 text-right">Total</th>
+                      <th className="px-2 py-2.5 text-right">CPM</th>
+                      <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--accent-gold)/0.18)]">Recommend</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -336,85 +349,120 @@ export default function CampaignReview() {
                           onClick={() => setHighlightedId(u.id)}
                           className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${isHighlighted ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]" : "hover:bg-muted/30"}`}
                         >
-                          <td className="px-3 py-3 align-top">
-                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                              {u.billboard_photo_url ? (
-                                <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
-                                  <img
-                                    src={u.billboard_photo_url}
-                                    alt={`Unit ${u.unit_number}`}
-                                    className="h-full w-full object-cover"
-                                    loading="lazy"
-                                  />
-                                  {u.low_res_flag && (
-                                    <span
-                                      title="Low-resolution photo"
-                                      className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-warning/90 text-warning-foreground"
+                          <td className="px-2 py-2 align-top">
+                            <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-start gap-1">
+                                {/* Billboard photo */}
+                                <div className="flex flex-col items-center gap-0.5">
+                                  {u.billboard_photo_url ? (
+                                    <div className="relative h-10 w-14 overflow-hidden rounded bg-muted">
+                                      <img
+                                        src={u.billboard_photo_url}
+                                        alt={`Unit ${u.unit_number}`}
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                      />
+                                      {u.low_res_flag && (
+                                        <span
+                                          title="Low-resolution photo"
+                                          className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-bl bg-warning/90 text-warning-foreground"
+                                        >
+                                          <AlertCircle className="h-2 w-2" />
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="flex h-10 w-14 items-center justify-center rounded bg-muted text-muted-foreground"
+                                      title="No photo"
                                     >
-                                      <AlertCircle className="h-3 w-3" />
-                                    </span>
+                                      <ImageOff className="h-3 w-3" />
+                                    </div>
                                   )}
+                                  <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Photo</span>
                                 </div>
-                              ) : (
-                                <div className="flex h-14 w-20 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                  <ImageOff className="h-4 w-4" />
+                                {/* Map photo */}
+                                <div className="flex flex-col items-center gap-0.5">
+                                  {u.inset_map_url ? (
+                                    <div className="relative h-10 w-14 overflow-hidden rounded border border-border bg-muted">
+                                      <img
+                                        src={u.inset_map_url}
+                                        alt={`Map for unit ${u.unit_number}`}
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="flex h-10 w-14 items-center justify-center rounded border border-dashed border-border bg-muted/40 text-muted-foreground"
+                                      title="No map"
+                                    >
+                                      <MapPin className="h-3 w-3" />
+                                    </div>
+                                  )}
+                                  <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Map</span>
                                 </div>
-                              )}
-                              {id && (
-                                <UnitPhotoUpload
-                                  campaignId={id}
-                                  unitId={u.id}
-                                  unitNumber={u.unit_number}
-                                  onUploaded={load}
-                                />
-                              )}
-                              {id && (
-                                <UnitMapUpload
-                                  campaignId={id}
-                                  unitId={u.id}
-                                  unitNumber={u.unit_number}
-                                  onUploaded={load}
-                                />
-                              )}
-                              {u.inset_map_url && (
-                                <div className="h-10 w-20 overflow-hidden rounded border border-border">
-                                  <img src={u.inset_map_url} alt="Map" className="h-full w-full object-cover" />
-                                </div>
-                              )}
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {id && (
+                                  <UnitPhotoUpload
+                                    campaignId={id}
+                                    unitId={u.id}
+                                    unitNumber={u.unit_number}
+                                    onUploaded={load}
+                                  />
+                                )}
+                                {id && (
+                                  <UnitMapUpload
+                                    campaignId={id}
+                                    unitId={u.id}
+                                    unitNumber={u.unit_number}
+                                    onUploaded={load}
+                                  />
+                                )}
+                              </div>
                             </div>
                           </td>
-                          <td className="px-3 py-3 align-top font-medium">
-                            <div className="flex items-center gap-2 whitespace-nowrap">
-                              {u.unit_number}
+                          <td className="px-2 py-2 align-top font-medium">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="truncate">{u.unit_number}</span>
                               {u.recommended && (
-                                <Badge className="bg-success/15 text-success border border-success/30 gap-1">
-                                  <Sparkles className="h-3 w-3" /> Rec
+                                <Badge className="bg-success/15 text-success border border-success/30 gap-0.5 px-1 py-0 text-[9px]">
+                                  <Sparkles className="h-2.5 w-2.5" /> Rec
                                 </Badge>
                               )}
                               {u.latitude != null && u.longitude != null && (
-                                <MapPin className="h-3 w-3 text-[hsl(var(--accent-gold))]" />
+                                <MapPin className="h-2.5 w-2.5 text-[hsl(var(--accent-gold))]" />
                               )}
                             </div>
-                            <div className="text-xs text-muted-foreground">{u.vendor}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">{u.vendor}</div>
                           </td>
-                          <td className="px-3 py-3 align-top text-muted-foreground whitespace-nowrap">
-                            {u.market ?? "—"}
+                          <td className="px-2 py-2 align-top text-muted-foreground">
+                            <span className="block truncate">{u.market ?? "—"}</span>
                           </td>
-                          <td className="px-3 py-3 align-top">
-                            <div className="whitespace-nowrap">{u.format ?? "—"}</div>
-                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                          <td className="px-2 py-2 align-top">
+                            <div className="truncate">{u.format ?? "—"}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">
                               {u.size ?? ""}
                             </div>
                           </td>
-                          <td className="px-3 py-3 align-top w-[260px] max-w-[260px]">
-                            <div className="font-medium text-foreground break-words">
+                          <td className="px-2 py-2 align-top">
+                            <div className="font-medium text-foreground break-words leading-snug">
                               {parseShortAddress(u.location_description) || "—"}
                             </div>
-                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug break-words">
+                            <div
+                              className="mt-0.5 text-[10px] text-muted-foreground leading-snug break-words"
+                              style={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
                               {u.location_description ?? ""}
                             </div>
                           </td>
-                          <td className="px-3 py-3 align-top w-[280px] max-w-[280px]" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
                             <HighlightsCell
                               unitId={u.id}
                               unitNumber={u.unit_number}
@@ -426,17 +474,17 @@ export default function CampaignReview() {
                               }
                             />
                           </td>
-                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {fmtNum(u.four_week_impressions)}
                           </td>
-                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {fmtMoney(u.total_cost)}
                           </td>
-                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
                           </td>
                           <td
-                            className={`px-3 py-3 align-top text-center sticky right-[120px] z-[5] border-l border-border w-[100px] min-w-[100px] shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.15)] ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.10)]" : "bg-card"}`}
+                            className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.10)]" : "bg-muted/30"}`}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Switch
@@ -445,17 +493,17 @@ export default function CampaignReview() {
                             />
                           </td>
                           <td
-                            className={`px-3 py-3 align-top text-center sticky right-0 z-[5] border-l border-border w-[120px] min-w-[120px] ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.22)]" : "bg-[hsl(var(--accent-gold)/0.12)]"}`}
+                            className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.22)]" : "bg-[hsl(var(--accent-gold)/0.12)]"}`}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex flex-col items-center gap-0.5">
                               <Switch
                                 checked={!!u.recommended}
                                 onCheckedChange={(v) => toggleField(u, "recommended", v)}
                                 disabled={excluded}
                               />
                               {u.recommended && !excluded && (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-success whitespace-nowrap">★ Hero</span>
+                                <span className="text-[8px] font-bold uppercase tracking-wider text-success whitespace-nowrap">★ Hero</span>
                               )}
                             </div>
                           </td>
