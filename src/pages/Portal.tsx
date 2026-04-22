@@ -769,10 +769,28 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
         </AnimatePresence>
       </div>
 
-      {/* Print fallback — every quote on its own page with photo, map, details, investment */}
-      <div className="hidden print:block">
+      {/*
+        PDF source — always rendered (off-screen) so html2canvas can read each
+        quote node from the DOM. Hidden from users via absolute + clip rect.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none"
+        style={{
+          position: "absolute",
+          left: "-10000px",
+          top: 0,
+          width: "780px",
+          opacity: 0,
+        }}
+      >
         {units.map((u, i) => (
-          <div key={u.id} className="print-quote mb-10">
+          <div
+            key={u.id}
+            id={`pdf-quote-${u.id}`}
+            className="bg-white"
+            style={{ width: "780px", padding: "16px" }}
+          >
             <PrintableQuote
               unit={u}
               market={market}
