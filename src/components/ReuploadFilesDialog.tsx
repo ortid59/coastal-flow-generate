@@ -126,27 +126,32 @@ export function ReuploadFilesDialog({ open, onOpenChange, campaignId, onDone }: 
         if (vfErr) throw vfErr;
       }
 
-      // Re-trigger extractions in the background based on what was uploaded
-      const promises: Promise<unknown>[] = [];
-      if (excels.length) {
-        setStep("Re-parsing Excel quotes…");
-        promises.push(
-          supabase.functions.invoke("parse-excel", { body: { campaign_id: campaignId } }),
-        );
-      }
-      if (photoSheets) {
-        setStep("Re-extracting highlights & maps…");
-        promises.push(
-          supabase.functions.invoke("extract-highlights", { body: { campaign_id: campaignId } }),
-        );
-      }
-      if (photos.length || photoSheets) {
-        promises.push(
-          supabase.functions.invoke("extract-photos", { body: { campaign_id: campaignId } }),
-        );
-      }
-      // Don't block UI on edge functions finishing — let them run async
-      Promise.allSettled(promises).then(() => onDone());
+      // Re-trigger extractions in the background. CRITICAL: parse-excel must
+      // finish BEFORE extract-photos so that the units exist for matching.
+      // We chain them rather than firing in parallel.
+      (async () => {
+        try {
+          if (excels.length) {
+            setStep("Re-parsing Excel quotes…");
+            await supabase.functions.invoke("parse-excel", { body: { campaign_id: campaignId } });
+          }
+          // Highlights and photos depend on units existing — run after parse.
+          const after: Promise<unknown>[] = [];
+          if (photoSheets) {
+            after.push(
+              supabase.functions.invoke("extract-highlights", { body: { campaign_id: campaignId } }),
+            );
+          }
+          if (photos.length || photoSheets) {
+            after.push(
+              supabase.functions.invoke("extract-photos", { body: { campaign_id: campaignId } }),
+            );
+          }
+          await Promise.allSettled(after);
+        } finally {
+          onDone();
+        }
+      })();
 
       toast({
         title: "Re-upload started",
