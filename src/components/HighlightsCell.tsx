@@ -66,30 +66,36 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="group/hl block w-full max-w-[260px] rounded-md border border-border bg-muted/30 p-2 text-left transition hover:border-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold)/0.06)]"
+          className="group/hl block w-full max-w-[280px] rounded-md border border-[hsl(var(--accent-gold)/0.4)] bg-[hsl(var(--accent-gold)/0.06)] p-2.5 text-left transition hover:border-[hsl(var(--accent-gold))] hover:bg-[hsl(var(--accent-gold)/0.12)]"
           title="Click to view / edit highlights"
         >
-          <div className="flex items-start gap-1.5">
-            <Sparkles className="mt-0.5 h-3 w-3 flex-none text-[hsl(var(--accent-gold))]" />
-            {empty ? (
-              <span className="text-xs italic text-muted-foreground">
-                No highlights — click to add
-              </span>
-            ) : (
-              <span
-                className="text-xs leading-snug text-foreground"
-                style={{
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                  wordBreak: "break-word",
-                }}
-              >
-                {initial}
-              </span>
-            )}
+          <div className="mb-1 flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3 flex-none text-[hsl(var(--accent-gold))]" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--accent-gold))]">
+              Highlights
+            </span>
+            <span className="ml-auto text-[10px] text-muted-foreground group-hover/hl:text-foreground">
+              expand →
+            </span>
           </div>
+          {empty ? (
+            <span className="text-xs italic text-muted-foreground">
+              No highlights — click to add
+            </span>
+          ) : (
+            <span
+              className="block text-xs leading-snug text-foreground"
+              style={{
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                wordBreak: "break-word",
+              }}
+            >
+              {initial}
+            </span>
+          )}
         </button>
       </DialogTrigger>
       <DialogContent className="max-w-xl">
