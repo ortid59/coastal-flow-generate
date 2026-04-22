@@ -85,9 +85,11 @@ const fmtDate = (d: string | null) => (d ? format(new Date(d), "MMM d, yyyy") : 
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
 
 export default function Portal({ token, campaignId }: { token: string; campaignId: string }) {
+  const { toast } = useToast();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
