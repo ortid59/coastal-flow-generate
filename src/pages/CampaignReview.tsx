@@ -302,16 +302,17 @@ export default function CampaignReview() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-3 text-left">Photo</th>
-                      <th className="px-4 py-3 text-left">Unit</th>
-                      <th className="px-4 py-3 text-left">Market</th>
-                      <th className="px-4 py-3 text-left">Format</th>
-                      <th className="px-4 py-3 text-left">Location</th>
-                      <th className="px-4 py-3 text-right">4wk Imp</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                      <th className="px-4 py-3 text-right">CPM</th>
-                      <th className="px-4 py-3 text-center">Include</th>
-                      <th className="px-4 py-3 text-center">Recommend</th>
+                      <th className="px-3 py-3 text-left">Photo</th>
+                      <th className="px-3 py-3 text-left">Unit</th>
+                      <th className="px-3 py-3 text-left">Market</th>
+                      <th className="px-3 py-3 text-left">Format</th>
+                      <th className="px-3 py-3 text-left w-[260px]">Location</th>
+                      <th className="px-3 py-3 text-left w-[280px]">Highlights</th>
+                      <th className="px-3 py-3 text-right">4wk Imp</th>
+                      <th className="px-3 py-3 text-right">Total</th>
+                      <th className="px-3 py-3 text-right">CPM</th>
+                      <th className="px-3 py-3 text-center">Include</th>
+                      <th className="px-3 py-3 text-center">Recommend</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
