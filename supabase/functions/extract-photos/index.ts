@@ -296,8 +296,9 @@ Deno.serve(async (req) => {
 
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
-    // Track best image (by area) per unit
+    // Track best image (by area) per unit — billboard = largest, map = secondary
     const bestForUnit = new Map<string, PdfImage>();
+    const mapForUnit = new Map<string, PdfImage>();
 
     const summary = {
       campaign_id: campaignId,
@@ -365,18 +366,22 @@ Deno.serve(async (req) => {
       let matchedUnits = 0;
 
       if (fileUnit && images.length > 0) {
-        const best = [...images].sort((a, b) => b.width * b.height - a.width * a.height)[0];
-        considerImage(bestForUnit, fileUnit, best);
+        const sorted = [...images].sort((a, b) => b.width * b.height - a.width * a.height);
+        considerImage(bestForUnit, fileUnit, sorted[0]);
+        if (sorted.length > 1) considerImage(mapForUnit, fileUnit, sorted[sorted.length - 1]);
         matchedUnits = 1;
       } else {
-        // (2) Page-text matching
+        // (2) Page-text matching — biggest image = billboard, second = map
         for (let p = 0; p < perPageText.length; p++) {
           const pageImages = images.filter((im) => im.page === p + 1);
           if (pageImages.length === 0) continue;
-          const best = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+          const sorted = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height);
+          const best = sorted[0];
+          const mapImg = sorted.length > 1 ? sorted[sorted.length - 1] : null;
           const matches = findUnitsInText(perPageText[p], unitNumbers);
           for (const u of matches) {
             considerImage(bestForUnit, u, best);
+            if (mapImg) considerImage(mapForUnit, u, mapImg);
             matchedUnits++;
           }
         }
@@ -427,6 +432,33 @@ Deno.serve(async (req) => {
         continue;
       }
       summary.units_with_photo++;
+    }
+
+    // Upload map images (public 'minimaps' bucket so portal renders directly)
+    for (const [unitNumber, img] of mapForUnit) {
+      const unitId = unitIdByNumber.get(unitNumber);
+      if (!unitId) continue;
+      const billboard = bestForUnit.get(unitNumber);
+      if (billboard && img.bytes === billboard.bytes) continue;
+      const path = `${campaignId}/${unitId}-map.${img.ext}`;
+      const up = await supabase.storage
+        .from("minimaps")
+        .upload(path, img.bytes, {
+          contentType: img.ext === "jpg" ? "image/jpeg" : "image/png",
+          upsert: true,
+        });
+      if (up.error) {
+        console.warn(`[extract-photos] map upload failed for ${unitNumber}:`, up.error.message);
+        continue;
+      }
+      const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from("units")
+        .update({ inset_map_url: pub.publicUrl })
+        .eq("id", unitId);
+      if (updErr) {
+        console.warn(`[extract-photos] map update failed for ${unitNumber}:`, updErr.message);
+      }
     }
 
     if (jobId) {
