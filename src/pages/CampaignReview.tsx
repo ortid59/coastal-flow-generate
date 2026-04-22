@@ -22,8 +22,9 @@ import {
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
+import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
 
-import { HighlightsEditor } from "@/components/HighlightsEditor";
+import { HighlightsCell } from "@/components/HighlightsCell";
 import { LogoReplace } from "@/components/LogoReplace";
 import { parseShortAddress } from "@/lib/shortAddress";
 
@@ -74,6 +75,7 @@ export default function CampaignReview() {
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const load = async () => {
