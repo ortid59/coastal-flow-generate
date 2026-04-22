@@ -366,18 +366,22 @@ Deno.serve(async (req) => {
       let matchedUnits = 0;
 
       if (fileUnit && images.length > 0) {
-        const best = [...images].sort((a, b) => b.width * b.height - a.width * a.height)[0];
-        considerImage(bestForUnit, fileUnit, best);
+        const sorted = [...images].sort((a, b) => b.width * b.height - a.width * a.height);
+        considerImage(bestForUnit, fileUnit, sorted[0]);
+        if (sorted.length > 1) considerImage(mapForUnit, fileUnit, sorted[sorted.length - 1]);
         matchedUnits = 1;
       } else {
-        // (2) Page-text matching
+        // (2) Page-text matching — biggest image = billboard, second = map
         for (let p = 0; p < perPageText.length; p++) {
           const pageImages = images.filter((im) => im.page === p + 1);
           if (pageImages.length === 0) continue;
-          const best = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+          const sorted = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height);
+          const best = sorted[0];
+          const mapImg = sorted.length > 1 ? sorted[sorted.length - 1] : null;
           const matches = findUnitsInText(perPageText[p], unitNumbers);
           for (const u of matches) {
             considerImage(bestForUnit, u, best);
+            if (mapImg) considerImage(mapForUnit, u, mapImg);
             matchedUnits++;
           }
         }
