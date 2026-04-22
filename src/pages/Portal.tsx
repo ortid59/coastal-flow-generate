@@ -1067,131 +1067,291 @@ async function downloadSingleQuotePdf(unitId: string, unitNumber: string) {
 }
 
 /* =================== Printable Quote (PDF layout) =================== */
+/**
+ * Self-contained, all-explicit-color print layout. Avoids any Tailwind theme
+ * tokens (text-muted-foreground, bg-secondary, etc.) so html2canvas always
+ * paints crisp black/grey on white regardless of the current site theme.
+ */
 function PrintableQuote({
   unit,
   market,
   indexLabel,
+  campaign,
 }: {
   unit: Unit;
   market: string;
   indexLabel: string;
+  campaign: Campaign | null;
 }) {
+  const NAVY = "#0F2A44";
+  const GOLD = "#C9A24A";
+  const GREY = "#6B7280";
+  const BORDER = "#E5E7EB";
+  const SOFT = "#F8FAFC";
+
   return (
     <article
       data-print-quote-id={unit.id}
-      className="bg-white text-black"
-      style={{ pageBreakInside: "avoid" }}
+      style={{
+        background: "#ffffff",
+        color: "#111827",
+        fontFamily: "Inter, system-ui, sans-serif",
+        padding: "8px",
+      }}
     >
-      {/* Header strip */}
-      <header className="mb-4 flex items-end justify-between border-b-2 border-[hsl(var(--accent-gold))] pb-2">
+      {/* Brand header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: `3px solid ${GOLD}`,
+          paddingBottom: 10,
+          marginBottom: 14,
+        }}
+      >
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-[hsl(var(--ocean))]">
-            {market} · Quote {indexLabel}
+          <div style={{ fontSize: 10, letterSpacing: "0.25em", color: NAVY, fontWeight: 700 }}>
+            COASTAL MAVERICK · {market.toUpperCase()}
           </div>
-          <h2 className="mt-1 font-heading text-xl font-bold uppercase tracking-tight">
-            {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
-          </h2>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xs text-muted-foreground">#{unit.unit_number}</div>
-          {unit.recommended && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--ocean))] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-              ★ Recommended
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Photos row: billboard + map side by side */}
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <div className="overflow-hidden rounded border border-border bg-muted">
-          {unit.billboard_photo_url ? (
-            <img
-              src={unit.billboard_photo_url}
-              alt={`Billboard ${unit.unit_number}`}
-              className="h-56 w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
-              No photo
-            </div>
-          )}
-          <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground">
-            Location photo
+          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY, marginTop: 2 }}>
+            {campaign?.proposal_name || campaign?.campaign_name || "Proposal"}
           </div>
         </div>
-        <div className="overflow-hidden rounded border border-border bg-muted">
-          {unit.inset_map_url ? (
-            <img
-              src={unit.inset_map_url}
-              alt={`Map ${unit.unit_number}`}
-              className="h-56 w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
-              No map
-            </div>
-          )}
-          <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-muted-foreground">
-            Location map
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", color: GREY }}>QUOTE</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>
+            {indexLabel}
           </div>
         </div>
       </div>
 
+      {/* Title row */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 9, letterSpacing: "0.2em", color: GREY, fontWeight: 600 }}>
+          UNIT #{unit.unit_number}
+          {unit.recommended ? "  ·  ★ RECOMMENDED" : ""}
+        </div>
+        <h2
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: "#111827",
+            margin: "4px 0 0",
+            lineHeight: 1.2,
+          }}
+        >
+          {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+        </h2>
+        {unit.location_description && (
+          <div style={{ fontSize: 11, color: GREY, marginTop: 2 }}>{unit.location_description}</div>
+        )}
+      </div>
+
+      {/* Photos row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <PhotoBox label="Location photo" src={unit.billboard_photo_url} border={BORDER} grey={GREY} />
+        <PhotoBox label="Location map" src={unit.inset_map_url} border={BORDER} grey={GREY} />
+      </div>
+
       {/* Highlights */}
       {unit.highlights && (
-        <p className="mb-3 text-[11px] leading-relaxed text-foreground">{unit.highlights}</p>
+        <div
+          style={{
+            background: SOFT,
+            borderLeft: `3px solid ${GOLD}`,
+            padding: "8px 10px",
+            marginBottom: 12,
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: "#1F2937",
+          }}
+        >
+          {unit.highlights}
+        </div>
       )}
 
-      {/* Structured details + investment, two columns */}
-      <div className="grid grid-cols-2 gap-3 text-[10px]">
-        <dl className="rounded border border-border bg-secondary/40 p-3">
-          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
-            Quote details
-          </div>
-          {unit.location_description && (
-            <Row k="Description" v={unit.location_description} />
+      {/* Structured details + Investment */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <DetailBlock title="Quote details" navy={NAVY} border={BORDER} soft={SOFT}>
+          {unit.geopath_id && <Row k="Geopath ID" v={unit.geopath_id} grey={GREY} />}
+          {unit.media_type && <Row k="Media Type" v={unit.media_type} grey={GREY} />}
+          {unit.facing && <Row k="Facing" v={unit.facing} grey={GREY} />}
+          {unit.size && <Row k="Size" v={unit.size} grey={GREY} />}
+          {unit.city && <Row k="City" v={unit.city} grey={GREY} />}
+          {unit.zip && <Row k="Zip" v={unit.zip} grey={GREY} />}
+          {unit.latitude != null && (
+            <Row k="Latitude" v={unit.latitude.toFixed(5)} grey={GREY} />
           )}
-          {unit.geopath_id && <Row k="Geopath ID" v={unit.geopath_id} />}
-          {unit.media_type && <Row k="Media Type" v={unit.media_type} />}
-          {unit.facing && <Row k="Facing" v={unit.facing} />}
-          {unit.size && <Row k="Size" v={unit.size} />}
-          {unit.city && <Row k="City" v={unit.city} />}
-          {unit.zip && <Row k="Zip" v={unit.zip} />}
-          {unit.latitude != null && <Row k="Latitude" v={unit.latitude.toFixed(5)} />}
-          {unit.longitude != null && <Row k="Longitude" v={unit.longitude.toFixed(5)} />}
-          {unit.vendor && <Row k="Vendor" v={unit.vendor} />}
-        </dl>
+          {unit.longitude != null && (
+            <Row k="Longitude" v={unit.longitude.toFixed(5)} grey={GREY} />
+          )}
+          {unit.vendor && <Row k="Vendor" v={unit.vendor} grey={GREY} />}
+        </DetailBlock>
 
-        <dl className="rounded border border-border bg-secondary/40 p-3">
-          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
-            Performance
-          </div>
+        <DetailBlock title="Performance & Investment" navy={NAVY} border={BORDER} soft={SOFT}>
           {unit.weekly_impressions != null && (
-            <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} />
+            <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} grey={GREY} />
           )}
           {unit.four_week_impressions != null && (
-            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} />
+            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} grey={GREY} />
           )}
-          {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} />}
-          <div className="my-2 border-t border-border" />
-          <div className="mb-1 font-bold uppercase tracking-wider text-[hsl(var(--ocean))]">
-            Investment
-          </div>
-          {unit.production_cost != null && <Row k="Production" v={fmtMoney(unit.production_cost)} />}
-          {unit.install_cost != null && <Row k="Install" v={fmtMoney(unit.install_cost)} />}
-          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} bold />
-        </dl>
+          {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} grey={GREY} />}
+          <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 0" }} />
+          {unit.production_cost != null && (
+            <Row k="Production" v={fmtMoney(unit.production_cost)} grey={GREY} />
+          )}
+          {unit.install_cost != null && (
+            <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
+          )}
+          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} grey={GREY} bold />
+        </DetailBlock>
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 8,
+          borderTop: `1px solid ${BORDER}`,
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 9,
+          color: GREY,
+          letterSpacing: "0.05em",
+        }}
+      >
+        <span>coastalmaverick.com</span>
+        <span>{campaign?.client_name ?? ""}</span>
       </div>
     </article>
   );
 }
 
-function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
+function PhotoBox({
+  src,
+  label,
+  border,
+  grey,
+}: {
+  src: string | null;
+  label: string;
+  border: string;
+  grey: string;
+}) {
   return (
-    <div className="flex justify-between gap-2 py-0.5">
-      <dt className="text-muted-foreground">{k}</dt>
-      <dd className={bold ? "font-bold text-foreground" : "text-foreground"}>{v}</dd>
+    <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden", background: "#F3F4F6" }}>
+      {src ? (
+        <img
+          src={src}
+          alt={label}
+          crossOrigin="anonymous"
+          style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <div
+          style={{
+            height: 220,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: grey,
+            fontSize: 11,
+          }}
+        >
+          No image available
+        </div>
+      )}
+      <div
+        style={{
+          padding: "4px 8px",
+          fontSize: 9,
+          letterSpacing: "0.18em",
+          color: grey,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          background: "#fff",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function DetailBlock({
+  title,
+  children,
+  navy,
+  border,
+  soft,
+}: {
+  title: string;
+  children: React.ReactNode;
+  navy: string;
+  border: string;
+  soft: string;
+}) {
+  return (
+    <div style={{ border: `1px solid ${border}`, borderRadius: 6, background: soft, padding: 10 }}>
+      <div
+        style={{
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          color: navy,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          marginBottom: 6,
+          paddingBottom: 4,
+          borderBottom: `1px solid ${border}`,
+        }}
+      >
+        {title}
+      </div>
+      <dl style={{ margin: 0 }}>{children}</dl>
+    </div>
+  );
+}
+
+function Row({
+  k,
+  v,
+  bold,
+  grey,
+}: {
+  k: string;
+  v: string;
+  bold?: boolean;
+  grey: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 8,
+        padding: "3px 0",
+        fontSize: 10.5,
+      }}
+    >
+      <dt style={{ color: grey, margin: 0 }}>{k}</dt>
+      <dd
+        style={{
+          margin: 0,
+          color: "#111827",
+          fontWeight: bold ? 700 : 500,
+          textAlign: "right",
+        }}
+      >
+        {v}
+      </dd>
     </div>
   );
 }
