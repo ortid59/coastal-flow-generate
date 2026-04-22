@@ -517,7 +517,13 @@ export default function CampaignReview() {
 
           </div>
 
-          {id && <CampaignFilesHistory campaignId={id} />}
+          {id && (
+            <CampaignFilesHistory
+              campaignId={id}
+              units={units.map((u) => ({ id: u.id, unit_number: u.unit_number }))}
+              onUnitChanged={load}
+            />
+          )}
         </>
       )}
 
