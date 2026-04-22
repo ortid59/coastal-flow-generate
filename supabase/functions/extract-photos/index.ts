@@ -296,8 +296,9 @@ Deno.serve(async (req) => {
 
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
-    // Track best image (by area) per unit
+    // Track best image (by area) per unit — billboard = largest, map = secondary
     const bestForUnit = new Map<string, PdfImage>();
+    const mapForUnit = new Map<string, PdfImage>();
 
     const summary = {
       campaign_id: campaignId,
