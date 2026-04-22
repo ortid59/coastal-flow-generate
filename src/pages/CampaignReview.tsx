@@ -386,40 +386,51 @@ export default function CampaignReview() {
                             </div>
                             <div className="text-xs text-muted-foreground">{u.vendor}</div>
                           </td>
-                          <td className="px-4 py-3 align-top text-muted-foreground">{u.market ?? "—"}</td>
-                          <td className="px-4 py-3 align-top">
-                            <div>{u.format ?? "—"}</div>
-                            <div className="text-xs text-muted-foreground">{u.size ?? ""}</div>
+                          <td className="px-3 py-3 align-top text-muted-foreground whitespace-nowrap">
+                            {u.market ?? "—"}
                           </td>
-                          <td className="px-4 py-3 align-top max-w-md">
-                            <div className="font-medium text-foreground">
+                          <td className="px-3 py-3 align-top">
+                            <div className="whitespace-nowrap">{u.format ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              {u.size ?? ""}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top w-[260px] max-w-[260px]">
+                            <div className="font-medium text-foreground break-words">
                               {parseShortAddress(u.location_description) || "—"}
                             </div>
-                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                            <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug break-words">
                               {u.location_description ?? ""}
                             </div>
-                            <div className="mt-2">
-                              <HighlightsEditor
-                                unitId={u.id}
-                                initial={u.highlights}
-                                onSaved={(next) =>
-                                  setUnits((prev) =>
-                                    prev.map((x) => (x.id === u.id ? { ...x, highlights: next } : x)),
-                                  )
-                                }
-                              />
-                            </div>
                           </td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtNum(u.four_week_impressions)}</td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{fmtMoney(u.total_cost)}</td>
-                          <td className="px-4 py-3 align-top text-right tabular-nums">{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</td>
-                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 py-3 align-top w-[280px] max-w-[280px]" onClick={(e) => e.stopPropagation()}>
+                            <HighlightsCell
+                              unitId={u.id}
+                              unitNumber={u.unit_number}
+                              initial={u.highlights}
+                              onSaved={(next) =>
+                                setUnits((prev) =>
+                                  prev.map((x) => (x.id === u.id ? { ...x, highlights: next } : x)),
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {fmtNum(u.four_week_impressions)}
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {fmtMoney(u.total_cost)}
+                          </td>
+                          <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
+                            {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
+                          </td>
+                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={u.included !== false}
                               onCheckedChange={(v) => toggleField(u, "included", v)}
                             />
                           </td>
-                          <td className="px-4 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 py-3 align-top text-center" onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={!!u.recommended}
                               onCheckedChange={(v) => toggleField(u, "recommended", v)}
