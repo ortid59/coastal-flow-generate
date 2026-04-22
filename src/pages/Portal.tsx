@@ -828,11 +828,11 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               )}
               <button
                 type="button"
-                onClick={() => printSingleQuote(unit.id)}
+                onClick={() => downloadSingleQuotePdf(unit.id, unit.unit_number)}
                 className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground transition hover:bg-secondary hover:text-foreground print:hidden"
-                title="Print this quote"
+                title="Download this quote as PDF"
               >
-                <Printer className="h-3 w-3" /> Print
+                <Printer className="h-3 w-3" /> PDF
               </button>
             </div>
             <span className="mt-5 gold-rule" />
