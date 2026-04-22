@@ -434,6 +434,33 @@ Deno.serve(async (req) => {
       summary.units_with_photo++;
     }
 
+    // Upload map images (public 'minimaps' bucket so portal renders directly)
+    for (const [unitNumber, img] of mapForUnit) {
+      const unitId = unitIdByNumber.get(unitNumber);
+      if (!unitId) continue;
+      const billboard = bestForUnit.get(unitNumber);
+      if (billboard && img.bytes === billboard.bytes) continue;
+      const path = `${campaignId}/${unitId}-map.${img.ext}`;
+      const up = await supabase.storage
+        .from("minimaps")
+        .upload(path, img.bytes, {
+          contentType: img.ext === "jpg" ? "image/jpeg" : "image/png",
+          upsert: true,
+        });
+      if (up.error) {
+        console.warn(`[extract-photos] map upload failed for ${unitNumber}:`, up.error.message);
+        continue;
+      }
+      const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from("units")
+        .update({ inset_map_url: pub.publicUrl })
+        .eq("id", unitId);
+      if (updErr) {
+        console.warn(`[extract-photos] map update failed for ${unitNumber}:`, updErr.message);
+      }
+    }
+
     if (jobId) {
       await supabase.from("jobs").update({
         status: "succeeded",
