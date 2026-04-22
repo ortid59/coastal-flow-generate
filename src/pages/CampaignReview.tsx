@@ -325,7 +325,7 @@ export default function CampaignReview() {
                           onClick={() => setHighlightedId(u.id)}
                           className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${isHighlighted ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]" : "hover:bg-muted/30"}`}
                         >
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-3 align-top">
                             <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                               {u.billboard_photo_url ? (
                                 <div className="relative h-14 w-20 overflow-hidden rounded-md bg-muted">
@@ -372,8 +372,8 @@ export default function CampaignReview() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 align-top font-medium">
-                            <div className="flex items-center gap-2">
+                          <td className="px-3 py-3 align-top font-medium">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
                               {u.unit_number}
                               {u.recommended && (
                                 <Badge className="bg-success/15 text-success border border-success/30 gap-1">
