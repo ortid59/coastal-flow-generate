@@ -741,14 +741,15 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
         </AnimatePresence>
       </div>
 
-      {/* Print fallback */}
-      <div className="hidden print:block space-y-6">
+      {/* Print fallback — every quote on its own page with photo, map, details, investment */}
+      <div className="hidden print:block">
         {units.map((u, i) => (
-          <div key={u.id}>
-            <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} />
-            <div className="mt-4">
-              <UnitDetails unit={u} />
-            </div>
+          <div key={u.id} className="print-quote mb-10">
+            <PrintableQuote
+              unit={u}
+              market={market}
+              indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
+            />
           </div>
         ))}
       </div>
