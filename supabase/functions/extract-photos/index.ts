@@ -1,23 +1,24 @@
-// Extract billboard photos from vendor PDFs and attach them to units.
+// Extract billboard photos AND map images from vendor PDFs and attach
+// them to units. Uses pdf.js page resources directly so we can enumerate
+// every image on every page (JPEG + PNG/Flate) with accurate page numbers.
 //
-// Strategy (hybrid):
-//  1. For each PDF in vendor_files (kind='pdf') for the campaign:
-//     a. Walk PDF objects and pull every embedded JPEG (DCTDecode) and
-//        FlateDecode/PNG image. Capture raw bytes + width/height.
-//     b. For each page, run unpdf.extractText to find unit numbers that
-//        appear on that page.
-//  2. Match images to units:
-//     - Filename convention first: if "<unit_number>" appears in the PDF
-//       filename, attach largest image from that PDF to that unit.
-//     - Otherwise: for each page, attach the largest image on that page
-//       to every unit number whose token appears in that page's text.
-//  3. Upload chosen image to private "photos" bucket; sign a long URL and
-//     store it on units.billboard_photo_url. Set low_res_flag if width<800.
+// Strategy:
+//  1. For each PDF in vendor_files (kind='pdf' or 'photosheets'):
+//     a. Open with pdf.js (unpdf wraps the same lib).
+//     b. For each page: read text + commonObjs/objs imagery.
+//        - Re-encode raw pixel data as PNG so we can store it.
+//        - JPEGs already in /DCTDecode form are kept as-is.
+//     c. Find unit numbers in the page text.
+//  2. Per page: largest image = billboard, smallest distinct = map.
+//     Assign to every unit number found in that page's text.
+//  3. Direct image uploads (kind='image') match by filename → unit_number.
+//  4. Upload billboard → private 'photos' bucket, sign URL.
+//     Upload map → public 'minimaps' bucket.
 //
 // Auth: caller JWT required. RLS ensures campaign ownership.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
+import { getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,37 +29,297 @@ const corsHeaders = {
 
 const LOW_RES_WIDTH = 800;
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 year
+const MAP_RATIO_MAX = 0.4; // map must be < 40% area of biggest image on page
 
 type PdfImage = {
   bytes: Uint8Array;
   ext: "jpg" | "png";
   width: number;
   height: number;
-  page: number; // best-effort page association (may be 0 if unknown)
+  page: number;
 };
 
-// ---------- low-level PDF image extraction ----------
+// ---------- PDF image extraction via pdf.js page resources ----------
 
-// Locate every "stream ... endstream" object that is an /XObject Image.
-// We only support /DCTDecode (JPEG) reliably. PNG-from-FlateDecode requires
-// reconstruction; we skip it (rare in vendor billboard decks — they're JPEG).
-// Read width/height from a standalone JPEG file by scanning SOF markers.
+async function extractImagesFromPdf(bytes: Uint8Array): Promise<{
+  images: PdfImage[];
+  perPageText: string[];
+  pageCount: number;
+}> {
+  const pdf = await getDocumentProxy(bytes);
+  const pageCount = pdf.numPages as number;
+  const images: PdfImage[] = [];
+  const perPageText: string[] = [];
+
+  for (let p = 1; p <= pageCount; p++) {
+    let page: any;
+    try {
+      page = await pdf.getPage(p);
+    } catch (e) {
+      console.warn(`[extract-photos] getPage(${p}) failed:`, (e as Error).message);
+      perPageText.push("");
+      continue;
+    }
+
+    // Text
+    try {
+      const tc = await page.getTextContent();
+      perPageText.push(tc.items.map((it: any) => it.str ?? "").join(" "));
+    } catch {
+      perPageText.push("");
+    }
+
+    // Walk the operator list to find image XObject names referenced on
+    // this page, then resolve them via page.objs / commonObjs.
+    let ops: any;
+    try {
+      ops = await page.getOperatorList();
+    } catch (e) {
+      console.warn(`[extract-photos] op list p${p} failed:`, (e as Error).message);
+      continue;
+    }
+
+    const imageNames = new Set<string>();
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const args = ops.argsArray[i];
+      if (Array.isArray(args) && typeof args[0] === "string") {
+        // paintImageXObject / paintJpegXObject / paintInlineImageXObject all
+        // pass the image cache name as args[0].
+        if (/^(img_?p?\d+|g_[a-z0-9]+_img_?p?\d+|.*_img_?\d+)/i.test(args[0])) {
+          imageNames.add(args[0]);
+        }
+      }
+    }
+
+    for (const name of imageNames) {
+      const img = await resolvePdfImage(page, name);
+      if (img && img.bytes.length > 0) {
+        images.push({ ...img, page: p });
+      }
+    }
+  }
+
+  return { images, perPageText, pageCount };
+}
+
+// Resolve an image from page.objs (preferred) or page.commonObjs.
+// Returns either the original JPEG bytes or a PNG re-encoding of pixel data.
+async function resolvePdfImage(
+  page: any,
+  name: string,
+): Promise<{ bytes: Uint8Array; ext: "jpg" | "png"; width: number; height: number } | null> {
+  const tryGet = async (store: any): Promise<any | null> => {
+    if (!store || typeof store.get !== "function") return null;
+    try {
+      // Some pdf.js versions need a callback; promise form works in modern builds.
+      return await new Promise((resolve) => {
+        try {
+          const v = store.get(name, (data: any) => resolve(data));
+          if (v !== undefined) resolve(v);
+        } catch {
+          resolve(null);
+        }
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  let imgObj: any = await tryGet(page.objs);
+  if (!imgObj) imgObj = await tryGet(page.commonObjs);
+  if (!imgObj) return null;
+
+  // pdf.js exposes images as { width, height, kind, data } where data may
+  // already be the JPEG byte stream (kind=1) or raw pixel data (kind=2/3).
+  // Some builds wrap it under .bitmap (an ImageBitmap) — we ignore those.
+  const width = Number(imgObj.width || imgObj.bitmap?.width || 0);
+  const height = Number(imgObj.height || imgObj.bitmap?.height || 0);
+  const data = imgObj.data;
+
+  if (!data || width === 0 || height === 0) return null;
+
+  // Heuristic: if data starts with FF D8 FF it's a JPEG byte stream.
+  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (u8.length >= 3 && u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) {
+    return { bytes: u8, ext: "jpg", width, height };
+  }
+
+  // Otherwise re-encode raw pixel bytes as a PNG.
+  // imgObj.kind: 1 = grayscale, 2 = RGB, 3 = RGBA (pdf.js ImageKind enum)
+  const kind = Number(imgObj.kind || 0);
+  let channels = 4;
+  if (kind === 1) channels = 1;
+  else if (kind === 2) channels = 3;
+  else if (kind === 3) channels = 4;
+  else {
+    // Guess from data length
+    const px = width * height;
+    if (u8.length === px) channels = 1;
+    else if (u8.length === px * 3) channels = 3;
+    else if (u8.length === px * 4) channels = 4;
+    else return null; // unknown — skip
+  }
+
+  try {
+    const png = encodePng(u8, width, height, channels);
+    return { bytes: png, ext: "png", width, height };
+  } catch (e) {
+    console.warn(`[extract-photos] PNG encode failed for ${name}:`, (e as Error).message);
+    return null;
+  }
+}
+
+// ---------- Minimal PNG encoder (no external deps) ----------
+
+function encodePng(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  channels: number,
+): Uint8Array {
+  // Convert to RGBA for simplicity — small encode overhead, simpler decoder support.
+  const rgba = new Uint8Array(width * height * 4);
+  for (let i = 0, j = 0; i < width * height; i++) {
+    if (channels === 1) {
+      const g = pixels[i];
+      rgba[j++] = g; rgba[j++] = g; rgba[j++] = g; rgba[j++] = 255;
+    } else if (channels === 3) {
+      rgba[j++] = pixels[i * 3];
+      rgba[j++] = pixels[i * 3 + 1];
+      rgba[j++] = pixels[i * 3 + 2];
+      rgba[j++] = 255;
+    } else {
+      rgba[j++] = pixels[i * 4];
+      rgba[j++] = pixels[i * 4 + 1];
+      rgba[j++] = pixels[i * 4 + 2];
+      rgba[j++] = pixels[i * 4 + 3];
+    }
+  }
+
+  // Filter byte (0 = none) prepended to each scanline
+  const stride = width * 4;
+  const filtered = new Uint8Array((stride + 1) * height);
+  for (let y = 0; y < height; y++) {
+    filtered[y * (stride + 1)] = 0;
+    filtered.set(rgba.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
+  }
+
+  // Deflate using CompressionStream (available in Deno).
+  // We need a sync return — collect chunks via a Response.
+  // Note: top-level await isn't allowed here; use a sync zlib-style approach.
+  // Since CompressionStream is async, we wrap encodePng's caller appropriately.
+  // ... but we need sync — fall back to a tiny zlib "stored" block writer.
+  const compressed = deflateStored(filtered);
+
+  const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = chunk("IHDR", buildIhdr(width, height));
+  const idat = chunk("IDAT", compressed);
+  const iend = chunk("IEND", new Uint8Array(0));
+
+  const out = new Uint8Array(sig.length + ihdr.length + idat.length + iend.length);
+  let o = 0;
+  out.set(sig, o); o += sig.length;
+  out.set(ihdr, o); o += ihdr.length;
+  out.set(idat, o); o += idat.length;
+  out.set(iend, o);
+  return out;
+}
+
+function buildIhdr(width: number, height: number): Uint8Array {
+  const b = new Uint8Array(13);
+  const dv = new DataView(b.buffer);
+  dv.setUint32(0, width);
+  dv.setUint32(4, height);
+  b[8] = 8;  // bit depth
+  b[9] = 6;  // color type RGBA
+  b[10] = 0; // compression
+  b[11] = 0; // filter
+  b[12] = 0; // interlace
+  return b;
+}
+
+function chunk(type: string, data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(8 + data.length + 4);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  out[4] = type.charCodeAt(0);
+  out[5] = type.charCodeAt(1);
+  out[6] = type.charCodeAt(2);
+  out[7] = type.charCodeAt(3);
+  out.set(data, 8);
+  const crc = crc32(out.subarray(4, 8 + data.length));
+  dv.setUint32(8 + data.length, crc);
+  return out;
+}
+
+// CRC32 (PNG / zlib)
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// Adler-32 for zlib trailer
+function adler32(buf: Uint8Array): number {
+  let a = 1, b = 0;
+  for (let i = 0; i < buf.length; i++) {
+    a = (a + buf[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+// Build a zlib stream of "stored" (uncompressed) deflate blocks.
+// Each block holds up to 65535 bytes; widely-supported by every PNG decoder.
+function deflateStored(data: Uint8Array): Uint8Array {
+  const MAX = 0xffff;
+  const blockCount = Math.max(1, Math.ceil(data.length / MAX));
+  const out = new Uint8Array(2 + blockCount * 5 + data.length + 4);
+  let o = 0;
+  // zlib header: deflate, 32K window, no preset dict, fastest
+  out[o++] = 0x78;
+  out[o++] = 0x01;
+  for (let i = 0; i < data.length; i += MAX) {
+    const len = Math.min(MAX, data.length - i);
+    const last = (i + len >= data.length) ? 1 : 0;
+    out[o++] = last; // BFINAL flag, BTYPE=00 (stored)
+    out[o++] = len & 0xff;
+    out[o++] = (len >>> 8) & 0xff;
+    out[o++] = (~len) & 0xff;
+    out[o++] = (~len >>> 8) & 0xff;
+    out.set(data.subarray(i, i + len), o);
+    o += len;
+  }
+  const adler = adler32(data);
+  out[o++] = (adler >>> 24) & 0xff;
+  out[o++] = (adler >>> 16) & 0xff;
+  out[o++] = (adler >>> 8) & 0xff;
+  out[o++] = adler & 0xff;
+  return out.subarray(0, o);
+}
+
+// Read width/height from a JPEG buffer (used for kind='image' uploads).
 function readJpegDimensions(buf: Uint8Array): { width: number; height: number } {
-  // Must start with SOI (FFD8)
   if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return { width: 0, height: 0 };
   let i = 2;
   while (i < buf.length - 9) {
     if (buf[i] !== 0xff) { i++; continue; }
-    // Skip fill bytes
     while (i < buf.length && buf[i] === 0xff) i++;
     const marker = buf[i]; i++;
-    // Standalone markers (no length): D0-D9, 01
     if (marker === 0xd9 || marker === 0xda) break;
     if (marker >= 0xd0 && marker <= 0xd7) continue;
     if (marker === 0x01) continue;
     if (i + 1 >= buf.length) break;
     const segLen = (buf[i] << 8) | buf[i + 1];
-    // SOF markers: C0–C3, C5–C7, C9–CB, CD–CF (skip C4, C8, CC)
     const isSOF =
       (marker >= 0xc0 && marker <= 0xc3) ||
       (marker >= 0xc5 && marker <= 0xc7) ||
@@ -74,131 +335,15 @@ function readJpegDimensions(buf: Uint8Array): { width: number; height: number } 
   return { width: 0, height: 0 };
 }
 
-function extractJpegImages(buf: Uint8Array): PdfImage[] {
-  const images: PdfImage[] = [];
-  // Convert to latin1 string for header scanning; preserve byte indices 1:1.
-  let text = "";
-  for (let i = 0; i < buf.length; i++) text += String.fromCharCode(buf[i]);
-
-  // Match each indirect object header: "N G obj ... endobj"
-  const objRe = /(\d+)\s+(\d+)\s+obj([\s\S]*?)endobj/g;
-  let m: RegExpExecArray | null;
-  while ((m = objRe.exec(text)) !== null) {
-    const body = m[3];
-    if (!/\/Subtype\s*\/Image/.test(body)) continue;
-    if (!/\/Filter\s*(?:\[[^\]]*\/DCTDecode[^\]]*\]|\/DCTDecode)/.test(body)) continue;
-
-    const widthM = /\/Width\s+(\d+)/.exec(body);
-    const heightM = /\/Height\s+(\d+)/.exec(body);
-    const w = widthM ? parseInt(widthM[1], 10) : 0;
-    const h = heightM ? parseInt(heightM[1], 10) : 0;
-
-    // Find "stream\n...endstream" inside this object's byte range.
-    const objStart = m.index;
-    const objEnd = objStart + m[0].length;
-    // Locate "stream" then skip its trailing EOL (CR/LF or LF).
-    const streamMarker = body.indexOf("stream");
-    if (streamMarker < 0) continue;
-    let dataStart = objStart + (m[0].length - body.length) + streamMarker + "stream".length;
-    if (buf[dataStart] === 0x0d && buf[dataStart + 1] === 0x0a) dataStart += 2;
-    else if (buf[dataStart] === 0x0a) dataStart += 1;
-
-    // Find "endstream" within this object's byte range.
-    const endRel = body.indexOf("endstream", streamMarker);
-    if (endRel < 0) continue;
-    let dataEnd = objStart + (m[0].length - body.length) + endRel;
-    // Strip trailing whitespace before endstream
-    while (dataEnd > dataStart && (buf[dataEnd - 1] === 0x0a || buf[dataEnd - 1] === 0x0d || buf[dataEnd - 1] === 0x20)) {
-      dataEnd--;
-    }
-    if (dataEnd <= dataStart || dataEnd > buf.length) continue;
-
-    const bytes = buf.slice(dataStart, dataEnd);
-    // Sanity: a JPEG starts with FF D8 FF
-    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) continue;
-
-    images.push({ bytes, ext: "jpg", width: w, height: h, page: 0 });
-    if (objEnd > 0) {
-      // continue scanning
-    }
-  }
-  return images;
-}
-
-// Also try extracting via unpdf to get a per-page image inventory (for page→image association).
-// Returns [pageNumber] -> count of images on that page.
-async function getPerPageImageCount(pdf: any): Promise<number[]> {
-  const counts: number[] = [];
-  const total = pdf.numPages as number;
-  for (let p = 1; p <= total; p++) {
-    try {
-      const page = await pdf.getPage(p);
-      const ops = await page.getOperatorList();
-      // PDFJS op for paintImageXObject is 85 in modern builds — but the constant
-      // can vary. Count xobject paint ops by scanning for ops referencing image names.
-      let n = 0;
-      for (let i = 0; i < ops.fnArray.length; i++) {
-        const args = ops.argsArray[i];
-        if (Array.isArray(args) && typeof args[0] === "string" && /^img_?p?\d+/i.test(args[0])) {
-          n++;
-        }
-      }
-      counts.push(n);
-    } catch {
-      counts.push(0);
-    }
-  }
-  return counts;
-}
-
-async function getPerPageText(pdf: any): Promise<string[]> {
-  const out: string[] = [];
-  const total = pdf.numPages as number;
-  for (let p = 1; p <= total; p++) {
-    try {
-      const page = await pdf.getPage(p);
-      const tc = await page.getTextContent();
-      const t = tc.items.map((it: any) => it.str).join(" ");
-      out.push(t);
-    } catch {
-      out.push("");
-    }
-  }
-  return out;
-}
-
-// Best-effort: distribute extracted images across pages using per-page image counts.
-function assignImagesToPages(images: PdfImage[], perPageCounts: number[]): PdfImage[] {
-  if (perPageCounts.length === 0) return images;
-  const total = perPageCounts.reduce((s, n) => s + n, 0);
-  if (total === 0 || total !== images.length) {
-    // Fall back: leave page=0 (unknown)
-    return images;
-  }
-  const out: PdfImage[] = [];
-  let idx = 0;
-  for (let p = 0; p < perPageCounts.length; p++) {
-    for (let k = 0; k < perPageCounts[p]; k++) {
-      out.push({ ...images[idx], page: p + 1 });
-      idx++;
-    }
-  }
-  return out;
-}
-
-// ---------- matching ----------
-
-function normalizeUnit(u: string): string {
-  return u.replace(/\s+/g, "").toLowerCase();
-}
+// ---------- matching helpers ----------
 
 function findUnitsInText(text: string, unitNumbers: string[]): Set<string> {
   const found = new Set<string>();
   const norm = text.replace(/\s+/g, " ").toLowerCase();
-  for (const u of unitNumbers) {
-    const tok = u.toLowerCase();
-    // word-boundary-ish match, allow surrounding punctuation
-    const re = new RegExp(`(^|[^a-z0-9])${escapeRe(tok)}([^a-z0-9]|$)`);
+  // Match longest first to prefer "ABC-1234" over "1234".
+  const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
+  for (const u of sorted) {
+    const re = new RegExp(`(^|[^a-z0-9])${escapeRe(u.toLowerCase())}([^a-z0-9]|$)`);
     if (re.test(norm)) found.add(u);
   }
   return found;
@@ -206,7 +351,6 @@ function findUnitsInText(text: string, unitNumbers: string[]): Set<string> {
 
 function findUnitInFilename(name: string, unitNumbers: string[]): string | null {
   const lower = name.toLowerCase();
-  // Prefer the longest unit-number match to avoid "12" matching "121".
   const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
   for (const u of sorted) {
     const re = new RegExp(`(^|[^a-z0-9])${escapeRe(u.toLowerCase())}([^a-z0-9]|$)`);
@@ -219,7 +363,14 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ---------- main ----------
+function considerImage(map: Map<string, PdfImage>, unit: string, img: PdfImage) {
+  const existing = map.get(unit);
+  const newArea = img.width * img.height;
+  const oldArea = existing ? existing.width * existing.height : -1;
+  if (newArea > oldArea) map.set(unit, img);
+}
+
+// ---------- main handler ----------
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -296,14 +447,14 @@ Deno.serve(async (req) => {
 
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
-    // Track best image (by area) per unit — billboard = largest, map = secondary
-    const bestForUnit = new Map<string, PdfImage>();
-    const mapForUnit = new Map<string, PdfImage>();
+    const bestForUnit = new Map<string, PdfImage>(); // billboard
+    const mapForUnit = new Map<string, PdfImage>(); // map
 
     const summary = {
       campaign_id: campaignId,
       pdfs: [] as Array<{ name: string; pages: number; images: number; matched_units: number }>,
       units_with_photo: 0,
+      units_with_map: 0,
       low_res_count: 0,
     };
 
@@ -345,39 +496,51 @@ Deno.serve(async (req) => {
       }
 
       // PDF path (covers both 'pdf' and 'photosheets')
-      const rawImages = extractJpegImages(bytes);
-
-      let perPageText: string[] = [];
-      let perPageCounts: number[] = [];
-      let pageCount = 0;
+      let extracted: { images: PdfImage[]; perPageText: string[]; pageCount: number };
       try {
-        const pdf = await getDocumentProxy(bytes);
-        pageCount = pdf.numPages;
-        perPageText = await getPerPageText(pdf);
-        perPageCounts = await getPerPageImageCount(pdf);
+        extracted = await extractImagesFromPdf(bytes);
       } catch (e) {
-        console.warn(`[extract-photos] unpdf failed on ${f.original_name}:`, (e as Error).message);
+        console.warn(`[extract-photos] pdf parse failed for ${f.original_name}:`, (e as Error).message);
+        summary.pdfs.push({
+          name: f.original_name ?? f.storage_path,
+          pages: 0,
+          images: 0,
+          matched_units: 0,
+        });
+        continue;
       }
 
-      const images = assignImagesToPages(rawImages, perPageCounts);
+      const { images, perPageText, pageCount } = extracted;
 
-      // (1) Filename convention
+      // Filename convention
       const fileUnit = findUnitInFilename(f.original_name ?? "", unitNumbers);
       let matchedUnits = 0;
 
       if (fileUnit && images.length > 0) {
         const sorted = [...images].sort((a, b) => b.width * b.height - a.width * a.height);
         considerImage(bestForUnit, fileUnit, sorted[0]);
-        if (sorted.length > 1) considerImage(mapForUnit, fileUnit, sorted[sorted.length - 1]);
+        if (sorted.length > 1) {
+          const map = sorted[sorted.length - 1];
+          if (map.width * map.height < sorted[0].width * sorted[0].height * MAP_RATIO_MAX) {
+            considerImage(mapForUnit, fileUnit, map);
+          }
+        }
         matchedUnits = 1;
       } else {
-        // (2) Page-text matching — biggest image = billboard, second = map
+        // Page-text matching — biggest image = billboard, smallest distinct = map
         for (let p = 0; p < perPageText.length; p++) {
           const pageImages = images.filter((im) => im.page === p + 1);
           if (pageImages.length === 0) continue;
           const sorted = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height);
           const best = sorted[0];
-          const mapImg = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+          // Map = smallest image that's notably smaller than the billboard
+          let mapImg: PdfImage | null = null;
+          if (sorted.length > 1) {
+            const candidate = sorted[sorted.length - 1];
+            if (candidate.width * candidate.height < best.width * best.height * MAP_RATIO_MAX) {
+              mapImg = candidate;
+            }
+          }
           const matches = findUnitsInText(perPageText[p], unitNumbers);
           for (const u of matches) {
             considerImage(bestForUnit, u, best);
@@ -395,7 +558,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upload + update units
+    // Upload billboard photos + update units
     for (const [unitNumber, img] of bestForUnit) {
       const unitId = unitIdByNumber.get(unitNumber);
       if (!unitId) continue;
@@ -458,7 +621,9 @@ Deno.serve(async (req) => {
         .eq("id", unitId);
       if (updErr) {
         console.warn(`[extract-photos] map update failed for ${unitNumber}:`, updErr.message);
+        continue;
       }
+      summary.units_with_map++;
     }
 
     if (jobId) {
@@ -487,10 +652,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-function considerImage(map: Map<string, PdfImage>, unit: string, img: PdfImage) {
-  const existing = map.get(unit);
-  const newArea = img.width * img.height;
-  const oldArea = existing ? existing.width * existing.height : -1;
-  if (newArea > oldArea) map.set(unit, img);
-}
