@@ -224,8 +224,10 @@ Deno.serve(async (req) => {
     if (filesErr) throw filesErr;
     if (!files || files.length === 0) throw new Error("No Excel files found for this campaign");
 
-    // Clear previous parse for this campaign (idempotent re-run)
-    await supabase.from("units").delete().eq("campaign_id", campaignId);
+    // NOTE: previously this deleted all units for the campaign before re-inserting.
+    // That wiped billboard_photo_url / inset_map_url whenever the user re-uploaded.
+    // We now upsert by (campaign_id, unit_number) so existing units (and their
+    // photos / map URLs / manual edits) are preserved across re-parses.
 
     const summary = {
       campaign_id: campaignId,
@@ -336,10 +338,16 @@ Deno.serve(async (req) => {
       }
 
       if (inserts.length > 0) {
-        // Insert in batches of 200
+        // Upsert in batches of 200 — preserves photo URLs, map URLs, and any
+        // admin edits because we match on (campaign_id, unit_number).
         for (let i = 0; i < inserts.length; i += 200) {
           const chunk = inserts.slice(i, i + 200);
-          const { error: insErr } = await supabase.from("units").insert(chunk);
+          const { error: insErr } = await supabase
+            .from("units")
+            .upsert(chunk, {
+              onConflict: "campaign_id,unit_number",
+              ignoreDuplicates: false,
+            });
           if (insErr) throw insErr;
         }
       }
