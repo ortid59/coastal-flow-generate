@@ -457,6 +457,14 @@ export default function CampaignReview() {
           campaignName={campaign.campaign_name}
         />
       )}
+      {campaign && (
+        <ReuploadFilesDialog
+          open={reuploadOpen}
+          onOpenChange={setReuploadOpen}
+          campaignId={campaign.id}
+          onDone={load}
+        />
+      )}
     </main>
   );
 }
