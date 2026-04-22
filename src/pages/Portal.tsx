@@ -1055,25 +1055,15 @@ function DetailKV({ label, value }: { label: string; value: string }) {
 /* =================== Print helpers =================== */
 
 /**
- * Print a single quote: temporarily mark every other quote with a class
- * that hides them via @media print, then call window.print(), then clean up.
+ * Download a single quote as a PDF using the off-screen PrintableQuote node.
  */
-function printSingleQuote(unitId: string) {
-  const all = document.querySelectorAll<HTMLElement>("[data-print-quote-id]");
-  all.forEach((el) => {
-    if (el.dataset.printQuoteId !== unitId) {
-      el.classList.add("print-hide-when-single");
-    }
-  });
-  document.body.classList.add("print-single");
-  const cleanup = () => {
-    document.body.classList.remove("print-single");
-    all.forEach((el) => el.classList.remove("print-hide-when-single"));
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  // Small delay so DOM updates apply before the print dialog snapshots
-  setTimeout(() => window.print(), 50);
+async function downloadSingleQuotePdf(unitId: string, unitNumber: string) {
+  const node = document.getElementById(`pdf-quote-${unitId}`);
+  if (!node) {
+    console.warn("No PDF node for unit", unitId);
+    return;
+  }
+  await exportNodeToPdf(node, `quote-${unitNumber || unitId}.pdf`);
 }
 
 /* =================== Printable Quote (PDF layout) =================== */
