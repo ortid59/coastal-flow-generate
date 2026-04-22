@@ -427,7 +427,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
             <div className="mt-16 space-y-20">
               {byMarket.map(([market, list], idx) => (
-                <MarketSection key={market} market={market} units={list} index={idx} />
+                <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} />
               ))}
             </div>
           </div>
@@ -656,7 +656,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 }
 
 /* =================== Market Section (carousel) =================== */
-function MarketSection({ market, units, index }: { market: string; units: Unit[]; index: number }) {
+function MarketSection({ market, units, index, campaign }: { market: string; units: Unit[]; index: number; campaign: Campaign | null }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [selected, setSelected] = useState(0);
 
@@ -794,6 +794,7 @@ function MarketSection({ market, units, index }: { market: string; units: Unit[]
             <PrintableQuote
               unit={u}
               market={market}
+              campaign={campaign}
               indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
             />
           </div>
