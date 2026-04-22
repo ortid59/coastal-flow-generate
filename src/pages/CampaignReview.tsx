@@ -468,6 +468,8 @@ export default function CampaignReview() {
             </div>
 
           </div>
+
+          {id && <CampaignFilesHistory campaignId={id} />}
         </>
       )}
 
