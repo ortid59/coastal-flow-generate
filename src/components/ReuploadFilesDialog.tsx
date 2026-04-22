@@ -112,6 +112,14 @@ export function ReuploadFilesDialog({ open, onOpenChange, campaignId, onDone }: 
 
       if (records.length) {
         setStep("Saving file records…");
+        // Avoid duplicate vendor_files rows for fixed-path re-uploads (e.g. photosheets).
+        // Delete any prior row pointing at the exact same storage_path before inserting.
+        const fixedPaths = records.map((r) => r.storage_path);
+        await supabase
+          .from("vendor_files")
+          .delete()
+          .eq("campaign_id", campaignId)
+          .in("storage_path", fixedPaths);
         const { error: vfErr } = await supabase
           .from("vendor_files")
           .insert(records.map((r) => ({ campaign_id: campaignId, ...r })));
@@ -146,7 +154,6 @@ export function ReuploadFilesDialog({ open, onOpenChange, campaignId, onDone }: 
       });
       onOpenChange(false);
       reset();
-      onDone();
     } catch (err: any) {
       toast({
         title: "Re-upload failed",
