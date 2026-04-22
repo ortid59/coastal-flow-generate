@@ -319,11 +319,11 @@ export default function CampaignReview() {
                       <th className="px-3 py-3 text-left">Format</th>
                       <th className="px-3 py-3 text-left w-[260px]">Location</th>
                       <th className="px-3 py-3 text-left w-[280px]">Highlights</th>
-                      <th className="px-3 py-3 text-right">4wk Imp</th>
-                      <th className="px-3 py-3 text-right">Total</th>
-                      <th className="px-3 py-3 text-right">CPM</th>
-                      <th className="px-3 py-3 text-center sticky right-[110px] bg-muted/40 border-l border-border">Include</th>
-                      <th className="px-3 py-3 text-center sticky right-0 bg-[hsl(var(--accent-gold)/0.15)] border-l border-border min-w-[110px]">Recommend</th>
+                      <th className="px-3 py-3 text-right whitespace-nowrap">4wk Imp</th>
+                      <th className="px-3 py-3 text-right whitespace-nowrap">Total</th>
+                      <th className="px-3 py-3 text-right whitespace-nowrap">CPM</th>
+                      <th className="px-3 py-3 text-center sticky right-[120px] z-10 bg-muted border-l border-border w-[100px] min-w-[100px] shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.15)]">Include</th>
+                      <th className="px-3 py-3 text-center sticky right-0 z-10 bg-[hsl(var(--accent-gold)/0.25)] border-l border-border w-[120px] min-w-[120px]">Recommend</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -435,13 +435,19 @@ export default function CampaignReview() {
                           <td className="px-3 py-3 align-top text-right tabular-nums whitespace-nowrap">
                             {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
                           </td>
-                          <td className={`px-3 py-3 align-top text-center sticky right-[110px] border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.06)]" : u.recommended && !excluded ? "bg-success/5" : "bg-card"}`} onClick={(e) => e.stopPropagation()}>
+                          <td
+                            className={`px-3 py-3 align-top text-center sticky right-[120px] z-[5] border-l border-border w-[100px] min-w-[100px] shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.15)] ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.10)]" : "bg-card"}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Switch
                               checked={u.included !== false}
                               onCheckedChange={(v) => toggleField(u, "included", v)}
                             />
                           </td>
-                          <td className={`px-3 py-3 align-top text-center sticky right-0 border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.12)]" : "bg-[hsl(var(--accent-gold)/0.08)]"}`} onClick={(e) => e.stopPropagation()}>
+                          <td
+                            className={`px-3 py-3 align-top text-center sticky right-0 z-[5] border-l border-border w-[120px] min-w-[120px] ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.22)]" : "bg-[hsl(var(--accent-gold)/0.12)]"}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <div className="flex flex-col items-center gap-1">
                               <Switch
                                 checked={!!u.recommended}
@@ -449,7 +455,7 @@ export default function CampaignReview() {
                                 disabled={excluded}
                               />
                               {u.recommended && !excluded && (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-success">★ Hero</span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-success whitespace-nowrap">★ Hero</span>
                               )}
                             </div>
                           </td>
