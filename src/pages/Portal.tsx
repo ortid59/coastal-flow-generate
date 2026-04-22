@@ -191,8 +191,32 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
             <Logo size={32} />
             <span className="text-xs text-muted-foreground hidden sm:inline">Private proposal</span>
           </div>
-          <Button size="sm" variant="outline" onClick={() => window.print()}>
-            <Printer className="h-4 w-4" /> Print / Save PDF
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={downloading || units.length === 0}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                const nodes = units
+                  .map((u) => document.getElementById(`pdf-quote-${u.id}`))
+                  .filter((n): n is HTMLElement => !!n);
+                if (!nodes.length) {
+                  toast({ title: "No quotes to export", variant: "destructive" });
+                  return;
+                }
+                const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
+                await exportNodesToPdf(nodes, filename);
+                toast({ title: "PDF downloaded" });
+              } catch (e: any) {
+                toast({ title: "PDF export failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+              } finally {
+                setDownloading(false);
+              }
+            }}
+          >
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            {downloading ? "Generating…" : "Download PDF"}
           </Button>
         </div>
       </div>
