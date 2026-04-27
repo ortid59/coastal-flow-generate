@@ -38,6 +38,9 @@ type Campaign = {
   client_logo_url: string | null;
   status: string | null;
   markets: string[] | null;
+  show_tier_a: boolean | null;
+  show_tier_b: boolean | null;
+  show_tier_c: boolean | null;
 };
 
 type Unit = {
@@ -60,7 +63,18 @@ type Unit = {
   low_res_flag: boolean | null;
   latitude: number | null;
   longitude: number | null;
+  tier_a: boolean | null;
+  tier_b: boolean | null;
+  tier_c: boolean | null;
 };
+
+type TierKey = "tier_a" | "tier_b" | "tier_c";
+type ShowTierKey = "show_tier_a" | "show_tier_b" | "show_tier_c";
+const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string }[] = [
+  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A" },
+  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B" },
+  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C" },
+];
 
 const fmtNum = (n: number | null) =>
   n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -85,13 +99,13 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c")
         .eq("id", id)
         .single(),
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
