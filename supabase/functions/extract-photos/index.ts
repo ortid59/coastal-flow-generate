@@ -1,24 +1,23 @@
-// Extract billboard photos AND map images from vendor PDFs and attach
-// them to units. Uses pdf.js page resources directly so we can enumerate
-// every image on every page (JPEG + PNG/Flate) with accurate page numbers.
+// Extract billboard photos and inset maps from vendor Photo Sheets PDFs.
 //
-// Strategy:
-//  1. For each PDF in vendor_files (kind='pdf' or 'photosheets'):
-//     a. Open with pdf.js (unpdf wraps the same lib).
-//     b. For each page: read text + commonObjs/objs imagery.
-//        - Re-encode raw pixel data as PNG so we can store it.
-//        - JPEGs already in /DCTDecode form are kept as-is.
-//     c. Find unit numbers in the page text.
-//  2. Per page: largest image = billboard, smallest distinct = map.
-//     Assign to every unit number found in that page's text.
-//  3. Direct image uploads (kind='image') match by filename → unit_number.
-//  4. Upload billboard → private 'photos' bucket, sign URL.
-//     Upload map → public 'minimaps' bucket.
+// Strategy (Clear Channel format, tuned per vendor going forward):
+//  1. Open the PDF with mupdf-wasm (works in Deno without a DOM canvas).
+//  2. Page 1 = full-campaign overview map. Render the whole page as PNG and
+//     store on campaigns.vendor_overview_map_url. Do not match to any unit.
+//  3. Pages 2..N = one billboard per page. Read the page text, extract the
+//     6-digit unit number (pattern: "001115 – Jacksonville"), then render the
+//     page TWICE with different CropBox values to get:
+//       - billboard photo: x 0%,  y 35%, w 58%, h 60%  -> billboard_photo_url
+//       - inset map:       x 58%, y 5%,  w 42%, h 52%  -> inset_map_url
+//     Match unit_number to the units table (same campaign) and write — but
+//     only if the field is currently null (do not overwrite manual uploads).
+//  4. Unmatched / unrecognised pages are skipped with a warning, not fatal.
 //
 // Auth: caller JWT required. RLS ensures campaign ownership.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
+// mupdf-wasm runs in Deno and does not need a browser canvas.
+import * as mupdf from "https://esm.sh/mupdf@1.3.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,347 +26,82 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const LOW_RES_WIDTH = 800;
+const RENDER_DPI = 150;
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 year
-const MAP_RATIO_MAX = 0.4; // map must be < 40% area of biggest image on page
 
-type PdfImage = {
-  bytes: Uint8Array;
-  ext: "jpg" | "png";
-  width: number;
-  height: number;
-  page: number;
-};
+// Crop regions tuned for Clear Channel photo-sheet layout.
+// Coordinates are fractions of the full page bounds.
+const CROP_BILLBOARD = { x: 0.00, y: 0.35, w: 0.58, h: 0.60 };
+const CROP_MAP       = { x: 0.58, y: 0.05, w: 0.42, h: 0.52 };
 
-// ---------- PDF image extraction via pdf.js page resources ----------
+// "001115 – Jacksonville" — 6 digits, en-dash or hyphen, then a city word.
+// Allow surrounding whitespace; allow either – (U+2013) or - .
+const UNIT_HEADER_RE = /(\b\d{6})\s*[–-]\s*[A-Za-z]/;
 
-async function extractImagesFromPdf(bytes: Uint8Array): Promise<{
-  images: PdfImage[];
-  perPageText: string[];
-  pageCount: number;
-}> {
-  const pdf = await getDocumentProxy(bytes);
-  const pageCount = pdf.numPages as number;
-  const images: PdfImage[] = [];
-  const perPageText: string[] = [];
+// ---------- helpers ----------
 
-  for (let p = 1; p <= pageCount; p++) {
-    let page: any;
-    try {
-      page = await pdf.getPage(p);
-    } catch (e) {
-      console.warn(`[extract-photos] getPage(${p}) failed:`, (e as Error).message);
-      perPageText.push("");
-      continue;
-    }
-
-    // Text
-    try {
-      const tc = await page.getTextContent();
-      perPageText.push(tc.items.map((it: any) => it.str ?? "").join(" "));
-    } catch {
-      perPageText.push("");
-    }
-
-    // Walk the operator list to find image XObject names referenced on
-    // this page, then resolve them via page.objs / commonObjs.
-    let ops: any;
-    try {
-      ops = await page.getOperatorList();
-    } catch (e) {
-      console.warn(`[extract-photos] op list p${p} failed:`, (e as Error).message);
-      continue;
-    }
-
-    const imageNames = new Set<string>();
-    for (let i = 0; i < ops.fnArray.length; i++) {
-      const args = ops.argsArray[i];
-      if (Array.isArray(args) && typeof args[0] === "string") {
-        // paintImageXObject / paintJpegXObject / paintInlineImageXObject all
-        // pass the image cache name as args[0].
-        if (/^(img_?p?\d+|g_[a-z0-9]+_img_?p?\d+|.*_img_?\d+)/i.test(args[0])) {
-          imageNames.add(args[0]);
-        }
-      }
-    }
-
-    for (const name of imageNames) {
-      const img = await resolvePdfImage(page, name);
-      if (img && img.bytes.length > 0) {
-        images.push({ ...img, page: p });
-      }
-    }
-  }
-
-  return { images, perPageText, pageCount };
-}
-
-// Resolve an image from page.objs (preferred) or page.commonObjs.
-// Returns either the original JPEG bytes or a PNG re-encoding of pixel data.
-async function resolvePdfImage(
-  page: any,
-  name: string,
-): Promise<{ bytes: Uint8Array; ext: "jpg" | "png"; width: number; height: number } | null> {
-  const tryGet = async (store: any): Promise<any | null> => {
-    if (!store || typeof store.get !== "function") return null;
-    try {
-      // Some pdf.js versions need a callback; promise form works in modern builds.
-      return await new Promise((resolve) => {
-        try {
-          const v = store.get(name, (data: any) => resolve(data));
-          if (v !== undefined) resolve(v);
-        } catch {
-          resolve(null);
-        }
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  let imgObj: any = await tryGet(page.objs);
-  if (!imgObj) imgObj = await tryGet(page.commonObjs);
-  if (!imgObj) return null;
-
-  // pdf.js exposes images as { width, height, kind, data } where data may
-  // already be the JPEG byte stream (kind=1) or raw pixel data (kind=2/3).
-  // Some builds wrap it under .bitmap (an ImageBitmap) — we ignore those.
-  const width = Number(imgObj.width || imgObj.bitmap?.width || 0);
-  const height = Number(imgObj.height || imgObj.bitmap?.height || 0);
-  const data = imgObj.data;
-
-  if (!data || width === 0 || height === 0) return null;
-
-  // Heuristic: if data starts with FF D8 FF it's a JPEG byte stream.
-  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
-  if (u8.length >= 3 && u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) {
-    return { bytes: u8, ext: "jpg", width, height };
-  }
-
-  // Otherwise re-encode raw pixel bytes as a PNG.
-  // imgObj.kind: 1 = grayscale, 2 = RGB, 3 = RGBA (pdf.js ImageKind enum)
-  const kind = Number(imgObj.kind || 0);
-  let channels = 4;
-  if (kind === 1) channels = 1;
-  else if (kind === 2) channels = 3;
-  else if (kind === 3) channels = 4;
-  else {
-    // Guess from data length
-    const px = width * height;
-    if (u8.length === px) channels = 1;
-    else if (u8.length === px * 3) channels = 3;
-    else if (u8.length === px * 4) channels = 4;
-    else return null; // unknown — skip
-  }
-
+function renderPagePng(
+  doc: any,
+  pageIndex: number,
+  cropFraction?: { x: number; y: number; w: number; h: number },
+): Uint8Array | null {
+  const page = doc.loadPage(pageIndex);
   try {
-    const png = encodePng(u8, width, height, channels);
-    return { bytes: png, ext: "png", width, height };
+    const bounds = page.getBounds(); // [x0, y0, x1, y1] in PDF points
+    const pageW = bounds[2] - bounds[0];
+    const pageH = bounds[3] - bounds[1];
+
+    if (cropFraction) {
+      const cx0 = bounds[0] + pageW * cropFraction.x;
+      const cy0 = bounds[1] + pageH * cropFraction.y;
+      const cx1 = cx0 + pageW * cropFraction.w;
+      const cy1 = cy0 + pageH * cropFraction.h;
+      try {
+        // PDFPage.setPageBox lets us redefine the CropBox so the next render
+        // only covers the region we want.
+        page.setPageBox("CropBox", [cx0, cy0, cx1, cy1]);
+      } catch (e) {
+        console.warn("[extract-photos] setPageBox failed:", (e as Error).message);
+      }
+    }
+
+    const zoom = RENDER_DPI / 72;
+    const matrix = [zoom, 0, 0, zoom, 0, 0];
+    const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
+    try {
+      const png = pixmap.asPNG();
+      return png instanceof Uint8Array ? png : new Uint8Array(png);
+    } finally {
+      try { pixmap.destroy?.(); } catch { /* ignore */ }
+    }
+  } finally {
+    try { page.destroy?.(); } catch { /* ignore */ }
+  }
+}
+
+function getPageText(doc: any, pageIndex: number): string {
+  const page = doc.loadPage(pageIndex);
+  try {
+    // structuredText("preserve-whitespace") -> StructuredText; then asText()
+    const st = page.toStructuredText("preserve-whitespace");
+    try {
+      const txt = st.asText?.() ?? "";
+      return typeof txt === "string" ? txt : String(txt);
+    } finally {
+      try { st.destroy?.(); } catch { /* ignore */ }
+    }
   } catch (e) {
-    console.warn(`[extract-photos] PNG encode failed for ${name}:`, (e as Error).message);
-    return null;
+    console.warn("[extract-photos] text extract failed:", (e as Error).message);
+    return "";
+  } finally {
+    try { page.destroy?.(); } catch { /* ignore */ }
   }
 }
 
-// ---------- Minimal PNG encoder (no external deps) ----------
-
-function encodePng(
-  pixels: Uint8Array,
-  width: number,
-  height: number,
-  channels: number,
-): Uint8Array {
-  // Convert to RGBA for simplicity — small encode overhead, simpler decoder support.
-  const rgba = new Uint8Array(width * height * 4);
-  for (let i = 0, j = 0; i < width * height; i++) {
-    if (channels === 1) {
-      const g = pixels[i];
-      rgba[j++] = g; rgba[j++] = g; rgba[j++] = g; rgba[j++] = 255;
-    } else if (channels === 3) {
-      rgba[j++] = pixels[i * 3];
-      rgba[j++] = pixels[i * 3 + 1];
-      rgba[j++] = pixels[i * 3 + 2];
-      rgba[j++] = 255;
-    } else {
-      rgba[j++] = pixels[i * 4];
-      rgba[j++] = pixels[i * 4 + 1];
-      rgba[j++] = pixels[i * 4 + 2];
-      rgba[j++] = pixels[i * 4 + 3];
-    }
-  }
-
-  // Filter byte (0 = none) prepended to each scanline
-  const stride = width * 4;
-  const filtered = new Uint8Array((stride + 1) * height);
-  for (let y = 0; y < height; y++) {
-    filtered[y * (stride + 1)] = 0;
-    filtered.set(rgba.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
-  }
-
-  // Deflate using CompressionStream (available in Deno).
-  // We need a sync return — collect chunks via a Response.
-  // Note: top-level await isn't allowed here; use a sync zlib-style approach.
-  // Since CompressionStream is async, we wrap encodePng's caller appropriately.
-  // ... but we need sync — fall back to a tiny zlib "stored" block writer.
-  const compressed = deflateStored(filtered);
-
-  const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-  const ihdr = chunk("IHDR", buildIhdr(width, height));
-  const idat = chunk("IDAT", compressed);
-  const iend = chunk("IEND", new Uint8Array(0));
-
-  const out = new Uint8Array(sig.length + ihdr.length + idat.length + iend.length);
-  let o = 0;
-  out.set(sig, o); o += sig.length;
-  out.set(ihdr, o); o += ihdr.length;
-  out.set(idat, o); o += idat.length;
-  out.set(iend, o);
-  return out;
-}
-
-function buildIhdr(width: number, height: number): Uint8Array {
-  const b = new Uint8Array(13);
-  const dv = new DataView(b.buffer);
-  dv.setUint32(0, width);
-  dv.setUint32(4, height);
-  b[8] = 8;  // bit depth
-  b[9] = 6;  // color type RGBA
-  b[10] = 0; // compression
-  b[11] = 0; // filter
-  b[12] = 0; // interlace
-  return b;
-}
-
-function chunk(type: string, data: Uint8Array): Uint8Array {
-  const out = new Uint8Array(8 + data.length + 4);
-  const dv = new DataView(out.buffer);
-  dv.setUint32(0, data.length);
-  out[4] = type.charCodeAt(0);
-  out[5] = type.charCodeAt(1);
-  out[6] = type.charCodeAt(2);
-  out[7] = type.charCodeAt(3);
-  out.set(data, 8);
-  const crc = crc32(out.subarray(4, 8 + data.length));
-  dv.setUint32(8 + data.length, crc);
-  return out;
-}
-
-// CRC32 (PNG / zlib)
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(buf: Uint8Array): number {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-// Adler-32 for zlib trailer
-function adler32(buf: Uint8Array): number {
-  let a = 1, b = 0;
-  for (let i = 0; i < buf.length; i++) {
-    a = (a + buf[i]) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) >>> 0;
-}
-
-// Build a zlib stream of "stored" (uncompressed) deflate blocks.
-// Each block holds up to 65535 bytes; widely-supported by every PNG decoder.
-function deflateStored(data: Uint8Array): Uint8Array {
-  const MAX = 0xffff;
-  const blockCount = Math.max(1, Math.ceil(data.length / MAX));
-  const out = new Uint8Array(2 + blockCount * 5 + data.length + 4);
-  let o = 0;
-  // zlib header: deflate, 32K window, no preset dict, fastest
-  out[o++] = 0x78;
-  out[o++] = 0x01;
-  for (let i = 0; i < data.length; i += MAX) {
-    const len = Math.min(MAX, data.length - i);
-    const last = (i + len >= data.length) ? 1 : 0;
-    out[o++] = last; // BFINAL flag, BTYPE=00 (stored)
-    out[o++] = len & 0xff;
-    out[o++] = (len >>> 8) & 0xff;
-    out[o++] = (~len) & 0xff;
-    out[o++] = (~len >>> 8) & 0xff;
-    out.set(data.subarray(i, i + len), o);
-    o += len;
-  }
-  const adler = adler32(data);
-  out[o++] = (adler >>> 24) & 0xff;
-  out[o++] = (adler >>> 16) & 0xff;
-  out[o++] = (adler >>> 8) & 0xff;
-  out[o++] = adler & 0xff;
-  return out.subarray(0, o);
-}
-
-// Read width/height from a JPEG buffer (used for kind='image' uploads).
-function readJpegDimensions(buf: Uint8Array): { width: number; height: number } {
-  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return { width: 0, height: 0 };
-  let i = 2;
-  while (i < buf.length - 9) {
-    if (buf[i] !== 0xff) { i++; continue; }
-    while (i < buf.length && buf[i] === 0xff) i++;
-    const marker = buf[i]; i++;
-    if (marker === 0xd9 || marker === 0xda) break;
-    if (marker >= 0xd0 && marker <= 0xd7) continue;
-    if (marker === 0x01) continue;
-    if (i + 1 >= buf.length) break;
-    const segLen = (buf[i] << 8) | buf[i + 1];
-    const isSOF =
-      (marker >= 0xc0 && marker <= 0xc3) ||
-      (marker >= 0xc5 && marker <= 0xc7) ||
-      (marker >= 0xc9 && marker <= 0xcb) ||
-      (marker >= 0xcd && marker <= 0xcf);
-    if (isSOF && i + 7 < buf.length) {
-      const height = (buf[i + 3] << 8) | buf[i + 4];
-      const width = (buf[i + 5] << 8) | buf[i + 6];
-      return { width, height };
-    }
-    i += segLen;
-  }
-  return { width: 0, height: 0 };
-}
-
-// ---------- matching helpers ----------
-
-function findUnitsInText(text: string, unitNumbers: string[]): Set<string> {
-  const found = new Set<string>();
-  const norm = text.replace(/\s+/g, " ").toLowerCase();
-  // Match longest first to prefer "ABC-1234" over "1234".
-  const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
-  for (const u of sorted) {
-    const re = new RegExp(`(^|[^a-z0-9])${escapeRe(u.toLowerCase())}([^a-z0-9]|$)`);
-    if (re.test(norm)) found.add(u);
-  }
-  return found;
-}
-
-function findUnitInFilename(name: string, unitNumbers: string[]): string | null {
-  const lower = name.toLowerCase();
-  const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
-  for (const u of sorted) {
-    const re = new RegExp(`(^|[^a-z0-9])${escapeRe(u.toLowerCase())}([^a-z0-9]|$)`);
-    if (re.test(lower)) return u;
-  }
-  return null;
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function considerImage(map: Map<string, PdfImage>, unit: string, img: PdfImage) {
-  const existing = map.get(unit);
-  const newArea = img.width * img.height;
-  const oldArea = existing ? existing.width * existing.height : -1;
-  if (newArea > oldArea) map.set(unit, img);
+function extractUnitNumber(text: string): string | null {
+  if (!text) return null;
+  const m = text.match(UNIT_HEADER_RE);
+  return m ? m[1] : null;
 }
 
 // ---------- main handler ----------
@@ -422,215 +156,213 @@ Deno.serve(async (req) => {
 
   const { data: jobRow } = await supabase
     .from("jobs")
-    .insert({ campaign_id: campaignId, kind: "extract-photos", status: "running", started_at: new Date().toISOString() })
+    .insert({
+      campaign_id: campaignId,
+      kind: "extract-photos",
+      status: "running",
+      started_at: new Date().toISOString(),
+    })
     .select("id")
     .single();
   const jobId = jobRow?.id;
 
+  const summary = {
+    campaign_id: campaignId,
+    pdfs_processed: 0,
+    pages_processed: 0,
+    overview_pages: 0,
+    units_with_photo: 0,
+    units_with_map: 0,
+    units_skipped_existing: 0,
+    pages_unmatched: 0,
+    low_res_count: 0, // kept for response shape compat
+  };
+
   try {
+    // Load units & their current image state so we never overwrite a manual upload.
     const { data: units, error: uErr } = await supabase
       .from("units")
-      .select("id, unit_number")
+      .select("id, unit_number, billboard_photo_url, inset_map_url")
       .eq("campaign_id", campaignId);
     if (uErr) throw uErr;
-    if (!units || units.length === 0) throw new Error("No units to attach photos to. Parse the Excel first.");
+    if (!units || units.length === 0) {
+      throw new Error("No units to attach photos to. Parse the Excel first.");
+    }
 
+    type UnitRow = { id: string; unit_number: string; billboard_photo_url: string | null; inset_map_url: string | null };
+    const unitByNumber = new Map<string, UnitRow>(
+      (units as UnitRow[]).map((u) => [String(u.unit_number).trim(), u]),
+    );
+
+    // Vendor Photo Sheets PDFs only — image uploads are handled via the
+    // dedicated UnitPhotoUpload UI button now.
     const { data: vendorFiles, error: fErr } = await supabase
       .from("vendor_files")
       .select("id, storage_path, original_name, kind")
       .eq("campaign_id", campaignId)
-      .in("kind", ["pdf", "image", "photosheets"]);
+      .in("kind", ["pdf", "photosheets"]);
     if (fErr) throw fErr;
     if (!vendorFiles || vendorFiles.length === 0) {
-      throw new Error("No PDF or image files uploaded for this campaign.");
+      throw new Error("No PDF files uploaded for this campaign.");
     }
-
-    const unitNumbers = units.map((u) => u.unit_number);
-    const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
-    const bestForUnit = new Map<string, PdfImage>(); // billboard
-    const mapForUnit = new Map<string, PdfImage>(); // map
-
-    const summary = {
-      campaign_id: campaignId,
-      pdfs: [] as Array<{ name: string; pages: number; images: number; matched_units: number }>,
-      units_with_photo: 0,
-      units_with_map: 0,
-      low_res_count: 0,
-    };
 
     for (const f of vendorFiles) {
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
         .download(f.storage_path);
       if (dlErr || !blob) {
-        console.warn(`[extract-photos] Could not download ${f.storage_path}`, dlErr);
+        console.warn(`[extract-photos] download failed ${f.storage_path}`, dlErr);
         continue;
       }
       const bytes = new Uint8Array(await blob.arrayBuffer());
 
-      // Direct image upload — match purely by filename → unit number
-      if (f.kind === "image") {
-        const fileUnit = findUnitInFilename(f.original_name ?? "", unitNumbers);
-        if (!fileUnit) {
-          summary.pdfs.push({
-            name: f.original_name ?? f.storage_path,
-            pages: 0,
-            images: 1,
-            matched_units: 0,
-          });
+      let doc: any;
+      try {
+        doc = mupdf.Document.openDocument(bytes, "application/pdf");
+      } catch (e) {
+        console.warn(
+          `[extract-photos] mupdf open failed for ${f.original_name}:`,
+          (e as Error).message,
+        );
+        continue;
+      }
+      summary.pdfs_processed++;
+
+      let pageCount = 0;
+      try { pageCount = doc.countPages(); } catch { pageCount = 0; }
+
+      for (let i = 0; i < pageCount; i++) {
+        summary.pages_processed++;
+
+        // Page 1 → campaign overview map. Render entire page, save at campaign level.
+        if (i === 0) {
+          try {
+            const overviewPng = renderPagePng(doc, 0);
+            if (overviewPng) {
+              const path = `${campaignId}/overview-map.png`;
+              const up = await supabase.storage
+                .from("minimaps")
+                .upload(path, overviewPng, { contentType: "image/png", upsert: true });
+              if (up.error) {
+                console.warn("[extract-photos] overview upload failed:", up.error.message);
+              } else {
+                const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+                // Cache-bust so re-uploads show fresh image immediately.
+                const url = `${pub.publicUrl}?v=${Date.now()}`;
+                const { error: cErr } = await supabase
+                  .from("campaigns")
+                  .update({ vendor_overview_map_url: url })
+                  .eq("id", campaignId);
+                if (cErr) {
+                  console.warn("[extract-photos] campaign update failed:", cErr.message);
+                } else {
+                  summary.overview_pages++;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[extract-photos] overview render failed:", (e as Error).message);
+          }
           continue;
         }
-        const ext: "jpg" | "png" =
-          /\.png$/i.test(f.original_name ?? "") ? "png" : "jpg";
-        const dims = ext === "jpg" ? readJpegDimensions(bytes) : { width: 0, height: 0 };
-        considerImage(bestForUnit, fileUnit, {
-          bytes, ext, width: dims.width, height: dims.height, page: 0,
-        });
-        summary.pdfs.push({
-          name: f.original_name ?? f.storage_path,
-          pages: 0,
-          images: 1,
-          matched_units: 1,
-        });
-        continue;
-      }
 
-      // PDF path (covers both 'pdf' and 'photosheets')
-      let extracted: { images: PdfImage[]; perPageText: string[]; pageCount: number };
-      try {
-        extracted = await extractImagesFromPdf(bytes);
-      } catch (e) {
-        console.warn(`[extract-photos] pdf parse failed for ${f.original_name}:`, (e as Error).message);
-        summary.pdfs.push({
-          name: f.original_name ?? f.storage_path,
-          pages: 0,
-          images: 0,
-          matched_units: 0,
-        });
-        continue;
-      }
-
-      const { images, perPageText, pageCount } = extracted;
-
-      // Filename convention
-      const fileUnit = findUnitInFilename(f.original_name ?? "", unitNumbers);
-      let matchedUnits = 0;
-
-      if (fileUnit && images.length > 0) {
-        const sorted = [...images].sort((a, b) => b.width * b.height - a.width * a.height);
-        considerImage(bestForUnit, fileUnit, sorted[0]);
-        if (sorted.length > 1) {
-          const map = sorted[sorted.length - 1];
-          if (map.width * map.height < sorted[0].width * sorted[0].height * MAP_RATIO_MAX) {
-            considerImage(mapForUnit, fileUnit, map);
-          }
+        // Pages 2..N → one billboard each.
+        const pageText = getPageText(doc, i);
+        const unitNumber = extractUnitNumber(pageText);
+        if (!unitNumber) {
+          console.warn(`[extract-photos] page ${i + 1} has no unit-header pattern, skipping`);
+          summary.pages_unmatched++;
+          continue;
         }
-        matchedUnits = 1;
-      } else {
-        // Page-text matching — biggest image = billboard, smallest distinct = map
-        for (let p = 0; p < perPageText.length; p++) {
-          const pageImages = images.filter((im) => im.page === p + 1);
-          if (pageImages.length === 0) continue;
-          const sorted = [...pageImages].sort((a, b) => b.width * b.height - a.width * a.height);
-          const best = sorted[0];
-          // Map = smallest image that's notably smaller than the billboard
-          let mapImg: PdfImage | null = null;
-          if (sorted.length > 1) {
-            const candidate = sorted[sorted.length - 1];
-            if (candidate.width * candidate.height < best.width * best.height * MAP_RATIO_MAX) {
-              mapImg = candidate;
+        const unit = unitByNumber.get(unitNumber);
+        if (!unit) {
+          console.warn(
+            `[extract-photos] page ${i + 1} references unit ${unitNumber} which is not in this campaign, skipping`,
+          );
+          summary.pages_unmatched++;
+          continue;
+        }
+
+        // Render the two crops. We re-load the page each time inside
+        // renderPagePng because setPageBox mutates page state.
+        const updates: Record<string, string> = {};
+
+        if (!unit.billboard_photo_url) {
+          try {
+            const png = renderPagePng(doc, i, CROP_BILLBOARD);
+            if (png) {
+              const path = `${campaignId}/${unit.id}.png`;
+              const up = await supabase.storage
+                .from("photos")
+                .upload(path, png, { contentType: "image/png", upsert: true });
+              if (up.error) {
+                console.warn(`[extract-photos] photo upload failed for ${unitNumber}:`, up.error.message);
+              } else {
+                const { data: signed, error: sErr } = await supabase.storage
+                  .from("photos")
+                  .createSignedUrl(path, SIGNED_URL_TTL);
+                if (sErr) {
+                  console.warn(`[extract-photos] sign failed for ${unitNumber}:`, sErr.message);
+                } else {
+                  updates.billboard_photo_url = signed.signedUrl;
+                  summary.units_with_photo++;
+                }
+              }
             }
+          } catch (e) {
+            console.warn(`[extract-photos] billboard render failed for ${unitNumber}:`, (e as Error).message);
           }
-          const matches = findUnitsInText(perPageText[p], unitNumbers);
-          for (const u of matches) {
-            considerImage(bestForUnit, u, best);
-            if (mapImg) considerImage(mapForUnit, u, mapImg);
-            matchedUnits++;
+        } else {
+          summary.units_skipped_existing++;
+        }
+
+        if (!unit.inset_map_url) {
+          try {
+            const png = renderPagePng(doc, i, CROP_MAP);
+            if (png) {
+              const path = `${campaignId}/${unit.id}-map.png`;
+              const up = await supabase.storage
+                .from("minimaps")
+                .upload(path, png, { contentType: "image/png", upsert: true });
+              if (up.error) {
+                console.warn(`[extract-photos] map upload failed for ${unitNumber}:`, up.error.message);
+              } else {
+                const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+                updates.inset_map_url = `${pub.publicUrl}?v=${Date.now()}`;
+                summary.units_with_map++;
+              }
+            }
+          } catch (e) {
+            console.warn(`[extract-photos] map render failed for ${unitNumber}:`, (e as Error).message);
+          }
+        } else {
+          summary.units_skipped_existing++;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const { error: updErr } = await supabase
+            .from("units")
+            .update(updates)
+            .eq("id", unit.id);
+          if (updErr) {
+            console.warn(`[extract-photos] unit update failed for ${unitNumber}:`, updErr.message);
+          } else {
+            // Update local cache so subsequent pages referencing the same
+            // unit (rare, but possible) don't re-process.
+            if (updates.billboard_photo_url) unit.billboard_photo_url = updates.billboard_photo_url;
+            if (updates.inset_map_url) unit.inset_map_url = updates.inset_map_url;
           }
         }
       }
 
-      summary.pdfs.push({
-        name: f.original_name ?? f.storage_path,
-        pages: pageCount,
-        images: images.length,
-        matched_units: matchedUnits,
-      });
-    }
-
-    // Upload billboard photos + update units
-    for (const [unitNumber, img] of bestForUnit) {
-      const unitId = unitIdByNumber.get(unitNumber);
-      if (!unitId) continue;
-      const path = `${campaignId}/${unitId}.${img.ext}`;
-      const up = await supabase.storage
-        .from("photos")
-        .upload(path, img.bytes, {
-          contentType: img.ext === "jpg" ? "image/jpeg" : "image/png",
-          upsert: true,
-        });
-      if (up.error) {
-        console.warn(`[extract-photos] upload failed for ${unitNumber}:`, up.error.message);
-        continue;
-      }
-      const { data: signed, error: sErr } = await supabase.storage
-        .from("photos")
-        .createSignedUrl(path, SIGNED_URL_TTL);
-      if (sErr) {
-        console.warn(`[extract-photos] sign failed for ${unitNumber}:`, sErr.message);
-        continue;
-      }
-      const lowRes = img.width > 0 && img.width < LOW_RES_WIDTH;
-      if (lowRes) summary.low_res_count++;
-
-      const { error: updErr } = await supabase
-        .from("units")
-        .update({
-          billboard_photo_url: signed.signedUrl,
-          low_res_flag: lowRes,
-        })
-        .eq("id", unitId);
-      if (updErr) {
-        console.warn(`[extract-photos] update failed for ${unitNumber}:`, updErr.message);
-        continue;
-      }
-      summary.units_with_photo++;
-    }
-
-    // Upload map images (public 'minimaps' bucket so portal renders directly)
-    for (const [unitNumber, img] of mapForUnit) {
-      const unitId = unitIdByNumber.get(unitNumber);
-      if (!unitId) continue;
-      const billboard = bestForUnit.get(unitNumber);
-      if (billboard && img.bytes === billboard.bytes) continue;
-      const path = `${campaignId}/${unitId}-map.${img.ext}`;
-      const up = await supabase.storage
-        .from("minimaps")
-        .upload(path, img.bytes, {
-          contentType: img.ext === "jpg" ? "image/jpeg" : "image/png",
-          upsert: true,
-        });
-      if (up.error) {
-        console.warn(`[extract-photos] map upload failed for ${unitNumber}:`, up.error.message);
-        continue;
-      }
-      const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
-      const { error: updErr } = await supabase
-        .from("units")
-        .update({ inset_map_url: pub.publicUrl })
-        .eq("id", unitId);
-      if (updErr) {
-        console.warn(`[extract-photos] map update failed for ${unitNumber}:`, updErr.message);
-        continue;
-      }
-      summary.units_with_map++;
+      try { doc.destroy?.(); } catch { /* ignore */ }
     }
 
     if (jobId) {
-      await supabase.from("jobs").update({
-        status: "succeeded",
-        finished_at: new Date().toISOString(),
-      }).eq("id", jobId);
+      await supabase
+        .from("jobs")
+        .update({ status: "succeeded", finished_at: new Date().toISOString() })
+        .eq("id", jobId);
     }
 
     return new Response(JSON.stringify({ ok: true, summary }), {
@@ -640,11 +372,14 @@ Deno.serve(async (req) => {
     console.error("[extract-photos] error", err);
     const message = err?.message ?? String(err);
     if (jobId) {
-      await supabase.from("jobs").update({
-        status: "failed",
-        error_message: message,
-        finished_at: new Date().toISOString(),
-      }).eq("id", jobId);
+      await supabase
+        .from("jobs")
+        .update({
+          status: "failed",
+          error_message: message,
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
     }
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
