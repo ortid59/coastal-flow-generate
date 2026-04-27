@@ -233,7 +233,7 @@ export default function CampaignReview() {
   }
 
   return (
-    <main className="container-app py-10 md:py-14">
+    <main className="w-full max-w-none px-4 md:px-6 py-10 md:py-14">
       <Button variant="ghost" size="sm" asChild className="mb-6 -ml-3">
         <Link to="/">
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
@@ -375,17 +375,19 @@ export default function CampaignReview() {
           )}
 
           <div className="items-start">
-            <div className="surface-card overflow-hidden min-w-0">
-              <div className="w-full">
-                <table className="w-full table-fixed text-[12px]">
-                  <colgroup>
-                    <col className="w-[120px]" />
-                    <col className="w-[110px]" />
-                    <col className="w-[90px]" />
-                    <col className="w-[110px]" />
-                    <col />
-                    <col />
-                    <col className="w-[64px]" />
+            <div className="overflow-x-auto -mx-4 md:-mx-6">
+              <div className="min-w-[1200px] px-4 md:px-6">
+                <div className="surface-card overflow-hidden min-w-0">
+                  <div className="w-full">
+                    <table className="w-full table-fixed text-[12px]">
+                      <colgroup>
+                        <col className="w-[120px]" />
+                        <col className="w-[110px]" />
+                        <col className="w-[90px]" />
+                        <col className="w-[110px]" />
+                        <col className="min-w-[120px]" />
+                        <col className="min-w-[180px]" />
+                        <col className="w-[64px]" />
                     <col className="w-[78px]" />
                     <col className="w-[56px]" />
                     <col className="w-[72px]" />
