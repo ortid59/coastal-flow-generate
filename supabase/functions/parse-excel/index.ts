@@ -17,6 +17,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// COLUMN ALLOWLIST — Heather's spec (Change 4):
+// Per the rule that vendor rate/cost columns must NOT be ingested (the
+// system computes client-facing pricing from the campaign margin %), we
+// strip every rate / cost / CPM / production / install / total-cost
+// column from the import. Heather will enter pricing later.
+//
+// Columns we still ingest (display + map + matching purposes only):
+//   - Unit #                  → unit_number    (board ID)
+//   - Latitude / Longitude    → latitude/long  (map matching only, internal)
+//   - 4 Week A18+ Impressions → four_week_impressions
+//   - Weekly A18+ Impressions → weekly_impressions (used to derive 4wk if absent)
+//   - Vendor                  → vendor         (INTERNAL ONLY — never sent to portal)
+//   - Market                  → market         (used by review + portal grouping)
+//   - Format / Size           → format / size  (board card display)
+//   - Location Description    → location_description (board card display + bullets)
+//   - Facing / Read direction → facing / read_direction (review-page detail)
+//   - Spot / Loop length, SOV, # advertisers, dates, periods → review-page detail
+//   - Artwork Due Date, Notes → review-page detail
+//
+// EXPLICITLY EXCLUDED (must never be stored):
+//   - 4 Week Rate Card
+//   - 4 Week Negotiated Rate
+//   - INTERNAL 4-WEEK RATE
+//   - Production
+//   - Install
+//   - Total Cost
+//   - CPM
+//
+// To support a new vendor with different headers: add the canonical header
+// text and a mapped DB column to COLUMN_MAP below. Do NOT add rate/cost
+// columns here.
 const COLUMN_MAP: Record<string, string> = {
   "Market": "market",
   "Vendor": "vendor",
@@ -38,22 +69,15 @@ const COLUMN_MAP: Record<string, string> = {
   "Start Date": "start_date",
   "End Date": "end_date",
   "# of Four week Periods": "four_week_periods",
-  "4 Week Rate Card": "rate_card_4wk",
-  "4 Week Negotiated Rate": "negotiated_rate_4wk",
-  "INTERNAL 4-WEEK RATE": "rate_4week",
-  "Production": "production_cost",
-  "Install": "install_cost",
-  "Total Cost": "total_cost",
-  "CPM": "cpm",
   "Artwork Due Date": "artwork_due_date",
   "Notes": "notes",
+  // Rate / cost columns intentionally absent — see allowlist comment above.
 };
 
 const NUMERIC_FIELDS = new Set([
   "unit_count", "latitude", "longitude", "weekly_impressions",
   "four_week_impressions", "sov_pct", "current_advertisers",
-  "four_week_periods", "rate_card_4wk", "negotiated_rate_4wk",
-  "rate_4week", "production_cost", "install_cost", "total_cost", "cpm",
+  "four_week_periods",
 ]);
 
 const DATE_FIELDS = new Set(["start_date", "end_date", "artwork_due_date"]);
