@@ -16,7 +16,10 @@
 // Auth: caller JWT required. RLS ensures campaign ownership.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import * as pdfjs from "https://esm.sh/pdfjs-dist@3.11.174/build/pdf.mjs";
+// Use the legacy build to avoid pdfjs's auto-import of node-canvas, which
+// fails to bundle in the edge function runtime. We supply our own
+// OffscreenCanvas for rendering.
+import * as pdfjs from "https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs";
 pdfjs.GlobalWorkerOptions.workerSrc = "";
 
 const corsHeaders = {
