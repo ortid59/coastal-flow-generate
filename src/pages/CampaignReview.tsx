@@ -341,8 +341,38 @@ export default function CampaignReview() {
           <p className="mb-3 text-xs text-muted-foreground">
             Toggle <span className="font-medium text-foreground">Include</span> to add/remove a unit from the proposal.
             Toggle <span className="font-medium text-foreground">Recommend</span> to feature it as a hero card on the
-            client page.
+            client page. Use <span className="font-medium text-foreground">A / B / C</span> to assign a unit to one or
+            more pricing tiers shown in the proposal.
           </p>
+
+          {/* Campaign-level tier master switches with running totals (Change 3C) */}
+          {campaign && (
+            <section className="surface-card mb-6 p-5">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Show in presentation
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {TIERS.map((t) => (
+                  <label
+                    key={t.key}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Switch
+                        checked={!!campaign[t.show]}
+                        onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
+                      />
+                      <span className="text-sm font-medium">Include {t.label}</span>
+                    </div>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
+                      <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="items-start">
             <div className="surface-card overflow-hidden min-w-0">
@@ -360,6 +390,9 @@ export default function CampaignReview() {
                     <col className="w-[56px]" />
                     <col className="w-[72px]" />
                     <col className="w-[88px]" />
+                    <col className="w-[44px]" />
+                    <col className="w-[44px]" />
+                    <col className="w-[44px]" />
                   </colgroup>
                   <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
