@@ -49,7 +49,10 @@ type Unit = {
   id: string;
   unit_number: string;
   market: string | null;
-  vendor: string | null;
+  // NOTE: `vendor` is intentionally NOT part of the client-facing Unit type.
+  // It exists in the database but must never reach the portal — clients could
+  // identify the media owner and bypass Coastal Maverick. Stripped at the data
+  // fetch layer below (SELECT does not include it).
   format: string | null;
   size: string | null;
   location_description: string | null;
@@ -106,7 +109,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
+            // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -924,12 +928,8 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 )}
                 <div>{fmtCostLine("Production", unit.production_cost)}</div>
                 <div>{fmtCostLine("Install", unit.install_cost)}</div>
-                {(unit.size || unit.vendor) && (
-                  <div className="pt-1">
-                    {unit.size && <>Size: {unit.size}</>}
-                    {unit.size && unit.vendor && <> · </>}
-                    {unit.vendor && <>Vendor: {unit.vendor}</>}
-                  </div>
+                {unit.size && (
+                  <div className="pt-1">Size: {unit.size}</div>
                 )}
               </div>
             </div>
@@ -1004,7 +1004,6 @@ function UnitDetails({ unit }: { unit: Unit }) {
             value={unit.cpm == null ? "—" : `$${unit.cpm.toFixed(2)}`}
           />
           <DetailStat icon={<Ruler className="h-4 w-4" />} label="Size" value={unit.size ?? "—"} />
-          <DetailStat icon={<Building2 className="h-4 w-4" />} label="Vendor" value={unit.vendor ?? "—"} />
           <DetailStat icon={<Sparkles className="h-4 w-4" />} label="Format" value={unit.format ?? "—"} />
         </div>
       </div>
@@ -1196,7 +1195,6 @@ function PrintableQuote({
           {unit.longitude != null && (
             <Row k="Longitude" v={unit.longitude.toFixed(5)} grey={GREY} />
           )}
-          {unit.vendor && <Row k="Vendor" v={unit.vendor} grey={GREY} />}
         </DetailBlock>
 
         <DetailBlock title="Performance & Investment" navy={NAVY} border={BORDER} soft={SOFT}>
