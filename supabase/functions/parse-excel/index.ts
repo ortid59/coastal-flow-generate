@@ -17,6 +17,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// COLUMN ALLOWLIST — Heather's spec (Change 4):
+// Per the rule that vendor rate/cost columns must NOT be ingested (the
+// system computes client-facing pricing from the campaign margin %), we
+// strip every rate / cost / CPM / production / install / total-cost
+// column from the import. Heather will enter pricing later.
+//
+// Columns we still ingest (display + map + matching purposes only):
+//   - Unit #                  → unit_number    (board ID)
+//   - Latitude / Longitude    → latitude/long  (map matching only, internal)
+//   - 4 Week A18+ Impressions → four_week_impressions
+//   - Weekly A18+ Impressions → weekly_impressions (used to derive 4wk if absent)
+//   - Vendor                  → vendor         (INTERNAL ONLY — never sent to portal)
+//   - Market                  → market         (used by review + portal grouping)
+//   - Format / Size           → format / size  (board card display)
+//   - Location Description    → location_description (board card display + bullets)
+//   - Facing / Read direction → facing / read_direction (review-page detail)
+//   - Spot / Loop length, SOV, # advertisers, dates, periods → review-page detail
+//   - Artwork Due Date, Notes → review-page detail
+//
+// EXPLICITLY EXCLUDED (must never be stored):
+//   - 4 Week Rate Card
+//   - 4 Week Negotiated Rate
+//   - INTERNAL 4-WEEK RATE
+//   - Production
+//   - Install
+//   - Total Cost
+//   - CPM
+//
+// To support a new vendor with different headers: add the canonical header
+// text and a mapped DB column to COLUMN_MAP below. Do NOT add rate/cost
+// columns here.
 const COLUMN_MAP: Record<string, string> = {
   "Market": "market",
   "Vendor": "vendor",
@@ -38,22 +69,15 @@ const COLUMN_MAP: Record<string, string> = {
   "Start Date": "start_date",
   "End Date": "end_date",
   "# of Four week Periods": "four_week_periods",
-  "4 Week Rate Card": "rate_card_4wk",
-  "4 Week Negotiated Rate": "negotiated_rate_4wk",
-  "INTERNAL 4-WEEK RATE": "rate_4week",
-  "Production": "production_cost",
-  "Install": "install_cost",
-  "Total Cost": "total_cost",
-  "CPM": "cpm",
   "Artwork Due Date": "artwork_due_date",
   "Notes": "notes",
+  // Rate / cost columns intentionally absent — see allowlist comment above.
 };
 
 const NUMERIC_FIELDS = new Set([
   "unit_count", "latitude", "longitude", "weekly_impressions",
   "four_week_impressions", "sov_pct", "current_advertisers",
-  "four_week_periods", "rate_card_4wk", "negotiated_rate_4wk",
-  "rate_4week", "production_cost", "install_cost", "total_cost", "cpm",
+  "four_week_periods",
 ]);
 
 const DATE_FIELDS = new Set(["start_date", "end_date", "artwork_due_date"]);
@@ -157,6 +181,157 @@ function isRecommendedHex(hex: string | undefined): boolean {
   return GREEN_HEXES.has(hex.toUpperCase());
 }
 
+// =====================================================================
+// Embedded image extraction (Change 2)
+// =====================================================================
+// Vendors like Clear Channel embed a per-board location map directly in
+// their Excel workbook. We crack open the .xlsx (which is a zip) and:
+//   1. Read every sheet's drawing relationships.
+//   2. Parse anchors from xl/drawings/drawingN.xml — each <xdr:twoCellAnchor>
+//      or <xdr:oneCellAnchor> tells us which cell row/col the image sits at.
+//   3. Map the image's anchor row to the matching unit_number on that row
+//      (with a fallback to the nearest unit_number row above).
+//   4. Sheet-level / floating images (no clear row anchor near a unit row)
+//      are returned as a campaign overview map.
+//
+// Image bytes are returned to the caller for upload to the public
+// `minimaps` storage bucket.
+
+type ExtractedImage = {
+  ext: "png" | "jpg" | "jpeg" | "gif";
+  contentType: string;
+  bytes: Uint8Array;
+  // 0-based sheet row this image is anchored to (or null for sheet-level)
+  anchorRow: number | null;
+  sheetName: string;
+};
+
+const IMG_EXT_RE = /\.(png|jpe?g|gif)$/i;
+
+function extOf(name: string): "png" | "jpg" | "jpeg" | "gif" | null {
+  const m = IMG_EXT_RE.exec(name);
+  if (!m) return null;
+  const e = m[1].toLowerCase();
+  return e === "jpeg" ? "jpeg" : (e as any);
+}
+
+function ctOf(ext: string): string {
+  if (ext === "png") return "image/png";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+}
+
+/**
+ * Pull every embedded image out of the workbook with its anchoring info.
+ * Returns one ExtractedImage per image found (deduped by media path).
+ */
+async function extractWorkbookImages(
+  fileBuf: ArrayBuffer,
+  sheetNames: string[],
+): Promise<ExtractedImage[]> {
+  const zip = await JSZip.loadAsync(fileBuf);
+  const out: ExtractedImage[] = [];
+  const seenMediaPath = new Set<string>();
+
+  // Build sheet index → file name. xlsx sheet files are xl/worksheets/sheet1.xml,
+  // sheet2.xml, etc. — order matches workbook.xml's sheet list, which matches
+  // SheetJS's wb.SheetNames order (1-based on disk).
+  for (let i = 0; i < sheetNames.length; i++) {
+    const sheetName = sheetNames[i];
+    const sheetIdx = i + 1;
+    const relsEntry = zip.file(`xl/worksheets/_rels/sheet${sheetIdx}.xml.rels`);
+    if (!relsEntry) continue;
+    const relsXml = await relsEntry.async("string");
+
+    // Find the drawing relationship for this sheet.
+    const drawingRelMatch = /<Relationship[^>]*Type="[^"]*\/drawing"[^>]*Target="([^"]+)"/.exec(relsXml);
+    if (!drawingRelMatch) continue;
+    // Resolve relative path: typically "../drawings/drawing1.xml" from xl/worksheets/_rels/
+    const drawingTarget = drawingRelMatch[1].replace(/^\.\.\//, "");
+    const drawingPath = drawingTarget.startsWith("xl/") ? drawingTarget : `xl/${drawingTarget}`;
+
+    const drawingEntry = zip.file(drawingPath);
+    if (!drawingEntry) continue;
+    const drawingXml = await drawingEntry.async("string");
+
+    // Drawing has its own _rels file mapping rId → media path.
+    const drawingFileName = drawingPath.split("/").pop()!;
+    const drawingRelsPath = drawingPath.replace(drawingFileName, `_rels/${drawingFileName}.rels`);
+    const drawingRelsEntry = zip.file(drawingRelsPath);
+    if (!drawingRelsEntry) continue;
+    const drawingRelsXml = await drawingRelsEntry.async("string");
+
+    const ridToMedia = new Map<string, string>();
+    const relRe = /<Relationship\s+Id="([^"]+)"[^>]*Target="([^"]+)"/g;
+    let rm: RegExpExecArray | null;
+    while ((rm = relRe.exec(drawingRelsXml)) !== null) {
+      const target = rm[2].replace(/^\.\.\//, "");
+      ridToMedia.set(rm[1], target.startsWith("xl/") ? target : `xl/${target}`);
+    }
+
+    // Walk every anchor in the drawing.
+    // Two-cell anchor: <xdr:twoCellAnchor> ... <xdr:from><xdr:row>R</xdr:row>...
+    // One-cell anchor: <xdr:oneCellAnchor> ... <xdr:from><xdr:row>R</xdr:row>...
+    // Absolute anchor: <xdr:absoluteAnchor> — no cell row, treat as sheet-level.
+    const anchorRe = /<xdr:(twoCellAnchor|oneCellAnchor|absoluteAnchor)\b[^>]*>([\s\S]*?)<\/xdr:\1>/g;
+    let am: RegExpExecArray | null;
+    while ((am = anchorRe.exec(drawingXml)) !== null) {
+      const anchorKind = am[1];
+      const inner = am[2];
+
+      let anchorRow: number | null = null;
+      if (anchorKind !== "absoluteAnchor") {
+        const fromRow = /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(inner);
+        if (fromRow) anchorRow = parseInt(fromRow[1], 10); // already 0-indexed
+      }
+
+      // Pick up the embedded image rId.
+      const blip = /<a:blip[^>]*r:embed="([^"]+)"/.exec(inner);
+      if (!blip) continue;
+      const mediaPath = ridToMedia.get(blip[1]);
+      if (!mediaPath || !IMG_EXT_RE.test(mediaPath)) continue;
+      if (seenMediaPath.has(`${sheetName}|${mediaPath}|${anchorRow}`)) continue;
+      seenMediaPath.add(`${sheetName}|${mediaPath}|${anchorRow}`);
+
+      const mediaEntry = zip.file(mediaPath);
+      if (!mediaEntry) continue;
+      const ext = extOf(mediaPath);
+      if (!ext) continue;
+      const bytes = await mediaEntry.async("uint8array");
+
+      out.push({
+        ext: ext === "jpeg" ? "jpg" : ext,
+        contentType: ctOf(ext),
+        bytes,
+        anchorRow,
+        sheetName,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Match an image's anchor row to a unit_number on that row, falling back
+ * to the nearest unit_number row above. Returns null if the image sits
+ * above the first data row (treat as sheet-level / overview map).
+ */
+function matchImageToUnit(
+  anchorRow: number | null,
+  rowToUnit: Map<number, string>,
+  headerRow: number,
+): string | null {
+  if (anchorRow == null) return null;
+  if (anchorRow <= headerRow) return null;
+  // Exact match
+  if (rowToUnit.has(anchorRow)) return rowToUnit.get(anchorRow)!;
+  // Walk up to closest data row above
+  for (let r = anchorRow - 1; r > headerRow; r--) {
+    if (rowToUnit.has(r)) return rowToUnit.get(r)!;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -231,9 +406,11 @@ Deno.serve(async (req) => {
 
     const summary = {
       campaign_id: campaignId,
-      files: [] as Array<{ name: string; rows: number; recommended: number }>,
+      files: [] as Array<{ name: string; rows: number; recommended: number; images_matched: number; overview_images: number }>,
       total_units: 0,
       total_recommended: 0,
+      total_images_matched: 0,
+      total_overview_images: 0,
     };
 
     for (const f of files) {
@@ -276,6 +453,9 @@ Deno.serve(async (req) => {
 
       const inserts: any[] = [];
       let recommendedCount = 0;
+      // Track which sheet row each unit_number lives on, for image anchoring.
+      const rowToUnit = new Map<number, string>();
+      const chosenSheetName = wb.SheetNames.find((sn) => wb.Sheets[sn] === chosen)!;
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
@@ -287,6 +467,8 @@ Deno.serve(async (req) => {
 
         // Determine recommended via fill color of the row's first non-null mapped cell
         const sheetRow = headerRow + 1 + i; // 0-indexed sheet row
+        const trimmedUnit = String(unitNumber).trim();
+        rowToUnit.set(sheetRow, trimmedUnit);
         let recommended = false;
         const probeCols = [
           headerIdx["market"], headerIdx["unit_number"], headerIdx["vendor"], headerIdx["format"],
@@ -309,7 +491,7 @@ Deno.serve(async (req) => {
 
         const row: Record<string, any> = {
           campaign_id: campaignId,
-          unit_number: String(unitNumber).trim(),
+          unit_number: trimmedUnit,
           recommended,
           included: true,
           vendor: (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null,
@@ -352,13 +534,91 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ---- Change 2: extract embedded vendor images from this workbook ----
+      // We do this after upsert so unit ids exist. Per-board images go to
+      // units.inset_map_url (only if currently null — never overwrite manual
+      // uploads). Sheet-level / floating images become the campaign overview
+      // map (stored on campaigns.vendor_overview_map_url for later use).
+      let imagesMatched = 0;
+      let overviewImages = 0;
+      try {
+        const images = await extractWorkbookImages(buf, wb.SheetNames);
+        // Restrict to images on the chosen data sheet — other sheets are noise.
+        const sheetImages = images.filter((im) => im.sheetName === chosenSheetName);
+
+        // Look up unit ids for this campaign so we can write inset_map_url.
+        const { data: existingUnits } = await supabase
+          .from("units")
+          .select("id, unit_number, inset_map_url")
+          .eq("campaign_id", campaignId);
+        const unitByNumber = new Map<string, { id: string; inset_map_url: string | null }>();
+        (existingUnits ?? []).forEach((u: any) =>
+          unitByNumber.set(String(u.unit_number).trim(), { id: u.id, inset_map_url: u.inset_map_url }),
+        );
+
+        for (const img of sheetImages) {
+          const matched = matchImageToUnit(img.anchorRow, rowToUnit, headerRow);
+          if (matched) {
+            const u = unitByNumber.get(matched);
+            if (!u) continue;
+            // Don't overwrite a manually-uploaded or previously-extracted map.
+            if (u.inset_map_url) continue;
+            const path = `${campaignId}/${u.id}-vendor-map.${img.ext}`;
+            const up = await supabase.storage
+              .from("minimaps")
+              .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+            if (up.error) {
+              console.warn(`[parse-excel] image upload failed for ${matched}:`, up.error.message);
+              continue;
+            }
+            const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+            const { error: updErr } = await supabase
+              .from("units")
+              .update({ inset_map_url: pub.publicUrl })
+              .eq("id", u.id);
+            if (updErr) {
+              console.warn(`[parse-excel] inset_map_url write failed for ${matched}:`, updErr.message);
+              continue;
+            }
+            // Cache so a second image for the same row doesn't overwrite.
+            u.inset_map_url = pub.publicUrl;
+            imagesMatched++;
+          } else {
+            // Sheet-level / overview map. Store the FIRST one we see per file.
+            // (Heather said don't render yet, but extract & store.)
+            if (overviewImages > 0) continue;
+            const path = `${campaignId}/overview-${f.id}.${img.ext}`;
+            const up = await supabase.storage
+              .from("minimaps")
+              .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+            if (up.error) {
+              console.warn(`[parse-excel] overview upload failed:`, up.error.message);
+              continue;
+            }
+            const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+            await supabase
+              .from("campaigns")
+              .update({ vendor_overview_map_url: pub.publicUrl })
+              .eq("id", campaignId);
+            overviewImages++;
+          }
+        }
+      } catch (imgErr: any) {
+        // Image extraction must never fail the parse — log and continue.
+        console.warn(`[parse-excel] image extraction failed for ${f.original_name}:`, imgErr?.message ?? imgErr);
+      }
+
       summary.files.push({
         name: f.original_name ?? f.storage_path,
         rows: inserts.length,
         recommended: recommendedCount,
+        images_matched: imagesMatched,
+        overview_images: overviewImages,
       });
       summary.total_units += inserts.length;
       summary.total_recommended += recommendedCount;
+      summary.total_images_matched += imagesMatched;
+      summary.total_overview_images += overviewImages;
     }
 
     await supabase.from("campaigns").update({ status: "ready" }).eq("id", campaignId);

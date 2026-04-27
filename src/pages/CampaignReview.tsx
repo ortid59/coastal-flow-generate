@@ -38,6 +38,9 @@ type Campaign = {
   client_logo_url: string | null;
   status: string | null;
   markets: string[] | null;
+  show_tier_a: boolean | null;
+  show_tier_b: boolean | null;
+  show_tier_c: boolean | null;
 };
 
 type Unit = {
@@ -60,7 +63,18 @@ type Unit = {
   low_res_flag: boolean | null;
   latitude: number | null;
   longitude: number | null;
+  tier_a: boolean | null;
+  tier_b: boolean | null;
+  tier_c: boolean | null;
 };
+
+type TierKey = "tier_a" | "tier_b" | "tier_c";
+type ShowTierKey = "show_tier_a" | "show_tier_b" | "show_tier_c";
+const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string }[] = [
+  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A" },
+  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B" },
+  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C" },
+];
 
 const fmtNum = (n: number | null) =>
   n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -85,13 +99,13 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c")
         .eq("id", id)
         .single(),
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -165,15 +179,28 @@ export default function CampaignReview() {
     }
   };
 
-  const toggleField = async (unit: Unit, field: "recommended" | "included", value: boolean) => {
-    // optimistic update
+  const toggleField = async (
+    unit: Unit,
+    field: "recommended" | "included" | TierKey,
+    value: boolean,
+  ) => {
     setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: value } : u)));
-    const patch = field === "recommended" ? { recommended: value } : { included: value };
-    const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
+    const patch: Record<string, boolean> = { [field]: value };
+    const { error } = await supabase.from("units").update(patch as any).eq("id", unit.id);
     if (error) {
       toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
-      // revert
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: !value } : u)));
+    }
+  };
+
+  const toggleCampaignTier = async (field: ShowTierKey, value: boolean) => {
+    if (!campaign) return;
+    setCampaign({ ...campaign, [field]: value });
+    const patch: Record<string, boolean> = { [field]: value };
+    const { error } = await supabase.from("campaigns").update(patch as any).eq("id", campaign.id);
+    if (error) {
+      toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
+      setCampaign({ ...campaign, [field]: !value });
     }
   };
 
@@ -183,7 +210,17 @@ export default function CampaignReview() {
     const imps = included.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
     const cost = included.reduce((s, u) => s + (u.total_cost ?? 0), 0);
     const photos = included.filter((u) => u.billboard_photo_url).length;
-    return { total: units.length, included: included.length, recs, imps, cost, photos };
+    const tierTotals: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
+    const tierCounts: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
+    for (const u of included) {
+      for (const t of TIERS) {
+        if (u[t.key]) {
+          tierTotals[t.key] += u.total_cost ?? 0;
+          tierCounts[t.key] += 1;
+        }
+      }
+    }
+    return { total: units.length, included: included.length, recs, imps, cost, photos, tierTotals, tierCounts };
   }, [units]);
 
 
@@ -304,8 +341,38 @@ export default function CampaignReview() {
           <p className="mb-3 text-xs text-muted-foreground">
             Toggle <span className="font-medium text-foreground">Include</span> to add/remove a unit from the proposal.
             Toggle <span className="font-medium text-foreground">Recommend</span> to feature it as a hero card on the
-            client page.
+            client page. Use <span className="font-medium text-foreground">A / B / C</span> to assign a unit to one or
+            more pricing tiers shown in the proposal.
           </p>
+
+          {/* Campaign-level tier master switches with running totals (Change 3C) */}
+          {campaign && (
+            <section className="surface-card mb-6 p-5">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Show in presentation
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {TIERS.map((t) => (
+                  <label
+                    key={t.key}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Switch
+                        checked={!!campaign[t.show]}
+                        onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
+                      />
+                      <span className="text-sm font-medium">Include {t.label}</span>
+                    </div>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
+                      <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="items-start">
             <div className="surface-card overflow-hidden min-w-0">
@@ -323,6 +390,9 @@ export default function CampaignReview() {
                     <col className="w-[56px]" />
                     <col className="w-[72px]" />
                     <col className="w-[88px]" />
+                    <col className="w-[44px]" />
+                    <col className="w-[44px]" />
+                    <col className="w-[44px]" />
                   </colgroup>
                   <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
@@ -337,6 +407,9 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
                       <th className="px-2 py-2.5 text-center bg-[hsl(var(--accent-gold)/0.18)]">Recommend</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">A</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">B</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">C</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -504,6 +577,21 @@ export default function CampaignReview() {
                               />
                             </div>
                           </td>
+                          {TIERS.map((t) => (
+                            <td
+                              key={t.key}
+                              className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--ocean)/0.14)]" : "bg-[hsl(var(--ocean)/0.06)]"}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-center">
+                                <Switch
+                                  checked={!!u[t.key]}
+                                  onCheckedChange={(v) => toggleField(u, t.key, v)}
+                                  disabled={excluded}
+                                />
+                              </div>
+                            </td>
+                          ))}
                         </tr>
                       );
                     })}
