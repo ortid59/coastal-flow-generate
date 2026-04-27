@@ -577,6 +577,21 @@ export default function CampaignReview() {
                               />
                             </div>
                           </td>
+                          {TIERS.map((t) => (
+                            <td
+                              key={t.key}
+                              className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--ocean)/0.14)]" : "bg-[hsl(var(--ocean)/0.06)]"}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-center">
+                                <Switch
+                                  checked={!!u[t.key]}
+                                  onCheckedChange={(v) => toggleField(u, t.key, v)}
+                                  disabled={excluded}
+                                />
+                              </div>
+                            </td>
+                          ))}
                         </tr>
                       );
                     })}
