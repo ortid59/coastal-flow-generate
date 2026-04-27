@@ -185,7 +185,8 @@ export default function CampaignReview() {
     value: boolean,
   ) => {
     setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: value } : u)));
-    const { error } = await supabase.from("units").update({ [field]: value }).eq("id", unit.id);
+    const patch: Record<string, boolean> = { [field]: value };
+    const { error } = await supabase.from("units").update(patch as any).eq("id", unit.id);
     if (error) {
       toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: !value } : u)));
@@ -195,7 +196,8 @@ export default function CampaignReview() {
   const toggleCampaignTier = async (field: ShowTierKey, value: boolean) => {
     if (!campaign) return;
     setCampaign({ ...campaign, [field]: value });
-    const { error } = await supabase.from("campaigns").update({ [field]: value }).eq("id", campaign.id);
+    const patch: Record<string, boolean> = { [field]: value };
+    const { error } = await supabase.from("campaigns").update(patch as any).eq("id", campaign.id);
     if (error) {
       toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
       setCampaign({ ...campaign, [field]: !value });
