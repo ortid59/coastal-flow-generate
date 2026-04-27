@@ -16,10 +16,10 @@
 // Auth: caller JWT required. RLS ensures campaign ownership.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-// Use the legacy build with ?no-check&target=denonext to avoid pdfjs's
-// auto-import of node-canvas, which fails to bundle in edge functions.
-// We supply our own OffscreenCanvas for rendering.
-import * as pdfjs from "https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs?target=denonext&deps=canvas@npm:nothing";
+// pdfjs-dist 3.x pulls in node-canvas via esm.sh, which fails to bundle in
+// edge functions. Use the npm: specifier with the legacy ESM build and
+// supply our own OffscreenCanvas for rendering.
+import * as pdfjs from "npm:pdfjs-dist@3.11.174/legacy/build/pdf.mjs";
 // @ts-ignore — workerSrc must be a string in Deno
 pdfjs.GlobalWorkerOptions.workerSrc = "";
 
