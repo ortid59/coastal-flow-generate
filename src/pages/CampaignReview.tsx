@@ -179,15 +179,26 @@ export default function CampaignReview() {
     }
   };
 
-  const toggleField = async (unit: Unit, field: "recommended" | "included", value: boolean) => {
-    // optimistic update
+  const toggleField = async (
+    unit: Unit,
+    field: "recommended" | "included" | TierKey,
+    value: boolean,
+  ) => {
     setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: value } : u)));
-    const patch = field === "recommended" ? { recommended: value } : { included: value };
-    const { error } = await supabase.from("units").update(patch).eq("id", unit.id);
+    const { error } = await supabase.from("units").update({ [field]: value }).eq("id", unit.id);
     if (error) {
       toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
-      // revert
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, [field]: !value } : u)));
+    }
+  };
+
+  const toggleCampaignTier = async (field: ShowTierKey, value: boolean) => {
+    if (!campaign) return;
+    setCampaign({ ...campaign, [field]: value });
+    const { error } = await supabase.from("campaigns").update({ [field]: value }).eq("id", campaign.id);
+    if (error) {
+      toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
+      setCampaign({ ...campaign, [field]: !value });
     }
   };
 
@@ -197,7 +208,17 @@ export default function CampaignReview() {
     const imps = included.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
     const cost = included.reduce((s, u) => s + (u.total_cost ?? 0), 0);
     const photos = included.filter((u) => u.billboard_photo_url).length;
-    return { total: units.length, included: included.length, recs, imps, cost, photos };
+    const tierTotals: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
+    const tierCounts: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
+    for (const u of included) {
+      for (const t of TIERS) {
+        if (u[t.key]) {
+          tierTotals[t.key] += u.total_cost ?? 0;
+          tierCounts[t.key] += 1;
+        }
+      }
+    }
+    return { total: units.length, included: included.length, recs, imps, cost, photos, tierTotals, tierCounts };
   }, [units]);
 
 
