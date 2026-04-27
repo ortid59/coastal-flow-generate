@@ -14,7 +14,7 @@ import {
   ChevronRight,
   Ruler,
   Eye,
-  Building2,
+  
   Mail,
   Globe,
   Instagram,
