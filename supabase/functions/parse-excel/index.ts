@@ -406,9 +406,11 @@ Deno.serve(async (req) => {
 
     const summary = {
       campaign_id: campaignId,
-      files: [] as Array<{ name: string; rows: number; recommended: number }>,
+      files: [] as Array<{ name: string; rows: number; recommended: number; images_matched: number; overview_images: number }>,
       total_units: 0,
       total_recommended: 0,
+      total_images_matched: 0,
+      total_overview_images: 0,
     };
 
     for (const f of files) {
@@ -451,6 +453,9 @@ Deno.serve(async (req) => {
 
       const inserts: any[] = [];
       let recommendedCount = 0;
+      // Track which sheet row each unit_number lives on, for image anchoring.
+      const rowToUnit = new Map<number, string>();
+      const chosenSheetName = wb.SheetNames.find((sn) => wb.Sheets[sn] === chosen)!;
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
@@ -462,6 +467,8 @@ Deno.serve(async (req) => {
 
         // Determine recommended via fill color of the row's first non-null mapped cell
         const sheetRow = headerRow + 1 + i; // 0-indexed sheet row
+        const trimmedUnit = String(unitNumber).trim();
+        rowToUnit.set(sheetRow, trimmedUnit);
         let recommended = false;
         const probeCols = [
           headerIdx["market"], headerIdx["unit_number"], headerIdx["vendor"], headerIdx["format"],
@@ -484,7 +491,7 @@ Deno.serve(async (req) => {
 
         const row: Record<string, any> = {
           campaign_id: campaignId,
-          unit_number: String(unitNumber).trim(),
+          unit_number: trimmedUnit,
           recommended,
           included: true,
           vendor: (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null,
@@ -527,13 +534,91 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ---- Change 2: extract embedded vendor images from this workbook ----
+      // We do this after upsert so unit ids exist. Per-board images go to
+      // units.inset_map_url (only if currently null — never overwrite manual
+      // uploads). Sheet-level / floating images become the campaign overview
+      // map (stored on campaigns.vendor_overview_map_url for later use).
+      let imagesMatched = 0;
+      let overviewImages = 0;
+      try {
+        const images = await extractWorkbookImages(buf, wb.SheetNames);
+        // Restrict to images on the chosen data sheet — other sheets are noise.
+        const sheetImages = images.filter((im) => im.sheetName === chosenSheetName);
+
+        // Look up unit ids for this campaign so we can write inset_map_url.
+        const { data: existingUnits } = await supabase
+          .from("units")
+          .select("id, unit_number, inset_map_url")
+          .eq("campaign_id", campaignId);
+        const unitByNumber = new Map<string, { id: string; inset_map_url: string | null }>();
+        (existingUnits ?? []).forEach((u: any) =>
+          unitByNumber.set(String(u.unit_number).trim(), { id: u.id, inset_map_url: u.inset_map_url }),
+        );
+
+        for (const img of sheetImages) {
+          const matched = matchImageToUnit(img.anchorRow, rowToUnit, headerRow);
+          if (matched) {
+            const u = unitByNumber.get(matched);
+            if (!u) continue;
+            // Don't overwrite a manually-uploaded or previously-extracted map.
+            if (u.inset_map_url) continue;
+            const path = `${campaignId}/${u.id}-vendor-map.${img.ext}`;
+            const up = await supabase.storage
+              .from("minimaps")
+              .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+            if (up.error) {
+              console.warn(`[parse-excel] image upload failed for ${matched}:`, up.error.message);
+              continue;
+            }
+            const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+            const { error: updErr } = await supabase
+              .from("units")
+              .update({ inset_map_url: pub.publicUrl })
+              .eq("id", u.id);
+            if (updErr) {
+              console.warn(`[parse-excel] inset_map_url write failed for ${matched}:`, updErr.message);
+              continue;
+            }
+            // Cache so a second image for the same row doesn't overwrite.
+            u.inset_map_url = pub.publicUrl;
+            imagesMatched++;
+          } else {
+            // Sheet-level / overview map. Store the FIRST one we see per file.
+            // (Heather said don't render yet, but extract & store.)
+            if (overviewImages > 0) continue;
+            const path = `${campaignId}/overview-${f.id}.${img.ext}`;
+            const up = await supabase.storage
+              .from("minimaps")
+              .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+            if (up.error) {
+              console.warn(`[parse-excel] overview upload failed:`, up.error.message);
+              continue;
+            }
+            const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+            await supabase
+              .from("campaigns")
+              .update({ vendor_overview_map_url: pub.publicUrl })
+              .eq("id", campaignId);
+            overviewImages++;
+          }
+        }
+      } catch (imgErr: any) {
+        // Image extraction must never fail the parse — log and continue.
+        console.warn(`[parse-excel] image extraction failed for ${f.original_name}:`, imgErr?.message ?? imgErr);
+      }
+
       summary.files.push({
         name: f.original_name ?? f.storage_path,
         rows: inserts.length,
         recommended: recommendedCount,
+        images_matched: imagesMatched,
+        overview_images: overviewImages,
       });
       summary.total_units += inserts.length;
       summary.total_recommended += recommendedCount;
+      summary.total_images_matched += imagesMatched;
+      summary.total_overview_images += overviewImages;
     }
 
     await supabase.from("campaigns").update({ status: "ready" }).eq("id", campaignId);
