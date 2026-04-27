@@ -537,7 +537,7 @@ export default function CampaignReview() {
                               {u.location_description ?? ""}
                             </div>
                           </td>
-                          <td className="px-2 py-2 align-top" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-2 py-2 align-top max-w-[200px]" onClick={(e) => e.stopPropagation()}>
                             <HighlightsCell
                               unitId={u.id}
                               unitNumber={u.unit_number}
