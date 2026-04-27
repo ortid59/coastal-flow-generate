@@ -597,8 +597,10 @@ export default function CampaignReview() {
                         </tr>
                       );
                     })}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
 
