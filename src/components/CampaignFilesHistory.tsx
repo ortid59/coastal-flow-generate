@@ -59,7 +59,6 @@ const JOB_LABEL: Record<string, string> = {
   "parse-excel": "Excel parsed",
   "extract-photos": "Photos extracted",
   "extract-highlights": "Highlights extracted",
-  "fetch-minimaps": "Map images fetched",
 };
 
 const fmtDate = (d: string | null) =>
