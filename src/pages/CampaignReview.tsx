@@ -407,6 +407,9 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
                       <th className="px-2 py-2.5 text-center bg-[hsl(var(--accent-gold)/0.18)]">Recommend</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">A</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">B</th>
+                      <th className="px-2 py-2.5 text-center bg-[hsl(var(--ocean)/0.10)]">C</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
