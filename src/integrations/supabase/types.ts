@@ -50,8 +50,12 @@ export type Database = {
           portal_password_set_at: string | null
           portal_token: string | null
           proposal_name: string | null
+          show_tier_a: boolean
+          show_tier_b: boolean
+          show_tier_c: boolean
           status: string | null
           user_id: string
+          vendor_overview_map_url: string | null
         }
         Insert: {
           campaign_date?: string | null
@@ -70,8 +74,12 @@ export type Database = {
           portal_password_set_at?: string | null
           portal_token?: string | null
           proposal_name?: string | null
+          show_tier_a?: boolean
+          show_tier_b?: boolean
+          show_tier_c?: boolean
           status?: string | null
           user_id: string
+          vendor_overview_map_url?: string | null
         }
         Update: {
           campaign_date?: string | null
@@ -90,8 +98,12 @@ export type Database = {
           portal_password_set_at?: string | null
           portal_token?: string | null
           proposal_name?: string | null
+          show_tier_a?: boolean
+          show_tier_b?: boolean
+          show_tier_c?: boolean
           status?: string | null
           user_id?: string
+          vendor_overview_map_url?: string | null
         }
         Relationships: []
       }
@@ -173,6 +185,9 @@ export type Database = {
           sov_pct: number | null
           spot_length: string | null
           start_date: string | null
+          tier_a: boolean
+          tier_b: boolean
+          tier_c: boolean
           total_cost: number | null
           unit_count: number | null
           unit_number: string
@@ -219,6 +234,9 @@ export type Database = {
           sov_pct?: number | null
           spot_length?: string | null
           start_date?: string | null
+          tier_a?: boolean
+          tier_b?: boolean
+          tier_c?: boolean
           total_cost?: number | null
           unit_count?: number | null
           unit_number: string
@@ -265,6 +283,9 @@ export type Database = {
           sov_pct?: number | null
           spot_length?: string | null
           start_date?: string | null
+          tier_a?: boolean
+          tier_b?: boolean
+          tier_c?: boolean
           total_cost?: number | null
           unit_count?: number | null
           unit_number?: string
