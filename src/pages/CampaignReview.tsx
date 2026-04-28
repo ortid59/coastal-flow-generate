@@ -148,17 +148,157 @@ export default function CampaignReview() {
   const extractPhotos = async () => {
     if (!id) return;
     setExtracting(true);
-    const { data, error } = await supabase.functions.invoke("extract-photos", { body: { campaign_id: id } });
-    setExtracting(false);
-    if (error) {
-      toast({ title: "Photo extraction failed", description: error.message, variant: "destructive" });
-    } else {
-      const s = (data as any)?.summary;
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+      const { data: units, error: uErr } = await supabase
+        .from('units')
+        .select('id, unit_number, billboard_photo_url, inset_map_url')
+        .eq('campaign_id', id);
+      if (uErr) throw uErr;
+      if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
+
+      const unitByNumber = new Map(units.map((u) => [String(u.unit_number).trim(), u]));
+
+      const { data: vendorFiles, error: fErr } = await supabase
+        .from('vendor_files')
+        .select('id, storage_path, original_name')
+        .eq('campaign_id', id);
+      if (fErr) throw fErr;
+
+      const pdfFiles = (vendorFiles ?? []).filter((f) =>
+        f.original_name?.toLowerCase().endsWith('.pdf')
+      );
+      if (!pdfFiles.length) {
+        throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
+      }
+
+      let totalPhotos = 0;
+      let totalMaps = 0;
+
+      for (const file of pdfFiles) {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from('uploads')
+          .download(file.storage_path);
+        if (dlErr || !blob) {
+          console.warn('PDF download failed:', dlErr?.message);
+          continue;
+        }
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const text = textContent.items.map((item: any) => item.str).join(' ');
+          const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
+
+          if (pageNum === 1 || !match) {
+            page.cleanup();
+            continue;
+          }
+
+          const unitNumber = match[1];
+          const unit = unitByNumber.get(unitNumber);
+          if (!unit) {
+            console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
+            page.cleanup();
+            continue;
+          }
+
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          const ctx = canvas.getContext('2d')!;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const W = canvas.width;
+          const H = canvas.height;
+
+          const uploadCrop = async (
+            crop: { x: number; y: number; w: number; h: number },
+            storageBucket: string,
+            storagePath: string,
+            dbField: string,
+          ) => {
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = Math.round(W * crop.w);
+            cropCanvas.height = Math.round(H * crop.h);
+            const cropCtx = cropCanvas.getContext('2d')!;
+            cropCtx.drawImage(
+              canvas,
+              Math.round(W * crop.x),
+              Math.round(H * crop.y),
+              Math.round(W * crop.w),
+              Math.round(H * crop.h),
+              0, 0,
+              cropCanvas.width,
+              cropCanvas.height,
+            );
+            const imageBlob = await new Promise<Blob>((resolve) =>
+              cropCanvas.toBlob((b) => resolve(b!), 'image/png'),
+            );
+            const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
+            const { error: upErr } = await supabase.storage
+              .from(storageBucket)
+              .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
+            if (upErr) {
+              console.warn(`Upload failed for ${unitNumber} (${dbField}):`, upErr.message);
+              return;
+            }
+            const { data: pubData } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
+            const url = `${pubData.publicUrl}?v=${Date.now()}`;
+            const { error: updateErr } = await supabase
+              .from('units')
+              .update({ [dbField]: url })
+              .eq('id', unit.id);
+            if (updateErr) {
+              console.warn(`DB update failed for ${unitNumber} (${dbField}):`, updateErr.message);
+            } else {
+              (unit as any)[dbField] = url;
+            }
+          };
+
+          if (!unit.billboard_photo_url) {
+            await uploadCrop(
+              { x: 0.00, y: 0.35, w: 0.58, h: 0.60 },
+              'photos',
+              `${id}/${unit.id}.png`,
+              'billboard_photo_url',
+            );
+            totalPhotos++;
+          }
+          if (!unit.inset_map_url) {
+            await uploadCrop(
+              { x: 0.58, y: 0.05, w: 0.42, h: 0.52 },
+              'minimaps',
+              `${id}/${unit.id}-map.png`,
+              'inset_map_url',
+            );
+            totalMaps++;
+          }
+
+          page.cleanup();
+        }
+      }
+
       toast({
-        title: "Photos extracted",
-        description: s ? `${s.units_with_photo} units matched · ${s.low_res_count} low-res` : "Done",
+        title: 'Photos extracted',
+        description: `${totalPhotos} billboard photos · ${totalMaps} maps matched`,
       });
       load();
+    } catch (err: any) {
+      console.error('[extractPhotos]', err);
+      toast({
+        title: 'Photo extraction failed',
+        description: err.message ?? 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setExtracting(false);
     }
   };
 
