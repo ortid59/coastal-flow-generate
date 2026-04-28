@@ -253,7 +253,7 @@ export default function CampaignReview() {
             const url = `${pubData.publicUrl}?v=${Date.now()}`;
             const { error: updateErr } = await supabase
               .from('units')
-              .update({ [dbField]: url })
+              .update({ [dbField]: url } as any)
               .eq('id', unit.id);
             if (updateErr) {
               console.warn(`DB update failed for ${unitNumber} (${dbField}):`, updateErr.message);
