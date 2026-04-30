@@ -159,7 +159,13 @@ export default function CampaignReview() {
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
 
-      const unitByNumber = new Map(units.map((u) => [String(u.unit_number).trim(), u]));
+      const unitByNumber = new Map<string, (typeof units)[number]>();
+      for (const u of units) {
+        const raw = String(u.unit_number).trim();
+        unitByNumber.set(raw, u);
+        unitByNumber.set(raw.padStart(6, '0'), u);
+        unitByNumber.set(String(parseInt(raw, 10)), u);
+      }
 
       const { data: vendorFiles, error: fErr } = await supabase
         .from('vendor_files')
@@ -201,7 +207,9 @@ export default function CampaignReview() {
           }
 
           const unitNumber = match[1];
-          const unit = unitByNumber.get(unitNumber);
+          const unit = unitByNumber.get(unitNumber)
+            ?? unitByNumber.get(unitNumber.padStart(6, '0'))
+            ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
           if (!unit) {
             console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
             page.cleanup();
@@ -223,7 +231,7 @@ export default function CampaignReview() {
             storageBucket: string,
             storagePath: string,
             dbField: string,
-          ) => {
+          ): Promise<boolean> => {
             const cropCanvas = document.createElement('canvas');
             cropCanvas.width = Math.round(W * crop.w);
             cropCanvas.height = Math.round(H * crop.h);
@@ -247,38 +255,54 @@ export default function CampaignReview() {
               .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
             if (upErr) {
               console.warn(`Upload failed for ${unitNumber} (${dbField}):`, upErr.message);
-              return;
+              return false;
             }
-            const { data: pubData } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
-            const url = `${pubData.publicUrl}?v=${Date.now()}`;
+
+            let url: string;
+            if (storageBucket === 'photos') {
+              const { data: signed, error: signErr } = await supabase.storage
+                .from('photos')
+                .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+              if (signErr || !signed) {
+                console.warn(`Sign URL failed for ${storagePath}:`, signErr?.message);
+                return false;
+              }
+              url = signed.signedUrl;
+            } else {
+              const { data: pubData } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
+              url = `${pubData.publicUrl}?v=${Date.now()}`;
+            }
+
             const { error: updateErr } = await supabase
               .from('units')
               .update({ [dbField]: url } as any)
               .eq('id', unit.id);
             if (updateErr) {
               console.warn(`DB update failed for ${unitNumber} (${dbField}):`, updateErr.message);
+              return false;
             } else {
               (unit as any)[dbField] = url;
+              return true;
             }
           };
 
           if (!unit.billboard_photo_url) {
-            await uploadCrop(
+            const ok = await uploadCrop(
               { x: 0.00, y: 0.35, w: 0.58, h: 0.60 },
               'photos',
               `${id}/${unit.id}.png`,
               'billboard_photo_url',
             );
-            totalPhotos++;
+            if (ok) totalPhotos++;
           }
           if (!unit.inset_map_url) {
-            await uploadCrop(
+            const ok = await uploadCrop(
               { x: 0.58, y: 0.05, w: 0.42, h: 0.52 },
               'minimaps',
               `${id}/${unit.id}-map.png`,
               'inset_map_url',
             );
-            totalMaps++;
+            if (ok) totalMaps++;
           }
 
           page.cleanup();
