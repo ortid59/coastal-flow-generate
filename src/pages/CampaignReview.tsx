@@ -180,11 +180,74 @@ export default function CampaignReview() {
         f.original_name?.toLowerCase().endsWith('.pdf')
       );
       if (!pdfFiles.length) {
+        if (silent) return;
         throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
       }
 
       let totalPhotos = 0;
       let totalMaps = 0;
+
+      // Smart vendor-agnostic image bounds detection from PDF content stream.
+      // Falls back to measured Clear Channel coordinates when detection fails.
+      const detectImageBounds = async (page: any, viewportRef: any): Promise<{
+        billboard: { x: number; y: number; w: number; h: number } | null;
+        map: { x: number; y: number; w: number; h: number } | null;
+      }> => {
+        try {
+          const ops = await page.getOperatorList();
+          const vp = page.getViewport({ scale: 1 });
+          const images: Array<{ x: number; y: number; w: number; h: number; area: number }> = [];
+          let matrix = [1, 0, 0, 1, 0, 0];
+          const stack: number[][] = [];
+          for (let i = 0; i < ops.fnArray.length; i++) {
+            const fn = ops.fnArray[i];
+            const args = ops.argsArray[i];
+            if (fn === 14) {
+              stack.push([...matrix]);
+            } else if (fn === 15) {
+              if (stack.length > 0) matrix = stack.pop()!;
+            } else if (fn === 12) {
+              const [a, b, c, d, e, f] = args;
+              const [m0, m1, m2, m3, m4, m5] = matrix;
+              matrix = [
+                m0 * a + m2 * b, m1 * a + m3 * b,
+                m0 * c + m2 * d, m1 * c + m3 * d,
+                m0 * e + m2 * f + m4, m1 * e + m3 * f + m5,
+              ];
+            } else if (fn === 85 || fn === 86) {
+              const [a, b, c, d, e, f] = matrix;
+              const corners = [[e, f], [a + e, b + f], [a + c + e, b + d + f], [c + e, d + f]];
+              const pxs = corners.map((p) => p[0]);
+              const pys = corners.map((p) => p[1]);
+              const p0 = vp.convertToViewportPoint(Math.min(...pxs), Math.min(...pys));
+              const p1 = vp.convertToViewportPoint(Math.max(...pxs), Math.max(...pys));
+              const x0 = Math.min(p0[0], p1[0]) / vp.width;
+              const y0 = Math.min(p0[1], p1[1]) / vp.height;
+              const x1 = Math.max(p0[0], p1[0]) / vp.width;
+              const y1 = Math.max(p0[1], p1[1]) / vp.height;
+              const area = (x1 - x0) * (y1 - y0);
+              if (area > 0.02) images.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, area });
+            }
+          }
+          if (images.length < 2) return { billboard: null, map: null };
+          images.sort((a, b) => b.area - a.area);
+          const billboard = images.find((img) => (img.x + img.w / 2) < 0.55) ?? null;
+          const map = images.find((img) => img !== billboard && (img.x + img.w / 2) > 0.5) ?? null;
+          const pad = (r: typeof billboard) =>
+            r
+              ? {
+                  x: Math.max(0, r.x - 0.005),
+                  y: Math.max(0, r.y - 0.005),
+                  w: Math.min(1 - Math.max(0, r.x - 0.005), r.w + 0.01),
+                  h: Math.min(1 - Math.max(0, r.y - 0.005), r.h + 0.01),
+                }
+              : null;
+          return { billboard: pad(billboard), map: pad(map) };
+        } catch (e) {
+          console.warn('[detectImageBounds] failed:', e);
+          return { billboard: null, map: null };
+        }
+      };
 
       for (const file of pdfFiles) {
         const { data: blob, error: dlErr } = await supabase.storage
