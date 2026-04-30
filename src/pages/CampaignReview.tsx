@@ -133,6 +133,21 @@ export default function CampaignReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.status]);
 
+  // Auto-run photo extraction once parsing finishes (covers initial campaign
+  // creation flow, where NewCampaign navigates here while status === "parsing").
+  const [autoExtracted, setAutoExtracted] = useState(false);
+  useEffect(() => {
+    if (!campaign || autoExtracted) return;
+    if (campaign.status === "parsing") return;
+    if (units.length === 0) return;
+    const needsPhotos = units.some((u) => !u.billboard_photo_url || !u.inset_map_url);
+    if (!needsPhotos) return;
+    setAutoExtracted(true);
+    extractPhotos({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign?.status, units.length, autoExtracted]);
+
+
   const reparse = async () => {
     if (!id) return;
     setReparsing(true);
@@ -141,13 +156,16 @@ export default function CampaignReview() {
     if (error) toast({ title: "Parse failed", description: error.message, variant: "destructive" });
     else {
       toast({ title: "Parsing started" });
-      load();
+      await load();
+      // Auto-run photo extraction after re-parse (silent if no PDF exists)
+      extractPhotos({ silent: true });
     }
   };
 
-  const extractPhotos = async () => {
+  const extractPhotos = async (opts?: { silent?: boolean }) => {
     if (!id) return;
-    setExtracting(true);
+    const silent = !!opts?.silent;
+    if (!silent) setExtracting(true);
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -177,11 +195,74 @@ export default function CampaignReview() {
         f.original_name?.toLowerCase().endsWith('.pdf')
       );
       if (!pdfFiles.length) {
+        if (silent) return;
         throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
       }
 
       let totalPhotos = 0;
       let totalMaps = 0;
+
+      // Smart vendor-agnostic image bounds detection from PDF content stream.
+      // Falls back to measured Clear Channel coordinates when detection fails.
+      const detectImageBounds = async (page: any, viewportRef: any): Promise<{
+        billboard: { x: number; y: number; w: number; h: number } | null;
+        map: { x: number; y: number; w: number; h: number } | null;
+      }> => {
+        try {
+          const ops = await page.getOperatorList();
+          const vp = page.getViewport({ scale: 1 });
+          const images: Array<{ x: number; y: number; w: number; h: number; area: number }> = [];
+          let matrix = [1, 0, 0, 1, 0, 0];
+          const stack: number[][] = [];
+          for (let i = 0; i < ops.fnArray.length; i++) {
+            const fn = ops.fnArray[i];
+            const args = ops.argsArray[i];
+            if (fn === 14) {
+              stack.push([...matrix]);
+            } else if (fn === 15) {
+              if (stack.length > 0) matrix = stack.pop()!;
+            } else if (fn === 12) {
+              const [a, b, c, d, e, f] = args;
+              const [m0, m1, m2, m3, m4, m5] = matrix;
+              matrix = [
+                m0 * a + m2 * b, m1 * a + m3 * b,
+                m0 * c + m2 * d, m1 * c + m3 * d,
+                m0 * e + m2 * f + m4, m1 * e + m3 * f + m5,
+              ];
+            } else if (fn === 85 || fn === 86) {
+              const [a, b, c, d, e, f] = matrix;
+              const corners = [[e, f], [a + e, b + f], [a + c + e, b + d + f], [c + e, d + f]];
+              const pxs = corners.map((p) => p[0]);
+              const pys = corners.map((p) => p[1]);
+              const p0 = vp.convertToViewportPoint(Math.min(...pxs), Math.min(...pys));
+              const p1 = vp.convertToViewportPoint(Math.max(...pxs), Math.max(...pys));
+              const x0 = Math.min(p0[0], p1[0]) / vp.width;
+              const y0 = Math.min(p0[1], p1[1]) / vp.height;
+              const x1 = Math.max(p0[0], p1[0]) / vp.width;
+              const y1 = Math.max(p0[1], p1[1]) / vp.height;
+              const area = (x1 - x0) * (y1 - y0);
+              if (area > 0.02) images.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, area });
+            }
+          }
+          if (images.length < 2) return { billboard: null, map: null };
+          images.sort((a, b) => b.area - a.area);
+          const billboard = images.find((img) => (img.x + img.w / 2) < 0.55) ?? null;
+          const map = images.find((img) => img !== billboard && (img.x + img.w / 2) > 0.5) ?? null;
+          const pad = (r: typeof billboard) =>
+            r
+              ? {
+                  x: Math.max(0, r.x - 0.005),
+                  y: Math.max(0, r.y - 0.005),
+                  w: Math.min(1 - Math.max(0, r.x - 0.005), r.w + 0.01),
+                  h: Math.min(1 - Math.max(0, r.y - 0.005), r.h + 0.01),
+                }
+              : null;
+          return { billboard: pad(billboard), map: pad(map) };
+        } catch (e) {
+          console.warn('[detectImageBounds] failed:', e);
+          return { billboard: null, map: null };
+        }
+      };
 
       for (const file of pdfFiles) {
         const { data: blob, error: dlErr } = await supabase.storage
@@ -286,9 +367,16 @@ export default function CampaignReview() {
             }
           };
 
+          // Smart detection per page, with Clear Channel fallback (792x612pt landscape)
+          const detected = await detectImageBounds(page, viewport);
+          const FALLBACK_BILLBOARD = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
+          const FALLBACK_MAP = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
+          const billboardCrop = detected.billboard ?? FALLBACK_BILLBOARD;
+          const mapCrop = detected.map ?? FALLBACK_MAP;
+
           if (!unit.billboard_photo_url) {
             const ok = await uploadCrop(
-              { x: 0.00, y: 0.30, w: 0.58, h: 0.46 },
+              billboardCrop,
               'photos',
               `${id}/${unit.id}.png`,
               'billboard_photo_url',
@@ -297,7 +385,7 @@ export default function CampaignReview() {
           }
           if (!unit.inset_map_url) {
             const ok = await uploadCrop(
-              { x: 0.58, y: 0.05, w: 0.42, h: 0.46 },
+              mapCrop,
               'minimaps',
               `${id}/${unit.id}-map.png`,
               'inset_map_url',
@@ -309,20 +397,24 @@ export default function CampaignReview() {
         }
       }
 
-      toast({
-        title: 'Photos extracted',
-        description: `${totalPhotos} billboard photos · ${totalMaps} maps matched`,
-      });
+      if (!silent || totalPhotos > 0 || totalMaps > 0) {
+        toast({
+          title: 'Photos extracted',
+          description: `${totalPhotos} billboard photos · ${totalMaps} maps matched`,
+        });
+      }
       load();
     } catch (err: any) {
       console.error('[extractPhotos]', err);
-      toast({
-        title: 'Photo extraction failed',
-        description: err.message ?? 'Unknown error',
-        variant: 'destructive',
-      });
+      if (!silent) {
+        toast({
+          title: 'Photo extraction failed',
+          description: err.message ?? 'Unknown error',
+          variant: 'destructive',
+        });
+      }
     } finally {
-      setExtracting(false);
+      if (!silent) setExtracting(false);
     }
   };
 
@@ -440,7 +532,7 @@ export default function CampaignReview() {
 
         {/* Toolbar — its own row so the title never collapses to a thin column */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
+          <Button variant="outline" size="sm" onClick={() => extractPhotos()} disabled={extracting || units.length === 0}>
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
           </Button>
@@ -793,7 +885,10 @@ export default function CampaignReview() {
           open={reuploadOpen}
           onOpenChange={setReuploadOpen}
           campaignId={campaign.id}
-          onDone={load}
+          onDone={async () => {
+            await load();
+            extractPhotos({ silent: true });
+          }}
         />
       )}
     </main>
