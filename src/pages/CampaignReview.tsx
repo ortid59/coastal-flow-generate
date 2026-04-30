@@ -352,9 +352,16 @@ export default function CampaignReview() {
             }
           };
 
+          // Smart detection per page, with Clear Channel fallback (792x612pt landscape)
+          const detected = await detectImageBounds(page, viewport);
+          const FALLBACK_BILLBOARD = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
+          const FALLBACK_MAP = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
+          const billboardCrop = detected.billboard ?? FALLBACK_BILLBOARD;
+          const mapCrop = detected.map ?? FALLBACK_MAP;
+
           if (!unit.billboard_photo_url) {
             const ok = await uploadCrop(
-              { x: 0.00, y: 0.30, w: 0.58, h: 0.46 },
+              billboardCrop,
               'photos',
               `${id}/${unit.id}.png`,
               'billboard_photo_url',
@@ -363,7 +370,7 @@ export default function CampaignReview() {
           }
           if (!unit.inset_map_url) {
             const ok = await uploadCrop(
-              { x: 0.58, y: 0.05, w: 0.42, h: 0.46 },
+              mapCrop,
               'minimaps',
               `${id}/${unit.id}-map.png`,
               'inset_map_url',
@@ -375,20 +382,24 @@ export default function CampaignReview() {
         }
       }
 
-      toast({
-        title: 'Photos extracted',
-        description: `${totalPhotos} billboard photos · ${totalMaps} maps matched`,
-      });
+      if (!silent || totalPhotos > 0 || totalMaps > 0) {
+        toast({
+          title: 'Photos extracted',
+          description: `${totalPhotos} billboard photos · ${totalMaps} maps matched`,
+        });
+      }
       load();
     } catch (err: any) {
       console.error('[extractPhotos]', err);
-      toast({
-        title: 'Photo extraction failed',
-        description: err.message ?? 'Unknown error',
-        variant: 'destructive',
-      });
+      if (!silent) {
+        toast({
+          title: 'Photo extraction failed',
+          description: err.message ?? 'Unknown error',
+          variant: 'destructive',
+        });
+      }
     } finally {
-      setExtracting(false);
+      if (!silent) setExtracting(false);
     }
   };
 
