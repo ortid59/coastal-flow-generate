@@ -141,13 +141,16 @@ export default function CampaignReview() {
     if (error) toast({ title: "Parse failed", description: error.message, variant: "destructive" });
     else {
       toast({ title: "Parsing started" });
-      load();
+      await load();
+      // Auto-run photo extraction after re-parse (silent if no PDF exists)
+      extractPhotos({ silent: true });
     }
   };
 
-  const extractPhotos = async () => {
+  const extractPhotos = async (opts?: { silent?: boolean }) => {
     if (!id) return;
-    setExtracting(true);
+    const silent = !!opts?.silent;
+    if (!silent) setExtracting(true);
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
