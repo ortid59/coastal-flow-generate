@@ -288,7 +288,7 @@ export default function CampaignReview() {
 
           if (!unit.billboard_photo_url) {
             const ok = await uploadCrop(
-              { x: 0.00, y: 0.35, w: 0.58, h: 0.60 },
+              { x: 0.00, y: 0.30, w: 0.58, h: 0.46 },
               'photos',
               `${id}/${unit.id}.png`,
               'billboard_photo_url',
@@ -297,7 +297,7 @@ export default function CampaignReview() {
           }
           if (!unit.inset_map_url) {
             const ok = await uploadCrop(
-              { x: 0.58, y: 0.05, w: 0.42, h: 0.52 },
+              { x: 0.58, y: 0.05, w: 0.42, h: 0.46 },
               'minimaps',
               `${id}/${unit.id}-map.png`,
               'inset_map_url',
