@@ -133,6 +133,21 @@ export default function CampaignReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.status]);
 
+  // Auto-run photo extraction once parsing finishes (covers initial campaign
+  // creation flow, where NewCampaign navigates here while status === "parsing").
+  const [autoExtracted, setAutoExtracted] = useState(false);
+  useEffect(() => {
+    if (!campaign || autoExtracted) return;
+    if (campaign.status === "parsing") return;
+    if (units.length === 0) return;
+    const needsPhotos = units.some((u) => !u.billboard_photo_url || !u.inset_map_url);
+    if (!needsPhotos) return;
+    setAutoExtracted(true);
+    extractPhotos({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign?.status, units.length, autoExtracted]);
+
+
   const reparse = async () => {
     if (!id) return;
     setReparsing(true);
