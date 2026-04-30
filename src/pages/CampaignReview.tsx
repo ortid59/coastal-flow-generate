@@ -885,7 +885,10 @@ export default function CampaignReview() {
           open={reuploadOpen}
           onOpenChange={setReuploadOpen}
           campaignId={campaign.id}
-          onDone={load}
+          onDone={async () => {
+            await load();
+            extractPhotos({ silent: true });
+          }}
         />
       )}
     </main>
