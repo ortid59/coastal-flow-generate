@@ -443,7 +443,7 @@ export default function CampaignReview() {
 
         {/* Toolbar — its own row so the title never collapses to a thin column */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          <Button variant="outline" size="sm" onClick={extractPhotos} disabled={extracting || units.length === 0}>
+          <Button variant="outline" size="sm" onClick={() => extractPhotos()} disabled={extracting || units.length === 0}>
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
           </Button>
