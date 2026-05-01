@@ -971,10 +971,12 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
           position: "absolute",
           left: "-10000px",
           top: 0,
-          width: "780px",
-          opacity: 0,
+          width: 0,
+          height: 0,
+          overflow: "hidden",
         }}
       >
+        <div style={{ width: "780px" }}>
         {units.map((u, i) => (
           <div
             key={u.id}
