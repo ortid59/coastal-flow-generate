@@ -40,6 +40,7 @@ type Campaign = {
   proposal_name: string | null;
   client_logo_url: string | null;
   cover_image_url: string | null;
+  vendor_overview_map_url: string | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
@@ -103,7 +104,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -431,7 +432,23 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </p>
             </motion.div>
 
-            <div className="mt-16 space-y-20">
+            {campaign?.vendor_overview_map_url && (
+              <div className="mb-10 mt-16">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+                  Campaign Coverage Map
+                </p>
+                <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
+                  <img
+                    src={campaign.vendor_overview_map_url}
+                    alt="Campaign coverage map"
+                    className="w-full h-auto object-contain"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className={`${campaign?.vendor_overview_map_url ? '' : 'mt-16'} space-y-20`}>
               {byMarket.map(([market, list], idx) => (
                 <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} />
               ))}
@@ -862,11 +879,11 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
 
             {/* Map image extracted from photosheet */}
             {unit.inset_map_url && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+              <div className="mt-4 overflow-hidden rounded-lg border border-border bg-muted/30">
                 <img
                   src={unit.inset_map_url}
                   alt={`Location map for unit ${unit.unit_number}`}
-                  className="h-[180px] w-full object-cover"
+                  className="w-full h-auto object-contain"
                   loading="lazy"
                   onError={(e) => {
                     const container = (e.target as HTMLElement).parentElement;

@@ -224,7 +224,39 @@ export default function CampaignReview() {
           const text = textContent.items.map((item: any) => item.str).join(' ');
           const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
 
-          if (pageNum === 1 || !match) {
+          if (pageNum === 1) {
+            // Page 1 = campaign overview map with all locations pinned
+            try {
+              const ovViewport = page.getViewport({ scale: 1.5 });
+              const ovCanvas = document.createElement('canvas');
+              ovCanvas.width = Math.round(ovViewport.width);
+              ovCanvas.height = Math.round(ovViewport.height);
+              const ovCtx = ovCanvas.getContext('2d')!;
+              await page.render({ canvasContext: ovCtx, viewport: ovViewport }).promise;
+              const ovBlob = await new Promise<Blob>((resolve) =>
+                ovCanvas.toBlob((b) => resolve(b!), 'image/png')
+              );
+              const ovBytes = new Uint8Array(await ovBlob.arrayBuffer());
+              const ovPath = `${id}/overview-map.png`;
+              const { error: ovUpErr } = await supabase.storage
+                .from('minimaps')
+                .upload(ovPath, ovBytes, { contentType: 'image/png', upsert: true });
+              if (!ovUpErr) {
+                const { data: ovPub } = supabase.storage.from('minimaps').getPublicUrl(ovPath);
+                const ovUrl = `${ovPub.publicUrl}?v=${Date.now()}`;
+                await supabase
+                  .from('campaigns')
+                  .update({ vendor_overview_map_url: ovUrl })
+                  .eq('id', id);
+              }
+            } catch (e) {
+              console.warn('[extractPhotos] overview map failed:', e);
+            }
+            page.cleanup();
+            continue;
+          }
+
+          if (!match) {
             page.cleanup();
             continue;
           }
