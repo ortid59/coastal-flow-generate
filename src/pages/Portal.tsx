@@ -100,6 +100,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
+  const [expandedTier, setExpandedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
 
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
@@ -164,6 +166,23 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     });
     return Array.from(map.entries());
   }, [units]);
+
+  const displayedUnits = useMemo(() =>
+    selectedTier
+      ? units.filter((u) => u.included && u[selectedTier])
+      : units.filter((u) => u.included),
+    [units, selectedTier]
+  );
+
+  const displayedByMarket = useMemo(() => {
+    const map = new Map<string, Unit[]>();
+    displayedUnits.forEach((u) => {
+      const m = u.market ?? "Other";
+      if (!map.has(m)) map.set(m, []);
+      map.get(m)!.push(u);
+    });
+    return Array.from(map.entries());
+  }, [displayedUnits]);
 
   const activeTiers = [
     campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
@@ -470,35 +489,43 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-5">
                   Choose Your Option
                 </p>
-                <div className={`grid gap-5 ${activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
-                  {activeTiers.map((tier, idx) => {
+                <div className={`grid gap-4 ${activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+                  {activeTiers.map((tier) => {
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
                     const totalCost = tierUnits.reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
                     const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
-                    const isHighlighted = idx === activeTiers.length - 1;
+                    const isSelected = selectedTier === tier.key;
+                    const isExpanded = expandedTier === tier.key;
+                    const visibleUnits = isExpanded ? tierUnits : tierUnits.slice(0, 4);
+                    const hiddenCount = tierUnits.length - 4;
+
                     return (
-                      <div
+                      <button
                         key={tier.key}
-                        className={`relative rounded-xl border-2 p-6 flex flex-col gap-4 ${
-                          isHighlighted
-                            ? 'border-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.04)]'
-                            : 'border-border/40 bg-card'
+                        onClick={() => setSelectedTier(isSelected ? null : tier.key)}
+                        className={`relative text-left rounded-xl border-2 p-6 flex flex-col gap-4 transition-all duration-200 w-full ${
+                          isSelected
+                            ? 'border-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)] shadow-md'
+                            : 'border-border/40 bg-card hover:border-border hover:shadow-sm'
                         }`}
                       >
-                        {isHighlighted && (
-                          <span className="absolute -top-3 left-6 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-[hsl(var(--accent-gold))] text-white">
-                            Full Market
+                        {isSelected && (
+                          <span className="absolute -top-3 left-5 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-[hsl(var(--accent-gold))] text-white">
+                            Selected
                           </span>
                         )}
+
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                             {tier.label}
                           </p>
-                          <p className="text-3xl font-extrabold text-foreground">
-                            {totalCost > 0 ? `$${totalCost.toLocaleString()}` : 'Contact for pricing'}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">4-week investment</p>
+                          {totalCost > 0 ? (
+                            <p className="text-3xl font-extrabold text-foreground">
+                              ${totalCost.toLocaleString()}
+                            </p>
+                          ) : null}
                         </div>
+
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Placements</span>
@@ -511,31 +538,67 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                             </div>
                           )}
                         </div>
+
                         <div className="border-t border-border/30 pt-4">
-                          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-semibold">Includes</p>
+                          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-semibold">
+                            Includes
+                          </p>
                           <ul className="space-y-1">
-                            {tierUnits.slice(0, 4).map((u) => (
+                            {visibleUnits.map((u) => (
                               <li key={u.id} className="text-xs text-foreground/80 truncate">
                                 • {u.location_description ?? u.unit_number}
                               </li>
                             ))}
-                            {tierUnits.length > 4 && (
-                              <li className="text-xs text-muted-foreground">
-                                + {tierUnits.length - 4} more locations
-                              </li>
-                            )}
                           </ul>
+                          {hiddenCount > 0 && !isExpanded && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedTier(tier.key);
+                              }}
+                              className="mt-2 text-xs font-semibold text-[hsl(var(--accent-gold))] hover:underline"
+                            >
+                              + {hiddenCount} more locations
+                            </button>
+                          )}
+                          {isExpanded && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedTier(null);
+                              }}
+                              className="mt-2 text-xs font-semibold text-muted-foreground hover:underline"
+                            >
+                              Show less
+                            </button>
+                          )}
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
+                </div>
+
+                <div className="mt-8 flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedTier
+                      ? `Showing ${activeTiers.find(t => t.key === selectedTier)?.label} — ${displayedUnits.length} units`
+                      : `Showing all ${displayedUnits.length} units`}
+                  </p>
+                  {selectedTier && (
+                    <button
+                      onClick={() => setSelectedTier(null)}
+                      className="text-xs font-semibold text-muted-foreground hover:text-foreground underline"
+                    >
+                      Clear selection — view all
+                    </button>
+                  )}
                 </div>
               </div>
             )}
 
             <div className={`${campaign?.vendor_overview_map_url || activeTiers.length >= 2 ? '' : 'mt-16'} space-y-20`}>
-              {byMarket.map(([market, list], idx) => (
-                <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} activeTiers={activeTiers} />
+              {displayedByMarket.map(([market, list], idx) => (
+                <MarketSection key={`${market}-${selectedTier ?? 'all'}`} market={market} units={list} index={idx} campaign={campaign} activeTiers={activeTiers} selectedTier={selectedTier} />
               ))}
             </div>
           </div>
@@ -764,9 +827,15 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 }
 
 /* =================== Market Section (carousel) =================== */
-function MarketSection({ market, units, index, campaign, activeTiers }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
+function MarketSection({ market, units, index, campaign, activeTiers, selectedTier }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[]; selectedTier?: 'tier_a' | 'tier_b' | 'tier_c' | null }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [selected, setSelected] = useState(0);
+
+  // Reset carousel index when tier filter changes
+  useEffect(() => {
+    setSelected(0);
+    emblaApi?.scrollTo(0);
+  }, [selectedTier, emblaApi]);
 
   useEffect(() => {
     if (!emblaApi) return;
