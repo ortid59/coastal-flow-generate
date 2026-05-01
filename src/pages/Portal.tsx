@@ -100,6 +100,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
+  const [expandedTier, setExpandedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
 
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
