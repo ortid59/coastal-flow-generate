@@ -44,6 +44,9 @@ type Campaign = {
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
+  show_tier_a: boolean | null;
+  show_tier_b: boolean | null;
+  show_tier_c: boolean | null;
 };
 
 type Unit = {
@@ -77,6 +80,9 @@ type Unit = {
   facing: string | null;
   city: string | null;
   zip: string | null;
+  tier_a: boolean | null;
+  tier_b: boolean | null;
+  tier_c: boolean | null;
 };
 
 const fmtNum = (n: number | null) =>
