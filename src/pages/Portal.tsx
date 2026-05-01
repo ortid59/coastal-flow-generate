@@ -583,11 +583,21 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 </div>
 
                 <div className="mt-8 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTier
-                      ? `Showing ${activeTiers.find(t => t.key === selectedTier)?.label} — ${displayedUnits.length} units`
-                      : `Showing all ${displayedUnits.length} units`}
-                  </p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTier
+                        ? `Showing ${activeTiers.find(t => t.key === selectedTier)?.label} — ${displayedUnits.length} units`
+                        : `Showing all ${displayedUnits.length} units`}
+                    </p>
+                    {selectedTier && (() => {
+                      const total = tierTotal(selectedTier);
+                      return total > 0 ? (
+                        <p className="text-sm font-semibold text-foreground mt-1">
+                          Estimated investment: {fmtMoney(total)} for {displayedUnits.length} location{displayedUnits.length === 1 ? '' : 's'}
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>
                   {selectedTier && (
                     <button
                       onClick={() => setSelectedTier(null)}
