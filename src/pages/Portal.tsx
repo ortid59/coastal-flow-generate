@@ -110,14 +110,14 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c")
           .eq("id", campaignId)
           .single(),
         supabase
           .from("units")
           .select(
             // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
