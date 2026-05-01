@@ -466,25 +466,66 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
             )}
 
             {activeTiers.length >= 2 && (
-              <div className="mb-12 p-6 rounded-xl border border-border/40 bg-card shadow-elev-sm">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-6">
-                  Campaign Options
+              <div className="mb-14">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-5">
+                  Choose Your Option
                 </p>
-                <div className="grid md:grid-cols-3 gap-6">
-                  {activeTiers.map((tier) => {
-                    const total = tierTotal(tier.key);
+                <div className={`grid gap-5 ${activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+                  {activeTiers.map((tier, idx) => {
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
+                    const totalCost = tierUnits.reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+                    const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
+                    const isHighlighted = idx === activeTiers.length - 1;
                     return (
-                      <div key={tier.key} className="rounded-lg border border-border/30 p-5 bg-muted/20">
-                        <p className="text-sm font-bold uppercase tracking-wide text-foreground mb-1">
-                          {tier.label}
-                        </p>
-                        <p className="text-2xl font-bold text-primary mb-3">
-                          {total > 0 ? `$${total.toLocaleString()}` : '—'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {tierUnits.length} {tierUnits.length === 1 ? 'unit' : 'units'}
-                        </p>
+                      <div
+                        key={tier.key}
+                        className={`relative rounded-xl border-2 p-6 flex flex-col gap-4 ${
+                          isHighlighted
+                            ? 'border-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.04)]'
+                            : 'border-border/40 bg-card'
+                        }`}
+                      >
+                        {isHighlighted && (
+                          <span className="absolute -top-3 left-6 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-[hsl(var(--accent-gold))] text-white">
+                            Full Market
+                          </span>
+                        )}
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                            {tier.label}
+                          </p>
+                          <p className="text-3xl font-extrabold text-foreground">
+                            {totalCost > 0 ? `$${totalCost.toLocaleString()}` : 'Contact for pricing'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">4-week investment</p>
+                        </div>
+                        <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Placements</span>
+                            <span className="font-semibold">{tierUnits.length} units</span>
+                          </div>
+                          {totalImpressions > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">4-Week Impressions</span>
+                              <span className="font-semibold">{totalImpressions.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="border-t border-border/30 pt-4">
+                          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-semibold">Includes</p>
+                          <ul className="space-y-1">
+                            {tierUnits.slice(0, 4).map((u) => (
+                              <li key={u.id} className="text-xs text-foreground/80 truncate">
+                                • {u.location_description ?? u.unit_number}
+                              </li>
+                            ))}
+                            {tierUnits.length > 4 && (
+                              <li className="text-xs text-muted-foreground">
+                                + {tierUnits.length - 4} more locations
+                              </li>
+                            )}
+                          </ul>
+                        </div>
                       </div>
                     );
                   })}
@@ -908,7 +949,7 @@ function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: s
                 {activeTiers.filter((t) => unit[t.key]).map((t) => (
                   <span
                     key={t.key}
-                    className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[hsl(var(--ocean)/0.1)] text-[hsl(var(--ocean))] border border-[hsl(var(--ocean)/0.2)]"
+                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[hsl(var(--accent-gold)/0.12)] text-[hsl(var(--accent-gold))] border border-[hsl(var(--accent-gold)/0.3)]"
                   >
                     {t.label}
                   </span>
