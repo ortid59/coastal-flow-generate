@@ -814,14 +814,14 @@ function MarketSection({ market, units, index, campaign }: { market: string; uni
 function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
-      <div className="grid lg:grid-cols-[45%_55%] lg:items-stretch">
+      <div className="grid lg:grid-cols-[45%_55%]">
         {/* Left panel */}
         <motion.div
           initial={{ opacity: 0, x: -24 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="p-8 md:p-10 flex flex-col gap-0"
+          className="p-8 md:p-10 flex flex-col justify-between"
         >
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -875,41 +875,6 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 />
               </div>
             )}
-
-            {/* Structured details strip — extracted from photosheet */}
-            {(unit.location_description ||
-              unit.geopath_id ||
-              unit.media_type ||
-              unit.facing ||
-              unit.size ||
-              unit.city ||
-              unit.zip ||
-              (unit.latitude != null && unit.longitude != null)) && (
-              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border bg-secondary/40 p-4 text-[11px]">
-                {unit.location_description && (
-                  <div className="col-span-2">
-                    <dt className="font-semibold uppercase tracking-wider text-muted-foreground">Description</dt>
-                    <dd className="mt-0.5 text-foreground">{unit.location_description}</dd>
-                  </div>
-                )}
-                {unit.geopath_id && (
-                  <DetailKV label="Geopath ID" value={unit.geopath_id} />
-                )}
-                {unit.media_type && (
-                  <DetailKV label="Media Type" value={unit.media_type} />
-                )}
-                {unit.facing && <DetailKV label="Facing" value={unit.facing} />}
-                {unit.size && <DetailKV label="Size" value={unit.size} />}
-                {unit.city && <DetailKV label="City" value={unit.city} />}
-                {unit.zip && <DetailKV label="Zip" value={unit.zip} />}
-                {unit.latitude != null && (
-                  <DetailKV label="Latitude" value={unit.latitude.toFixed(5)} />
-                )}
-                {unit.longitude != null && (
-                  <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
-                )}
-              </dl>
-            )}
           </div>
 
           <div className="mt-8 space-y-5">
@@ -940,50 +905,87 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           </div>
         </motion.div>
 
-        {/* Right panel */}
+        {/* Right panel — billboard photo + description details */}
         <motion.div
           initial={{ opacity: 0, x: 24 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative bg-muted overflow-hidden border-2 border-border/40 lg:rounded-none lg:rounded-r-xl min-h-[280px]"
         >
-          {unit.billboard_photo_url ? (
-            <img
-              src={unit.billboard_photo_url}
-              alt={`Unit ${unit.unit_number}`}
-              className="absolute inset-0 h-full w-full object-cover animate-[float_8s_ease-in-out_infinite]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-              <ImageOff className="h-10 w-10" />
-            </div>
-          )}
-          <div
-            className="absolute inset-0"
-            aria-hidden
-            style={{
-              background:
-                "linear-gradient(135deg, hsl(var(--primary) / 0.22) 0%, transparent 55%)",
-            }}
-          />
-          {unit.four_week_impressions != null && (
-            <motion.div
-              initial={{ opacity: 0, y: 16, scale: 0.95 }}
-              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-              className="absolute bottom-6 left-6 rounded-xl bg-card/95 backdrop-blur border-l-[4px] border-[hsl(var(--accent-gold))] px-6 py-4 shadow-elev-md"
-            >
-              <CountUp
-                value={unit.four_week_impressions}
-                className="block num-display text-3xl md:text-4xl text-foreground leading-none"
+          {/* Billboard photo container */}
+          <div className="relative h-[320px] lg:h-[460px] max-h-[460px] bg-muted overflow-hidden border-2 border-border/40 flex-shrink-0">
+            {unit.billboard_photo_url ? (
+              <img
+                src={unit.billboard_photo_url}
+                alt={`Unit ${unit.unit_number}`}
+                className="absolute inset-0 h-full w-full object-cover animate-[float_8s_ease-in-out_infinite]"
+                loading="lazy"
               />
-              <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
-                4-Week Impressions
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <ImageOff className="h-10 w-10" />
               </div>
-            </motion.div>
+            )}
+            <div
+              className="absolute inset-0"
+              aria-hidden
+              style={{
+                background:
+                  "linear-gradient(135deg, hsl(var(--primary) / 0.22) 0%, transparent 55%)",
+              }}
+            />
+            {unit.four_week_impressions != null && (
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+                className="absolute bottom-6 left-6 rounded-xl bg-card/95 backdrop-blur border-l-[4px] border-[hsl(var(--accent-gold))] px-6 py-4 shadow-elev-md"
+              >
+                <CountUp
+                  value={unit.four_week_impressions}
+                  className="block num-display text-3xl md:text-4xl text-foreground leading-none"
+                />
+                <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
+                  4-Week Impressions
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Description details block */}
+          {(unit.location_description ||
+            unit.geopath_id ||
+            unit.media_type ||
+            unit.facing ||
+            unit.size ||
+            unit.city ||
+            unit.zip ||
+            (unit.latitude != null && unit.longitude != null)) && (
+            <dl className="m-4 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border bg-secondary/40 p-4 text-[11px]">
+              {unit.location_description && (
+                <div className="col-span-2">
+                  <dt className="font-semibold uppercase tracking-wider text-muted-foreground">Description</dt>
+                  <dd className="mt-0.5 text-foreground">{unit.location_description}</dd>
+                </div>
+              )}
+              {unit.geopath_id && (
+                <DetailKV label="Geopath ID" value={unit.geopath_id} />
+              )}
+              {unit.media_type && (
+                <DetailKV label="Media Type" value={unit.media_type} />
+              )}
+              {unit.facing && <DetailKV label="Facing" value={unit.facing} />}
+              {unit.size && <DetailKV label="Size" value={unit.size} />}
+              {unit.city && <DetailKV label="City" value={unit.city} />}
+              {unit.zip && <DetailKV label="Zip" value={unit.zip} />}
+              {unit.latitude != null && (
+                <DetailKV label="Latitude" value={unit.latitude.toFixed(5)} />
+              )}
+              {unit.longitude != null && (
+                <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
+              )}
+            </dl>
           )}
         </motion.div>
       </div>
