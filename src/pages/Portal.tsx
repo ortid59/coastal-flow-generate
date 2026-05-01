@@ -200,7 +200,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const primaryMarket = campaign.markets?.[0] ?? byMarket[0]?.[0] ?? "—";
 
   return (
-    <div className="min-h-screen bg-background print:bg-white">
+    <div className="min-h-screen bg-background print:bg-white overflow-x-hidden">
       {/* Scroll progress bar */}
       <motion.div
         style={{ scaleX: progress, transformOrigin: "0% 50%" }}
