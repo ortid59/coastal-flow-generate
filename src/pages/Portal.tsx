@@ -167,6 +167,23 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     return Array.from(map.entries());
   }, [units]);
 
+  const displayedUnits = useMemo(() =>
+    selectedTier
+      ? units.filter((u) => u.included && u[selectedTier])
+      : units.filter((u) => u.included),
+    [units, selectedTier]
+  );
+
+  const displayedByMarket = useMemo(() => {
+    const map = new Map<string, Unit[]>();
+    displayedUnits.forEach((u) => {
+      const m = u.market ?? "Other";
+      if (!map.has(m)) map.set(m, []);
+      map.get(m)!.push(u);
+    });
+    return Array.from(map.entries());
+  }, [displayedUnits]);
+
   const activeTiers = [
     campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
     campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
