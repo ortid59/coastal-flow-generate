@@ -814,14 +814,14 @@ function MarketSection({ market, units, index, campaign }: { market: string; uni
 function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
-      <div className="grid lg:grid-cols-[45%_55%]">
+      <div className="grid lg:grid-cols-[45%_55%] lg:items-stretch">
         {/* Left panel */}
         <motion.div
           initial={{ opacity: 0, x: -24 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="p-8 md:p-10 flex flex-col justify-between"
+          className="p-8 md:p-10 flex flex-col gap-0"
         >
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -860,6 +860,22 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               </p>
             )}
 
+            {/* Map image extracted from photosheet */}
+            {unit.inset_map_url && (
+              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                <img
+                  src={unit.inset_map_url}
+                  alt={`Location map for unit ${unit.unit_number}`}
+                  className="h-[180px] w-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    const container = (e.target as HTMLElement).parentElement;
+                    if (container) container.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+
             {/* Structured details strip — extracted from photosheet */}
             {(unit.location_description ||
               unit.geopath_id ||
@@ -893,22 +909,6 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                   <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
                 )}
               </dl>
-            )}
-
-            {/* Map image extracted from photosheet */}
-            {unit.inset_map_url && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-border">
-                <img
-                  src={unit.inset_map_url}
-                  alt={`Location map for unit ${unit.unit_number}`}
-                  className="h-[180px] w-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    const container = (e.target as HTMLElement).parentElement;
-                    if (container) container.style.display = 'none';
-                  }}
-                />
-              </div>
             )}
           </div>
 
@@ -946,7 +946,7 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative h-[320px] lg:h-[460px] max-h-[460px] bg-muted overflow-hidden flex-shrink-0 border-2 border-border/40 rounded-lg"
+          className="relative bg-muted overflow-hidden border-2 border-border/40 lg:rounded-none lg:rounded-r-xl min-h-[280px]"
         >
           {unit.billboard_photo_url ? (
             <img
