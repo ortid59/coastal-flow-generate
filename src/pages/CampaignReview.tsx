@@ -204,7 +204,7 @@ export default function CampaignReview() {
 
        // Static crop coordinates measured from Clear Channel PDF layout
        const billboardCrop = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
-       const mapCrop       = { x: 0.579, y: 0.180, w: 0.379, h: 0.340 };
+       const mapCrop       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
 
       for (const file of pdfFiles) {
         const { data: blob, error: dlErr } = await supabase.storage
