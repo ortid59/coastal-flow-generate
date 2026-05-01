@@ -204,7 +204,7 @@ export default function CampaignReview() {
 
        // Static crop coordinates measured from Clear Channel PDF layout
        const billboardCrop = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
-       const mapCrop       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
+       const mapCrop       = { x: 0.579, y: 0.180, w: 0.379, h: 0.340 };
 
       for (const file of pdfFiles) {
         const { data: blob, error: dlErr } = await supabase.storage
@@ -320,15 +320,13 @@ export default function CampaignReview() {
             );
             if (ok) totalPhotos++;
           }
-          if (!unit.inset_map_url) {
-            const ok = await uploadCrop(
-              mapCrop,
-              'minimaps',
-              `${id}/${unit.id}-map.png`,
-              'inset_map_url',
-            );
-            if (ok) totalMaps++;
-          }
+          const okMap = await uploadCrop(
+            mapCrop,
+            'minimaps',
+            `${id}/${unit.id}-map.png`,
+            'inset_map_url',
+          );
+          if (okMap) totalMaps++;
 
           page.cleanup();
         }

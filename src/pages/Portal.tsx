@@ -813,7 +813,7 @@ function MarketSection({ market, units, index, campaign }: { market: string; uni
 /* =================== Unit Card (split layout per spec) =================== */
 function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
   return (
-    <article className="overflow-hidden rounded-2xl bg-card border border-border shadow-elev-sm">
+    <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
       <div className="grid lg:grid-cols-[45%_55%]">
         {/* Left panel */}
         <motion.div
@@ -903,6 +903,10 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                   alt={`Location map for unit ${unit.unit_number}`}
                   className="h-[180px] w-full object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    const container = (e.target as HTMLElement).parentElement;
+                    if (container) container.style.display = 'none';
+                  }}
                 />
               </div>
             )}
@@ -942,7 +946,7 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative h-[320px] lg:h-[460px] max-h-[460px] bg-muted overflow-hidden flex-shrink-0"
+          className="relative h-[320px] lg:h-[460px] max-h-[460px] bg-muted overflow-hidden flex-shrink-0 border-2 border-border/40 rounded-lg"
         >
           {unit.billboard_photo_url ? (
             <img
