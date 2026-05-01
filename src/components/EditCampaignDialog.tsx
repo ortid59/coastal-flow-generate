@@ -167,13 +167,13 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
               id="e-proposal"
               value={proposalName}
               onChange={(e) => setProposalName(e.target.value)}
-              placeholder="Your Bridge to the Mountains — Jacksonville Advertising Opportunities"
+              placeholder="e.g. Summer 2026 Outdoor Advertising Opportunities"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="e-markets">Markets (comma separated)</Label>
-            <Input id="e-markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="Jacksonville FL, Orlando FL" />
+            <Input id="e-markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="e.g. Miami FL, Tampa FL" />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">

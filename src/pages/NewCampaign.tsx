@@ -242,11 +242,11 @@ export default function NewCampaign() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="client">Client name *</Label>
-              <Input id="client" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Stone Climbing JAX" required />
+              <Input id="client" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Acme Fitness Co." required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="campaign">Campaign name *</Label>
-              <Input id="campaign" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="Spring 2026 Launch" required />
+              <Input id="campaign" value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder="e.g. Q3 Brand Awareness" required />
               <p className="text-[11px] text-muted-foreground">Internal reference name.</p>
             </div>
           </div>
@@ -260,7 +260,7 @@ export default function NewCampaign() {
               id="proposal"
               value={proposalName}
               onChange={(e) => setProposalName(e.target.value)}
-              placeholder="Your Bridge to the Mountains — Jacksonville Advertising Opportunities"
+              placeholder="e.g. Summer 2026 Outdoor Advertising Opportunities"
             />
             <p className="text-[11px] text-muted-foreground">
               The catchy, client-facing title. Shown as the headline on the proposal cover.
@@ -269,7 +269,7 @@ export default function NewCampaign() {
 
           <div className="space-y-2">
             <Label htmlFor="markets">Markets (comma separated)</Label>
-            <Input id="markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="Jacksonville FL, Orlando FL" />
+            <Input id="markets" value={marketsRaw} onChange={(e) => setMarketsRaw(e.target.value)} placeholder="e.g. Miami FL, Tampa FL" />
           </div>
 
           <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
