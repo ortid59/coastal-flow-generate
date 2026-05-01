@@ -977,21 +977,22 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
         }}
       >
         <div style={{ width: "780px" }}>
-        {units.map((u, i) => (
-          <div
-            key={u.id}
-            id={`pdf-quote-${u.id}`}
-            className="bg-white"
-            style={{ width: "780px", padding: "16px" }}
-          >
-            <PrintableQuote
-              unit={u}
-              market={market}
-              campaign={campaign}
-              indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
-            />
-          </div>
-        ))}
+          {units.map((u, i) => (
+            <div
+              key={u.id}
+              id={`pdf-quote-${u.id}`}
+              className="bg-white"
+              style={{ width: "780px", padding: "16px" }}
+            >
+              <PrintableQuote
+                unit={u}
+                market={market}
+                campaign={campaign}
+                indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
