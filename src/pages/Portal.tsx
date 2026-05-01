@@ -723,7 +723,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 }
 
 /* =================== Market Section (carousel) =================== */
-function MarketSection({ market, units, index, campaign }: { market: string; units: Unit[]; index: number; campaign: Campaign | null }) {
+function MarketSection({ market, units, index, campaign, activeTiers }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [selected, setSelected] = useState(0);
 
