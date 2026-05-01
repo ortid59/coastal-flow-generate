@@ -872,7 +872,7 @@ function MarketSection({ market, units, index, campaign, activeTiers }: { market
 }
 
 /* =================== Unit Card (split layout per spec) =================== */
-function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
+function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: string; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
       <div className="grid lg:grid-cols-[45%_55%]">
@@ -903,6 +903,18 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 <Printer className="h-3 w-3" /> PDF
               </button>
             </div>
+            {activeTiers.length >= 2 && (
+              <div className="flex gap-1 flex-wrap mt-1">
+                {activeTiers.filter((t) => unit[t.key]).map((t) => (
+                  <span
+                    key={t.key}
+                    className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[hsl(var(--ocean)/0.1)] text-[hsl(var(--ocean))] border border-[hsl(var(--ocean)/0.2)]"
+                  >
+                    {t.label}
+                  </span>
+                ))}
+              </div>
+            )}
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
               {parseShortAddress(unit.location_description) ||
