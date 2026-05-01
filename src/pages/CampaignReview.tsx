@@ -233,8 +233,19 @@ export default function CampaignReview() {
               ovCanvas.height = Math.round(ovViewport.height);
               const ovCtx = ovCanvas.getContext('2d')!;
               await page.render({ canvasContext: ovCtx, viewport: ovViewport }).promise;
+              // Crop out the vendor header bar (top ~15% of the page)
+              const overviewCrop = { x: 0.0, y: 0.15, w: 1.0, h: 0.85 };
+              const cropCanvas = document.createElement('canvas');
+              const cx = Math.round(ovCanvas.width * overviewCrop.x);
+              const cy = Math.round(ovCanvas.height * overviewCrop.y);
+              const cw = Math.round(ovCanvas.width * overviewCrop.w);
+              const ch = Math.round(ovCanvas.height * overviewCrop.h);
+              cropCanvas.width = cw;
+              cropCanvas.height = ch;
+              const cropCtx = cropCanvas.getContext('2d')!;
+              cropCtx.drawImage(ovCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
               const ovBlob = await new Promise<Blob>((resolve) =>
-                ovCanvas.toBlob((b) => resolve(b!), 'image/png')
+                cropCanvas.toBlob((b) => resolve(b!), 'image/png')
               );
               const ovBytes = new Uint8Array(await ovBlob.arrayBuffer());
               const ovPath = `${id}/overview-map.png`;
