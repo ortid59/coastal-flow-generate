@@ -389,6 +389,14 @@ Deno.serve(async (req) => {
     // We now upsert by (campaign_id, unit_number) so existing units (and their
     // photos / map URLs / manual edits) are preserved across re-parses.
 
+    // Fetch campaign margin_pct for total_cost fallback calculation
+    const { data: campaignData } = await supabase
+      .from("campaigns")
+      .select("margin_pct")
+      .eq("id", campaignId)
+      .single();
+    const marginPct = campaignData?.margin_pct ?? 0;
+
     const summary = {
       campaign_id: campaignId,
       files: [] as Array<{ name: string; rows: number; recommended: number; images_matched: number; overview_images: number }>,
