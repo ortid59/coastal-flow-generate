@@ -597,8 +597,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
             )}
 
             <div className={`${campaign?.vendor_overview_map_url || activeTiers.length >= 2 ? '' : 'mt-16'} space-y-20`}>
-              {byMarket.map(([market, list], idx) => (
-                <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} activeTiers={activeTiers} />
+              {displayedByMarket.map(([market, list], idx) => (
+                <MarketSection key={`${market}-${selectedTier ?? 'all'}`} market={market} units={list} index={idx} campaign={campaign} activeTiers={activeTiers} selectedTier={selectedTier} />
               ))}
             </div>
           </div>
