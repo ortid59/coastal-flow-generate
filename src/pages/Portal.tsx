@@ -44,6 +44,9 @@ type Campaign = {
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
+  show_tier_a: boolean | null;
+  show_tier_b: boolean | null;
+  show_tier_c: boolean | null;
 };
 
 type Unit = {
@@ -77,6 +80,9 @@ type Unit = {
   facing: string | null;
   city: string | null;
   zip: string | null;
+  tier_a: boolean | null;
+  tier_b: boolean | null;
+  tier_c: boolean | null;
 };
 
 const fmtNum = (n: number | null) =>
@@ -104,14 +110,14 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c")
           .eq("id", campaignId)
           .single(),
         supabase
           .from("units")
           .select(
             // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -159,6 +165,17 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     return Array.from(map.entries());
   }, [units]);
 
+  const activeTiers = [
+    campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
+    campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
+    campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+
+  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') =>
+    units
+      .filter((u) => u.included && u[key])
+      .reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+
 
   if (loading) {
     return (
@@ -183,7 +200,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const primaryMarket = campaign.markets?.[0] ?? byMarket[0]?.[0] ?? "—";
 
   return (
-    <div className="min-h-screen bg-background print:bg-white">
+    <div className="min-h-screen bg-background print:bg-white overflow-x-hidden">
       {/* Scroll progress bar */}
       <motion.div
         style={{ scaleX: progress, transformOrigin: "0% 50%" }}
@@ -448,9 +465,36 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </div>
             )}
 
-            <div className={`${campaign?.vendor_overview_map_url ? '' : 'mt-16'} space-y-20`}>
+            {activeTiers.length >= 2 && (
+              <div className="mb-12 p-6 rounded-xl border border-border/40 bg-card shadow-elev-sm">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-6">
+                  Campaign Options
+                </p>
+                <div className="grid md:grid-cols-3 gap-6">
+                  {activeTiers.map((tier) => {
+                    const total = tierTotal(tier.key);
+                    const tierUnits = units.filter((u) => u.included && u[tier.key]);
+                    return (
+                      <div key={tier.key} className="rounded-lg border border-border/30 p-5 bg-muted/20">
+                        <p className="text-sm font-bold uppercase tracking-wide text-foreground mb-1">
+                          {tier.label}
+                        </p>
+                        <p className="text-2xl font-bold text-primary mb-3">
+                          {total > 0 ? `$${total.toLocaleString()}` : '—'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {tierUnits.length} {tierUnits.length === 1 ? 'unit' : 'units'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className={`${campaign?.vendor_overview_map_url || activeTiers.length >= 2 ? '' : 'mt-16'} space-y-20`}>
               {byMarket.map(([market, list], idx) => (
-                <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} />
+                <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} activeTiers={activeTiers} />
               ))}
             </div>
           </div>
@@ -679,7 +723,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 }
 
 /* =================== Market Section (carousel) =================== */
-function MarketSection({ market, units, index, campaign }: { market: string; units: Unit[]; index: number; campaign: Campaign | null }) {
+function MarketSection({ market, units, index, campaign, activeTiers }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [selected, setSelected] = useState(0);
 
@@ -753,7 +797,7 @@ function MarketSection({ market, units, index, campaign }: { market: string; uni
         <div className="flex">
           {units.map((u, i) => (
             <div key={u.id} id={`unit-${u.id}`} className="min-w-0 flex-[0_0_100%] pr-4 scroll-mt-24">
-              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} />
+              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} activeTiers={activeTiers} />
             </div>
           ))}
         </div>
@@ -828,7 +872,7 @@ function MarketSection({ market, units, index, campaign }: { market: string; uni
 }
 
 /* =================== Unit Card (split layout per spec) =================== */
-function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
+function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: string; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
       <div className="grid lg:grid-cols-[45%_55%]">
@@ -859,6 +903,18 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 <Printer className="h-3 w-3" /> PDF
               </button>
             </div>
+            {activeTiers.length >= 2 && (
+              <div className="flex gap-1 flex-wrap mt-1">
+                {activeTiers.filter((t) => unit[t.key]).map((t) => (
+                  <span
+                    key={t.key}
+                    className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[hsl(var(--ocean)/0.1)] text-[hsl(var(--ocean))] border border-[hsl(var(--ocean)/0.2)]"
+                  >
+                    {t.label}
+                  </span>
+                ))}
+              </div>
+            )}
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold uppercase tracking-tight leading-tight text-foreground">
               {parseShortAddress(unit.location_description) ||
