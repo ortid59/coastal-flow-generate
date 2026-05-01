@@ -17,37 +17,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// COLUMN ALLOWLIST — Heather's spec (Change 4):
-// Per the rule that vendor rate/cost columns must NOT be ingested (the
-// system computes client-facing pricing from the campaign margin %), we
-// strip every rate / cost / CPM / production / install / total-cost
-// column from the import. Heather will enter pricing later.
-//
-// Columns we still ingest (display + map + matching purposes only):
-//   - Unit #                  → unit_number    (board ID)
-//   - Latitude / Longitude    → latitude/long  (map matching only, internal)
-//   - 4 Week A18+ Impressions → four_week_impressions
-//   - Weekly A18+ Impressions → weekly_impressions (used to derive 4wk if absent)
-//   - Vendor                  → vendor         (INTERNAL ONLY — never sent to portal)
-//   - Market                  → market         (used by review + portal grouping)
-//   - Format / Size           → format / size  (board card display)
-//   - Location Description    → location_description (board card display + bullets)
-//   - Facing / Read direction → facing / read_direction (review-page detail)
-//   - Spot / Loop length, SOV, # advertisers, dates, periods → review-page detail
-//   - Artwork Due Date, Notes → review-page detail
-//
-// EXPLICITLY EXCLUDED (must never be stored):
-//   - 4 Week Rate Card
-//   - 4 Week Negotiated Rate
-//   - INTERNAL 4-WEEK RATE
-//   - Production
-//   - Install
-//   - Total Cost
-//   - CPM
-//
-// To support a new vendor with different headers: add the canonical header
-// text and a mapped DB column to COLUMN_MAP below. Do NOT add rate/cost
-// columns here.
 const COLUMN_MAP: Record<string, string> = {
   "Market": "market",
   "Vendor": "vendor",
@@ -71,13 +40,29 @@ const COLUMN_MAP: Record<string, string> = {
   "# of Four week Periods": "four_week_periods",
   "Artwork Due Date": "artwork_due_date",
   "Notes": "notes",
-  // Rate / cost columns intentionally absent — see allowlist comment above.
+  // Rate / cost columns
+  "4 Week Negotiated Rate": "negotiated_rate_4wk",
+  "4-Week Negotiated Rate": "negotiated_rate_4wk",
+  "Negotiated Rate": "negotiated_rate_4wk",
+  "Net Rate": "negotiated_rate_4wk",
+  "4 Week Net Rate": "negotiated_rate_4wk",
+  "INTERNAL 4-WEEK RATE": "rate_4week",
+  "4 Week Rate Card": "rate_card_4wk",
+  "Total Cost": "total_cost",
+  "Total": "total_cost",
+  "Total Investment": "total_cost",
+  "Gross Cost": "total_cost",
+  "4 Week Total": "total_cost",
+  "Production": "production_cost",
+  "Install": "install_cost",
+  "CPM": "cpm",
 };
 
 const NUMERIC_FIELDS = new Set([
   "unit_count", "latitude", "longitude", "weekly_impressions",
   "four_week_impressions", "sov_pct", "current_advertisers",
-  "four_week_periods",
+  "four_week_periods", "negotiated_rate_4wk", "rate_card_4wk",
+  "rate_4week", "total_cost", "production_cost", "install_cost", "cpm",
 ]);
 
 const DATE_FIELDS = new Set(["start_date", "end_date", "artwork_due_date"]);
@@ -404,6 +389,14 @@ Deno.serve(async (req) => {
     // We now upsert by (campaign_id, unit_number) so existing units (and their
     // photos / map URLs / manual edits) are preserved across re-parses.
 
+    // Fetch campaign margin_pct for total_cost fallback calculation
+    const { data: campaignData } = await supabase
+      .from("campaigns")
+      .select("margin_pct")
+      .eq("id", campaignId)
+      .single();
+    const marginPct = campaignData?.margin_pct ?? 0;
+
     const summary = {
       campaign_id: campaignId,
       files: [] as Array<{ name: string; rows: number; recommended: number; images_matched: number; overview_images: number }>,
@@ -514,6 +507,17 @@ Deno.serve(async (req) => {
 
         if (row.location_description) {
           row.insight_bullets = splitLocationBullets(row.location_description);
+        }
+
+        // Fallback total_cost calculation from negotiated rate or internal rate
+        const tc = toNumber(row.total_cost);
+        if (!tc || tc <= 0) {
+          const negRate = toNumber(row.negotiated_rate_4wk);
+          const intRate = toNumber(row.rate_4week);
+          const sourceRate = (negRate && negRate > 0) ? negRate : ((intRate && intRate > 0) ? intRate : null);
+          if (sourceRate) {
+            row.total_cost = Math.round(sourceRate * (1 + marginPct / 100));
+          }
         }
 
         inserts.push(row);

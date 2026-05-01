@@ -523,7 +523,11 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                             <p className="text-3xl font-extrabold text-foreground">
                               ${totalCost.toLocaleString()}
                             </p>
-                          ) : null}
+                          ) : (
+                            <p className="text-lg font-semibold text-muted-foreground italic">
+                              Contact for pricing
+                            </p>
+                          )}
                         </div>
 
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
@@ -579,11 +583,21 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 </div>
 
                 <div className="mt-8 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTier
-                      ? `Showing ${activeTiers.find(t => t.key === selectedTier)?.label} — ${displayedUnits.length} units`
-                      : `Showing all ${displayedUnits.length} units`}
-                  </p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTier
+                        ? `Showing ${activeTiers.find(t => t.key === selectedTier)?.label} — ${displayedUnits.length} units`
+                        : `Showing all ${displayedUnits.length} units`}
+                    </p>
+                    {selectedTier && (() => {
+                      const total = tierTotal(selectedTier);
+                      return total > 0 ? (
+                        <p className="text-sm font-semibold text-foreground mt-1">
+                          Estimated investment: {fmtMoney(total)} for {displayedUnits.length} location{displayedUnits.length === 1 ? '' : 's'}
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>
                   {selectedTier && (
                     <button
                       onClick={() => setSelectedTier(null)}
@@ -957,25 +971,28 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
           position: "absolute",
           left: "-10000px",
           top: 0,
-          width: "780px",
-          opacity: 0,
+          width: 0,
+          height: 0,
+          overflow: "hidden",
         }}
       >
-        {units.map((u, i) => (
-          <div
-            key={u.id}
-            id={`pdf-quote-${u.id}`}
-            className="bg-white"
-            style={{ width: "780px", padding: "16px" }}
-          >
-            <PrintableQuote
-              unit={u}
-              market={market}
-              campaign={campaign}
-              indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
-            />
-          </div>
-        ))}
+        <div style={{ width: "780px" }}>
+          {units.map((u, i) => (
+            <div
+              key={u.id}
+              id={`pdf-quote-${u.id}`}
+              className="bg-white"
+              style={{ width: "780px", padding: "16px" }}
+            >
+              <PrintableQuote
+                unit={u}
+                market={market}
+                campaign={campaign}
+                indexLabel={`${String(index + 1).padStart(2, "0")}.${String(i + 1).padStart(2, "0")}`}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
