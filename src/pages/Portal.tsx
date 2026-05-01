@@ -165,6 +165,17 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     return Array.from(map.entries());
   }, [units]);
 
+  const activeTiers = [
+    campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
+    campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
+    campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+
+  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') =>
+    units
+      .filter((u) => u.included && u[key])
+      .reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+
 
   if (loading) {
     return (
