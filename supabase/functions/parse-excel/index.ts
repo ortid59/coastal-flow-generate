@@ -509,6 +509,17 @@ Deno.serve(async (req) => {
           row.insight_bullets = splitLocationBullets(row.location_description);
         }
 
+        // Fallback total_cost calculation from negotiated rate or internal rate
+        const tc = toNumber(row.total_cost);
+        if (!tc || tc <= 0) {
+          const negRate = toNumber(row.negotiated_rate_4wk);
+          const intRate = toNumber(row.rate_4week);
+          const sourceRate = (negRate && negRate > 0) ? negRate : ((intRate && intRate > 0) ? intRate : null);
+          if (sourceRate) {
+            row.total_cost = Math.round(sourceRate * (1 + marginPct / 100));
+          }
+        }
+
         inserts.push(row);
       }
 
