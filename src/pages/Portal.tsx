@@ -901,7 +901,7 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                 <img
                   src={unit.inset_map_url}
                   alt={`Location map for unit ${unit.unit_number}`}
-                  className="h-auto w-full object-cover"
+                  className="h-[180px] w-full object-cover"
                   loading="lazy"
                 />
               </div>
@@ -942,7 +942,7 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative min-h-[300px] lg:min-h-[460px] bg-muted overflow-hidden"
+          className="relative h-[320px] lg:h-[460px] max-h-[460px] bg-muted overflow-hidden flex-shrink-0"
         >
           {unit.billboard_photo_url ? (
             <img
