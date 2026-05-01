@@ -523,7 +523,11 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                             <p className="text-3xl font-extrabold text-foreground">
                               ${totalCost.toLocaleString()}
                             </p>
-                          ) : null}
+                          ) : (
+                            <p className="text-lg font-semibold text-muted-foreground italic">
+                              Contact for pricing
+                            </p>
+                          )}
                         </div>
 
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
