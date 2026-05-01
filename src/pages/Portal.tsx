@@ -860,6 +860,22 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
               </p>
             )}
 
+            {/* Map image extracted from photosheet */}
+            {unit.inset_map_url && (
+              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                <img
+                  src={unit.inset_map_url}
+                  alt={`Location map for unit ${unit.unit_number}`}
+                  className="h-[180px] w-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    const container = (e.target as HTMLElement).parentElement;
+                    if (container) container.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+
             {/* Structured details strip — extracted from photosheet */}
             {(unit.location_description ||
               unit.geopath_id ||
@@ -893,22 +909,6 @@ function UnitCard({ unit, indexLabel }: { unit: Unit; indexLabel: string }) {
                   <DetailKV label="Longitude" value={unit.longitude.toFixed(5)} />
                 )}
               </dl>
-            )}
-
-            {/* Map image extracted from photosheet */}
-            {unit.inset_map_url && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-border">
-                <img
-                  src={unit.inset_map_url}
-                  alt={`Location map for unit ${unit.unit_number}`}
-                  className="h-[180px] w-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    const container = (e.target as HTMLElement).parentElement;
-                    if (container) container.style.display = 'none';
-                  }}
-                />
-              </div>
             )}
           </div>
 
