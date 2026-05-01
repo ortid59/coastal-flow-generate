@@ -827,9 +827,15 @@ function ClosingCTA({ clientName }: { clientName: string }) {
 }
 
 /* =================== Market Section (carousel) =================== */
-function MarketSection({ market, units, index, campaign, activeTiers }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
+function MarketSection({ market, units, index, campaign, activeTiers, selectedTier }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[]; selectedTier?: 'tier_a' | 'tier_b' | 'tier_c' | null }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
   const [selected, setSelected] = useState(0);
+
+  // Reset carousel index when tier filter changes
+  useEffect(() => {
+    setSelected(0);
+    emblaApi?.scrollTo(0);
+  }, [selectedTier, emblaApi]);
 
   useEffect(() => {
     if (!emblaApi) return;
