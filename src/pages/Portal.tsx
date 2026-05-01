@@ -797,7 +797,7 @@ function MarketSection({ market, units, index, campaign, activeTiers }: { market
         <div className="flex">
           {units.map((u, i) => (
             <div key={u.id} id={`unit-${u.id}`} className="min-w-0 flex-[0_0_100%] pr-4 scroll-mt-24">
-              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} />
+              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} activeTiers={activeTiers} />
             </div>
           ))}
         </div>
