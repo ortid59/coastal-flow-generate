@@ -465,7 +465,34 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </div>
             )}
 
-            <div className={`${campaign?.vendor_overview_map_url ? '' : 'mt-16'} space-y-20`}>
+            {activeTiers.length >= 2 && (
+              <div className="mb-12 p-6 rounded-xl border border-border/40 bg-card shadow-elev-sm">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-6">
+                  Campaign Options
+                </p>
+                <div className="grid md:grid-cols-3 gap-6">
+                  {activeTiers.map((tier) => {
+                    const total = tierTotal(tier.key);
+                    const tierUnits = units.filter((u) => u.included && u[tier.key]);
+                    return (
+                      <div key={tier.key} className="rounded-lg border border-border/30 p-5 bg-muted/20">
+                        <p className="text-sm font-bold uppercase tracking-wide text-foreground mb-1">
+                          {tier.label}
+                        </p>
+                        <p className="text-2xl font-bold text-primary mb-3">
+                          {total > 0 ? `$${total.toLocaleString()}` : '—'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {tierUnits.length} {tierUnits.length === 1 ? 'unit' : 'units'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className={`${campaign?.vendor_overview_map_url || activeTiers.length >= 2 ? '' : 'mt-16'} space-y-20`}>
               {byMarket.map(([market, list], idx) => (
                 <MarketSection key={market} market={market} units={list} index={idx} campaign={campaign} />
               ))}
