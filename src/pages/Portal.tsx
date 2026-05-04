@@ -370,83 +370,10 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </div>
       </section>
 
-      {/* ===== UNIT INDEX (2-column tile listing) ===== */}
-      <PortalIndexBar units={units} />
-
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
       <WhoWeAre />
 
-
-      {/* ===== SECTION 3 — MARKET OVERVIEW ===== */}
-      {byMarket.length > 0 && (
-        <section className="bg-card">
-          {/* Banner header */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="bg-gradient-ocean text-[hsl(var(--ocean-foreground))]"
-          >
-            <div className="container-app py-10 md:py-14 text-center">
-              <h2 className="font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight">
-                {primaryMarket} — Market Overview
-              </h2>
-              <p className="mt-3 text-sm md:text-base text-[hsl(var(--ocean-foreground))]/85 italic">
-                Active Adults 25–45 · High-Traffic Corridors
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Corridor cards */}
-          <div className="container-app py-16 md:py-20">
-            <div className="grid gap-6 md:grid-cols-3">
-              {byMarket.slice(0, 3).map(([market, list], i) => {
-                const corridorImps = list.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-                return (
-                  <motion.div
-                    key={market}
-                    initial={{ opacity: 0, y: 32 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-60px" }}
-                    transition={{ duration: 0.7, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-                    whileHover={{ y: -6 }}
-                    className="relative overflow-hidden rounded-2xl bg-card border border-border p-8 shadow-elev-sm transition-shadow hover:shadow-elev-md"
-                  >
-                    <span className="absolute top-0 left-0 right-0 h-[4px] bg-[hsl(var(--accent-gold))]" />
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
-                      Corridor {String(i + 1).padStart(2, "0")}
-                    </div>
-                    <h3 className="mt-3 font-heading text-xl md:text-2xl font-bold uppercase tracking-tight text-foreground leading-tight">
-                      {market}
-                    </h3>
-                    <CountUp
-                      value={corridorImps}
-                      className="mt-6 block num-display text-[hsl(var(--ocean))] leading-none"
-                    />
-                    <style>{``}</style>
-                    <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      4-Week Impressions
-                    </div>
-                    <div className="mt-4 text-xs text-muted-foreground">
-                      {list.length} unit{list.length === 1 ? "" : "s"}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Date strip */}
-          <div className="bg-secondary">
-            <div className="container-app py-4 text-center text-sm font-medium text-foreground">
-              {flightLabel}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ===== SECTION 4 — RECOMMENDED PLACEMENTS ===== */}
+      {/* ===== SECTION 3 — RECOMMENDED PLACEMENTS ===== */}
       {byMarket.length > 0 && (
         <section className="bg-[hsl(var(--off-white))]">
           <div className="container-app py-20 md:py-28">
@@ -462,17 +389,18 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 Recommended Placements
               </h2>
               <span className="mx-auto mt-5 gold-rule" />
-              <p className="mx-auto mt-6 max-w-2xl text-muted-foreground">
-                Hand-picked units across {byMarket.length} market
-                {byMarket.length === 1 ? "" : "s"}, optimized for visibility and impact.
-              </p>
             </motion.div>
 
+            {/* Campaign Coverage Map */}
             {campaign?.vendor_overview_map_url && (
               <div className="mb-10 mt-16">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  Campaign Coverage Map
-                </p>
+                <div className="text-center mb-8">
+                  <div className="eyebrow">Coverage</div>
+                  <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
+                    Campaign Coverage Map
+                  </h2>
+                  <span className="mx-auto mt-5 gold-rule" />
+                </div>
                 <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
                   <img
                     src={campaign.vendor_overview_map_url}
@@ -484,6 +412,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </div>
             )}
 
+            {/* Campaign Options */}
             {activeTiers.length >= 2 && (
               <div className="mb-14">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-5">
@@ -625,13 +554,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
         </section>
       )}
 
-      {/* ===== SECTION 6 — NEXT STEPS ===== */}
+      {/* ===== PROPOSAL INDEX ===== */}
+      <PortalIndexBar units={units} />
+
+      {/* ===== NEXT STEPS ===== */}
       <NextSteps />
 
       {/* ===== MEET THE TEAM ===== */}
       <MeetTheTeam />
 
-      {/* ===== SECTION 7 — CLOSING / CTA ===== */}
+      {/* ===== CLOSING / CTA ===== */}
       <ClosingCTA clientName={campaign.client_name} />
 
       {/* Footer */}
