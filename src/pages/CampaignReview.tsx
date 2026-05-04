@@ -579,6 +579,52 @@ export default function CampaignReview() {
             more pricing tiers shown in the proposal.
           </p>
 
+          {/* Batch action buttons */}
+          <div className="mb-4 flex items-center gap-1 overflow-x-auto pb-1">
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error, count } = await supabase.from("units").update({ included: true } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, included: true })));
+              toast({ title: `Included all ${units.length} units` });
+            }}>Include All</Button>
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error } = await supabase.from("units").update({ included: false } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, included: false })));
+              toast({ title: `Excluded all ${units.length} units` });
+            }}>Exclude All</Button>
+
+            <div className="mx-1 h-5 w-px bg-border shrink-0" />
+
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error } = await supabase.from("units").update({ recommended: false } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, recommended: false })));
+              toast({ title: `Cleared recommended on ${units.length} units` });
+            }}>Clear Recommended</Button>
+
+            <div className="mx-1 h-5 w-px bg-border shrink-0" />
+
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error } = await supabase.from("units").update({ tier_a: false } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, tier_a: false })));
+              toast({ title: `Reset Option A on ${units.length} units` });
+            }}>Reset A</Button>
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error } = await supabase.from("units").update({ tier_b: false } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, tier_b: false })));
+              toast({ title: `Reset Option B on ${units.length} units` });
+            }}>Reset B</Button>
+            <Button variant="outline" size="sm" onClick={async () => {
+              const { error } = await supabase.from("units").update({ tier_c: false } as any).eq("campaign_id", id!);
+              if (error) { toast({ title: "Failed", description: error.message, variant: "destructive" }); return; }
+              setUnits(prev => prev.map(u => ({ ...u, tier_c: false })));
+              toast({ title: `Reset Option C on ${units.length} units` });
+            }}>Reset C</Button>
+          </div>
+
           {/* Campaign-level tier master switches with running totals (Change 3C) */}
           {campaign && (
             <section className="surface-card mb-6 p-5">
