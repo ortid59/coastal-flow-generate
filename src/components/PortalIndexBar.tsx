@@ -113,6 +113,9 @@ export function PortalIndexBar({ units }: Props) {
                       {u.format && (u.market || weekly != null) && <span aria-hidden>·</span>}
                       {u.market && <span>{u.market}</span>}
                     </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground font-mono">
+                      #{u.unit_number}
+                    </div>
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span className="tabular-nums">{fmtCompactImpressions(weekly)}</span>
                       <span aria-hidden>·</span>
