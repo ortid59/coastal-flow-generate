@@ -13,6 +13,7 @@ import CampaignReview from "./pages/CampaignReview";
 import PortalPreview from "./pages/PortalPreview";
 import Settings from "./pages/Settings";
 import PortalGate from "./pages/PortalGate";
+import ProposalPrint from "./pages/ProposalPrint";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/proposal-print/:campaignId"
+              element={
+                <ProtectedRoute>
+                  <ProposalPrint />
                 </ProtectedRoute>
               }
             />
