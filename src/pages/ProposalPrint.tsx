@@ -184,7 +184,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER ===== */}
-        <section className="mb-0">
+        <section className="print-cover-section mb-0">
           <div className="flex items-start justify-between mb-6">
             <Logo size={40} />
             {campaign.client_logo_url && (
@@ -213,7 +213,7 @@ export default function ProposalPrint() {
           </div>
           {heroPhoto && (
             <div className="mt-8 rounded-lg overflow-hidden border border-gray-200">
-              <img src={heroPhoto} alt="Featured billboard" className="w-full h-64 object-cover" />
+              <img src={heroPhoto} alt="Featured billboard" className="w-full h-64 print-cover-hero object-cover" />
             </div>
           )}
         </section>
