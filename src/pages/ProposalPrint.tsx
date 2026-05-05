@@ -415,7 +415,7 @@ export default function ProposalPrint() {
             </div>
 
             {/* Unit header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-mono text-xs text-gray-400 mb-1">#{unit.unit_number}</p>
                 <h3 className="text-xl font-bold text-gray-900">
