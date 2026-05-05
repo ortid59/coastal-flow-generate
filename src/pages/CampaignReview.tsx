@@ -530,6 +530,14 @@ export default function CampaignReview() {
               <Eye className="h-4 w-4" /> Preview presentation
             </Link>
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={units.length === 0}
+            onClick={() => window.open(`/proposal-print/${id}`, '_blank')}
+          >
+            <FileText className="h-4 w-4" /> Download Full Proposal PDF
+          </Button>
           <div className="ml-auto" />
           <Button
             size="sm"
