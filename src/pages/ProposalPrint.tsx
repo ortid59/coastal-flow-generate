@@ -377,9 +377,25 @@ export default function ProposalPrint() {
           </section>
         </div>
 
-        {/* ===== MEET THE TEAM ===== */}
+        {/* ===== MEET THE TEAM (print-safe) ===== */}
         <div className="print-page-break">
-          <MeetTheTeam />
+          <section className="py-10">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">The Team</p>
+            <h2 className="text-3xl font-bold uppercase tracking-tight text-gray-900 mb-8">Meet The Team</h2>
+            <div className="mt-2 h-[3px] w-16 bg-amber-500 rounded-full mb-8" />
+            <div className="grid grid-cols-3 gap-8">
+              {[
+                { name: "Heather", role: "Founder & CEO" },
+                { name: "Via", role: "Creative Media Coordinator" },
+                { name: "Roxie", role: "Chief Happiness Officer" },
+              ].map((m) => (
+                <div key={m.name} className="text-center">
+                  <h3 className="text-lg font-bold uppercase tracking-wide text-gray-900">{m.name}</h3>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-500">{m.role}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* ===== INDIVIDUAL UNIT PAGES ===== */}
