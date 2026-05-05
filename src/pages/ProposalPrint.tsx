@@ -400,17 +400,17 @@ export default function ProposalPrint() {
 
         {/* ===== INDIVIDUAL UNIT PAGES ===== */}
         {units.map((unit) => (
-          <article key={unit.id} className="print-unit-page print-page-break py-8">
+          <article key={unit.id} className="print-unit-page print-page-break py-6">
             {/* Billboard photo */}
-            <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
+            <div className="rounded-lg overflow-hidden border border-gray-200 mb-4">
               {unit.billboard_photo_url ? (
                 <img
                   src={unit.billboard_photo_url}
                   alt={`Unit ${unit.unit_number}`}
-                  className="w-full h-72 object-cover"
+                  className="w-full h-56 print-unit-photo object-cover"
                 />
               ) : (
-                <div className="w-full h-72 flex items-center justify-center bg-gray-100 text-gray-400">
+                <div className="w-full h-56 print-unit-photo flex items-center justify-center bg-gray-100 text-gray-400">
                   <ImageOff className="h-12 w-12" />
                 </div>
               )}
