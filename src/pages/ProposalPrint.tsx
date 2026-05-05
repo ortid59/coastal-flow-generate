@@ -5,8 +5,6 @@ import { Loader2, MapPin, Calendar, Sparkles, Eye, DollarSign, Ruler, ImageOff }
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
-import { WhoWeAre } from "@/components/WhoWeAre";
-import { MeetTheTeam } from "@/components/MeetTheTeam";
 
 type Campaign = {
   id: string;
@@ -142,14 +140,27 @@ export default function ProposalPrint() {
     <>
       {/* Print-only styles */}
       <style>{`
+        @page { size: Letter; margin: 0.6in; }
         @media print {
-          @page { size: Letter; margin: 0.75in; }
-          body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; animation: none !important; transition: none !important; }
+          body { background: white !important; color: black !important; }
           .no-print { display: none !important; }
           .print-page-break { page-break-before: always; }
-          .print-unit-page { page-break-after: always; }
-          * { animation: none !important; transition: none !important; }
+          .print-unit-page { page-break-inside: avoid; page-break-after: always; }
           nav, header, footer, .sticky { display: none !important; }
+
+          /* P2 — Cover hero compact */
+          .print-cover-section { page-break-after: always; }
+          .print-cover-hero { height: 200px !important; max-height: 200px !important; }
+
+          /* P3 — Unit card fits one page */
+          .print-unit-page .print-unit-photo { height: 240px !important; max-height: 240px !important; }
+
+          /* P4 — Who We Are: hide decorative overlap layer */
+          .print-wwa-hide { display: none !important; }
+
+          /* P5 — Team: hide empty photo circles */
+          .print-team-photo-empty { display: none !important; }
         }
         @media screen {
           .proposal-print-root { max-width: 850px; margin: 0 auto; padding: 24px; }
@@ -171,7 +182,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER ===== */}
-        <section className="mb-0">
+        <section className="print-cover-section mb-0">
           <div className="flex items-start justify-between mb-6">
             <Logo size={40} />
             {campaign.client_logo_url && (
@@ -200,14 +211,31 @@ export default function ProposalPrint() {
           </div>
           {heroPhoto && (
             <div className="mt-8 rounded-lg overflow-hidden border border-gray-200">
-              <img src={heroPhoto} alt="Featured billboard" className="w-full h-64 object-cover" />
+              <img src={heroPhoto} alt="Featured billboard" className="w-full h-64 print-cover-hero object-cover" />
             </div>
           )}
         </section>
 
-        {/* ===== WHO WE ARE ===== */}
+        {/* ===== WHO WE ARE (print-safe) ===== */}
         <div className="print-page-break">
-          <WhoWeAre />
+          <section className="py-10">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">About the Agency</p>
+            <h2 className="text-3xl font-bold uppercase tracking-tight text-gray-900">Who We Are</h2>
+            <div className="mt-2 h-[3px] w-16 bg-amber-500 rounded-full" />
+            <div className="mt-6 space-y-4">
+              <p className="text-base text-gray-600 leading-relaxed">
+                <span className="font-semibold text-gray-900">Coastal Maverick</span> is a woman-owned boutique out-of-home (OOH) media agency specializing in high-impact, highly customized OOH campaigns. From concept to completion, we serve as a strategic partner for brands looking to make a bold visual statement in the physical world.
+              </p>
+              <p className="text-base text-gray-600 leading-relaxed">
+                With 360-degree experience across media owner, client, and agency sides, we bring a unique perspective that fuels smarter strategy and greater impact.
+              </p>
+              <ul className="mt-4 space-y-2 border-l-[3px] border-amber-500 pl-4">
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Woman-Owned.</li>
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Boutique.</li>
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Built for Impact.</li>
+              </ul>
+            </div>
+          </section>
         </div>
 
         {/* ===== RECOMMENDED PLACEMENTS + MAP ===== */}
@@ -347,31 +375,47 @@ export default function ProposalPrint() {
           </section>
         </div>
 
-        {/* ===== MEET THE TEAM ===== */}
+        {/* ===== MEET THE TEAM (print-safe) ===== */}
         <div className="print-page-break">
-          <MeetTheTeam />
+          <section className="py-10">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">The Team</p>
+            <h2 className="text-3xl font-bold uppercase tracking-tight text-gray-900 mb-8">Meet The Team</h2>
+            <div className="mt-2 h-[3px] w-16 bg-amber-500 rounded-full mb-8" />
+            <div className="grid grid-cols-3 gap-8">
+              {[
+                { name: "Heather", role: "Founder & CEO" },
+                { name: "Via", role: "Creative Media Coordinator" },
+                { name: "Roxie", role: "Chief Happiness Officer" },
+              ].map((m) => (
+                <div key={m.name} className="text-center">
+                  <h3 className="text-lg font-bold uppercase tracking-wide text-gray-900">{m.name}</h3>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-gray-500">{m.role}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* ===== INDIVIDUAL UNIT PAGES ===== */}
         {units.map((unit) => (
-          <article key={unit.id} className="print-unit-page print-page-break py-8">
+          <article key={unit.id} className="print-unit-page print-page-break py-6">
             {/* Billboard photo */}
-            <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
+            <div className="rounded-lg overflow-hidden border border-gray-200 mb-4">
               {unit.billboard_photo_url ? (
                 <img
                   src={unit.billboard_photo_url}
                   alt={`Unit ${unit.unit_number}`}
-                  className="w-full h-72 object-cover"
+                  className="w-full h-56 print-unit-photo object-cover"
                 />
               ) : (
-                <div className="w-full h-72 flex items-center justify-center bg-gray-100 text-gray-400">
+                <div className="w-full h-56 print-unit-photo flex items-center justify-center bg-gray-100 text-gray-400">
                   <ImageOff className="h-12 w-12" />
                 </div>
               )}
             </div>
 
             {/* Unit header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-mono text-xs text-gray-400 mb-1">#{unit.unit_number}</p>
                 <h3 className="text-xl font-bold text-gray-900">
@@ -389,7 +433,7 @@ export default function ProposalPrint() {
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-3 mb-4">
               <StatBox label="Format" value={unit.format ?? "—"} />
               <StatBox label="Size" value={unit.size ?? "—"} />
               <StatBox label="4-Wk Impressions" value={fmtNum(unit.four_week_impressions)} />
@@ -397,7 +441,7 @@ export default function ProposalPrint() {
             </div>
 
             {/* Additional details row */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               {/* Highlights */}
               {(unit.highlights || (unit.insight_bullets && unit.insight_bullets.length > 0)) && (
                 <div className="border border-gray-200 rounded-lg p-4">
