@@ -142,14 +142,27 @@ export default function ProposalPrint() {
     <>
       {/* Print-only styles */}
       <style>{`
+        @page { size: Letter; margin: 0.6in; }
         @media print {
-          @page { size: Letter; margin: 0.75in; }
-          body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; animation: none !important; transition: none !important; }
+          body { background: white !important; color: black !important; }
           .no-print { display: none !important; }
           .print-page-break { page-break-before: always; }
-          .print-unit-page { page-break-after: always; }
-          * { animation: none !important; transition: none !important; }
+          .print-unit-page { page-break-inside: avoid; page-break-after: always; }
           nav, header, footer, .sticky { display: none !important; }
+
+          /* P2 — Cover hero compact */
+          .print-cover-section { page-break-after: always; }
+          .print-cover-hero { height: 200px !important; max-height: 200px !important; }
+
+          /* P3 — Unit card fits one page */
+          .print-unit-page .print-unit-photo { height: 240px !important; max-height: 240px !important; }
+
+          /* P4 — Who We Are: hide decorative overlap layer */
+          .print-wwa-hide { display: none !important; }
+
+          /* P5 — Team: hide empty photo circles */
+          .print-team-photo-empty { display: none !important; }
         }
         @media screen {
           .proposal-print-root { max-width: 850px; margin: 0 auto; padding: 24px; }
