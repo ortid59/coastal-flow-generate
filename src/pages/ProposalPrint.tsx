@@ -433,7 +433,7 @@ export default function ProposalPrint() {
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-3 mb-4">
               <StatBox label="Format" value={unit.format ?? "—"} />
               <StatBox label="Size" value={unit.size ?? "—"} />
               <StatBox label="4-Wk Impressions" value={fmtNum(unit.four_week_impressions)} />
