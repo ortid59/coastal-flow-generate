@@ -5,8 +5,6 @@ import { Loader2, MapPin, Calendar, Sparkles, Eye, DollarSign, Ruler, ImageOff }
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
-import { WhoWeAre } from "@/components/WhoWeAre";
-import { MeetTheTeam } from "@/components/MeetTheTeam";
 
 type Campaign = {
   id: string;
