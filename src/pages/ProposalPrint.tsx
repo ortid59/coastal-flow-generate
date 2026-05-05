@@ -441,7 +441,7 @@ export default function ProposalPrint() {
             </div>
 
             {/* Additional details row */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               {/* Highlights */}
               {(unit.highlights || (unit.insight_bullets && unit.insight_bullets.length > 0)) && (
                 <div className="border border-gray-200 rounded-lg p-4">
