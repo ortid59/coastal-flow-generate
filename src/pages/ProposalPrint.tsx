@@ -218,9 +218,26 @@ export default function ProposalPrint() {
           )}
         </section>
 
-        {/* ===== WHO WE ARE ===== */}
+        {/* ===== WHO WE ARE (print-safe) ===== */}
         <div className="print-page-break">
-          <WhoWeAre />
+          <section className="py-10">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">About the Agency</p>
+            <h2 className="text-3xl font-bold uppercase tracking-tight text-gray-900">Who We Are</h2>
+            <div className="mt-2 h-[3px] w-16 bg-amber-500 rounded-full" />
+            <div className="mt-6 space-y-4">
+              <p className="text-base text-gray-600 leading-relaxed">
+                <span className="font-semibold text-gray-900">Coastal Maverick</span> is a woman-owned boutique out-of-home (OOH) media agency specializing in high-impact, highly customized OOH campaigns. From concept to completion, we serve as a strategic partner for brands looking to make a bold visual statement in the physical world.
+              </p>
+              <p className="text-base text-gray-600 leading-relaxed">
+                With 360-degree experience across media owner, client, and agency sides, we bring a unique perspective that fuels smarter strategy and greater impact.
+              </p>
+              <ul className="mt-4 space-y-2 border-l-[3px] border-amber-500 pl-4">
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Woman-Owned.</li>
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Boutique.</li>
+                <li className="text-lg font-semibold uppercase tracking-wide text-gray-900">Built for Impact.</li>
+              </ul>
+            </div>
+          </section>
         </div>
 
         {/* ===== RECOMMENDED PLACEMENTS + MAP ===== */}
