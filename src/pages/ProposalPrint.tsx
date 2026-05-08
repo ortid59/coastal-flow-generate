@@ -123,11 +123,27 @@ export default function ProposalPrint() {
   }, [campaignId]);
 
   useEffect(() => {
-    if (!loading && campaign) {
-      const t = setTimeout(() => window.print(), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [loading, campaign]);
+    if (loading || !campaign) return;
+    const waitForImages = () => {
+      const images = Array.from(document.querySelectorAll("img"));
+      if (images.length === 0) {
+        window.print();
+        return;
+      }
+      const promises = images.map((img) => {
+        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      });
+      Promise.all(promises).then(() => {
+        setTimeout(() => window.print(), 400);
+      });
+    };
+    const t = setTimeout(waitForImages, 1000);
+    return () => clearTimeout(t);
+  }, [loading, campaign, units]);
 
   if (loading) {
     return (
@@ -185,6 +201,66 @@ export default function ProposalPrint() {
           .print-section-page { page-break-after: always; page-break-inside: avoid; }
           .print-unit-page { page-break-after: always; page-break-inside: avoid; }
           img[src=""], img:not([src]) { display: none; }
+
+          /* ── Cover: never bleed onto a second page ── */
+          .print-cover-section {
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            page-break-after: always !important;
+          }
+
+          /* ── Who We Are: kill stacked watermark + decorative layers ── */
+          .print-who-wrapper [aria-hidden="true"] { display: none !important; }
+          .print-who-wrapper [style*="opacity: 0"],
+          .print-who-wrapper [style*="opacity:0"] { opacity: 1 !important; }
+
+          /* ── Meet The Team: keep all 3 cards on one page ── */
+          .print-team-section { page-break-inside: avoid !important; }
+          .print-team-section section { padding-top: 40px !important; padding-bottom: 40px !important; }
+          .print-team-section .grid {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 16px !important;
+            justify-content: center !important;
+          }
+          .print-team-section .grid > * {
+            flex: 0 0 30% !important;
+            page-break-inside: avoid !important;
+            padding: 16px !important;
+          }
+          .print-team-section .grid img {
+            width: 110px !important;
+            height: 110px !important;
+          }
+          .print-team-section .grid .h-44 {
+            height: 110px !important;
+            width: 110px !important;
+          }
+
+          /* ── Dark navy section pages: readable text + trim height ── */
+          .print-dark-section {
+            background-color: #0A1628 !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding-top: 60px !important;
+            padding-bottom: 60px !important;
+          }
+          .print-dark-section h1,
+          .print-dark-section h2,
+          .print-dark-section h3,
+          .print-dark-section p,
+          .print-dark-section span,
+          .print-dark-section div,
+          .print-dark-section a,
+          .print-dark-section blockquote {
+            color: #ffffff !important;
+          }
+          .print-dark-section .gold-text,
+          .print-dark-section [data-gold] { color: #C9A84C !important; }
+          .print-dark-section .step-circle {
+            border-color: #C9A84C !important;
+            color: #C9A84C !important;
+          }
         }
         @media screen {
           .print-page-wrapper { max-width: 820px; margin: 0 auto; }
@@ -197,7 +273,7 @@ export default function ProposalPrint() {
         {/* Screen-only info bar */}
         <div className="no-print p-4 bg-muted flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Full proposal preview — use your browser's Print / Save as PDF to download.
+            Full proposal preview — use your browser's Print / Save as PDF to download. Tip: in the print dialog, turn off "Headers and Footers" for a clean PDF.
           </span>
           <button
             onClick={() => window.print()}
@@ -208,10 +284,10 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
-              <img src={heroPhoto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={heroPhoto} alt="" loading="eager" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           )}
           <div style={{ position: "relative", zIndex: 1, padding: "40px" }}>
@@ -226,34 +302,24 @@ export default function ProposalPrint() {
             <p style={{ marginTop: 24, fontSize: 16, color: MUTED }}>
               Prepared for <span style={{ fontWeight: 700, color: WHITE }}>{campaign.client_name}</span>
             </p>
-            <div style={{ marginTop: 28, display: "flex", gap: 32, justifyContent: "center", fontSize: 13, color: MUTED }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Calendar className="h-4 w-4" style={{ color: GOLD }} />
-                {flightLabel}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <MapPin className="h-4 w-4" style={{ color: GOLD }} />
-                {primaryMarket}
-              </span>
-            </div>
             {campaign.client_logo_url && (
-              <img src={campaign.client_logo_url} alt={campaign.client_name} style={{ marginTop: 28, height: 48, width: "auto", margin: "28px auto 0", borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 6 }} />
+              <img src={campaign.client_logo_url} alt={campaign.client_name} loading="eager" style={{ marginTop: 28, height: 48, width: "auto", margin: "28px auto 0", borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 6 }} />
             )}
           </div>
         </section>
 
         {/* ===== WHO WE ARE ===== */}
-        <div className="print-section-page">
+        <div className="print-section-page print-who-wrapper">
           <WhoWeAre />
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
         {campaign.vendor_overview_map_url && (
-          <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+          <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
-            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
+            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
           </section>
         )}
 
@@ -270,7 +336,7 @@ export default function ProposalPrint() {
         ))}
 
         {/* ===== NEXT STEPS ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
           <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>Next Steps</h2>
           <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 48 }} />
@@ -282,21 +348,21 @@ export default function ProposalPrint() {
               { n: "04", title: "Campaign Goes Live", body: "Creative installed, monitoring begins." },
             ].map((s) => (
               <div key={s.n} style={{ textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${OCEAN}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: OCEAN }}>{s.n}</div>
+                <div className="step-circle" style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: GOLD }}>{s.n}</div>
                 <h3 style={{ marginTop: 16, fontFamily: "Montserrat, sans-serif", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>{s.title}</h3>
-                <p style={{ marginTop: 8, fontSize: 13, color: MUTED, lineHeight: 1.5 }}>{s.body}</p>
+                <p style={{ marginTop: 8, fontSize: 13, color: WHITE, lineHeight: 1.5 }}>{s.body}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* ===== MEET THE TEAM ===== */}
-        <div className="print-section-page">
+        <div className="print-section-page print-team-section">
           <MeetTheTeam />
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
             <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>Coastal Maverick Media</p>
@@ -492,6 +558,7 @@ function PhotoBox({ src, label }: { src: string | null; label: string }) {
         <img
           src={src}
           alt={label}
+          loading="eager"
           crossOrigin="anonymous"
           style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
         />
