@@ -558,6 +558,7 @@ function PhotoBox({ src, label }: { src: string | null; label: string }) {
         <img
           src={src}
           alt={label}
+          loading="eager"
           crossOrigin="anonymous"
           style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
         />
