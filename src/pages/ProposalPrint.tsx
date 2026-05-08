@@ -201,6 +201,66 @@ export default function ProposalPrint() {
           .print-section-page { page-break-after: always; page-break-inside: avoid; }
           .print-unit-page { page-break-after: always; page-break-inside: avoid; }
           img[src=""], img:not([src]) { display: none; }
+
+          /* ── Cover: never bleed onto a second page ── */
+          .print-cover-section {
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            page-break-after: always !important;
+          }
+
+          /* ── Who We Are: kill stacked watermark + decorative layers ── */
+          .print-who-wrapper [aria-hidden="true"] { display: none !important; }
+          .print-who-wrapper [style*="opacity: 0"],
+          .print-who-wrapper [style*="opacity:0"] { opacity: 1 !important; }
+
+          /* ── Meet The Team: keep all 3 cards on one page ── */
+          .print-team-section { page-break-inside: avoid !important; }
+          .print-team-section section { padding-top: 40px !important; padding-bottom: 40px !important; }
+          .print-team-section .grid {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 16px !important;
+            justify-content: center !important;
+          }
+          .print-team-section .grid > * {
+            flex: 0 0 30% !important;
+            page-break-inside: avoid !important;
+            padding: 16px !important;
+          }
+          .print-team-section .grid img {
+            width: 110px !important;
+            height: 110px !important;
+          }
+          .print-team-section .grid .h-44 {
+            height: 110px !important;
+            width: 110px !important;
+          }
+
+          /* ── Dark navy section pages: readable text + trim height ── */
+          .print-dark-section {
+            background-color: #0A1628 !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding-top: 60px !important;
+            padding-bottom: 60px !important;
+          }
+          .print-dark-section h1,
+          .print-dark-section h2,
+          .print-dark-section h3,
+          .print-dark-section p,
+          .print-dark-section span,
+          .print-dark-section div,
+          .print-dark-section a,
+          .print-dark-section blockquote {
+            color: #ffffff !important;
+          }
+          .print-dark-section .gold-text,
+          .print-dark-section [data-gold] { color: #C9A84C !important; }
+          .print-dark-section .step-circle {
+            border-color: #C9A84C !important;
+            color: #C9A84C !important;
+          }
         }
         @media screen {
           .print-page-wrapper { max-width: 820px; margin: 0 auto; }
