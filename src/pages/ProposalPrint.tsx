@@ -123,11 +123,27 @@ export default function ProposalPrint() {
   }, [campaignId]);
 
   useEffect(() => {
-    if (!loading && campaign) {
-      const t = setTimeout(() => window.print(), 1200);
-      return () => clearTimeout(t);
-    }
-  }, [loading, campaign]);
+    if (loading || !campaign) return;
+    const waitForImages = () => {
+      const images = Array.from(document.querySelectorAll("img"));
+      if (images.length === 0) {
+        window.print();
+        return;
+      }
+      const promises = images.map((img) => {
+        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      });
+      Promise.all(promises).then(() => {
+        setTimeout(() => window.print(), 400);
+      });
+    };
+    const t = setTimeout(waitForImages, 1000);
+    return () => clearTimeout(t);
+  }, [loading, campaign, units]);
 
   if (loading) {
     return (
