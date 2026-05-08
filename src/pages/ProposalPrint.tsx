@@ -273,7 +273,7 @@ export default function ProposalPrint() {
         {/* Screen-only info bar */}
         <div className="no-print p-4 bg-muted flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Full proposal preview — use your browser's Print / Save as PDF to download.
+            Full proposal preview — use your browser's Print / Save as PDF to download. Tip: in the print dialog, turn off "Headers and Footers" for a clean PDF.
           </span>
           <button
             onClick={() => window.print()}
