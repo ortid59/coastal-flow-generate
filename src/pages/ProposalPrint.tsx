@@ -336,7 +336,7 @@ export default function ProposalPrint() {
         ))}
 
         {/* ===== NEXT STEPS ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
           <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>Next Steps</h2>
           <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 48 }} />
@@ -348,21 +348,21 @@ export default function ProposalPrint() {
               { n: "04", title: "Campaign Goes Live", body: "Creative installed, monitoring begins." },
             ].map((s) => (
               <div key={s.n} style={{ textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${OCEAN}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: OCEAN }}>{s.n}</div>
+                <div className="step-circle" style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: GOLD }}>{s.n}</div>
                 <h3 style={{ marginTop: 16, fontFamily: "Montserrat, sans-serif", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>{s.title}</h3>
-                <p style={{ marginTop: 8, fontSize: 13, color: MUTED, lineHeight: 1.5 }}>{s.body}</p>
+                <p style={{ marginTop: 8, fontSize: 13, color: WHITE, lineHeight: 1.5 }}>{s.body}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* ===== MEET THE TEAM ===== */}
-        <div className="print-section-page">
+        <div className="print-section-page print-team-section">
           <MeetTheTeam />
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
             <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>Coastal Maverick Media</p>
