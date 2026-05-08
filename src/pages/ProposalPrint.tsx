@@ -284,10 +284,10 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
-              <img src={heroPhoto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={heroPhoto} alt="" loading="eager" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           )}
           <div style={{ position: "relative", zIndex: 1, padding: "40px" }}>
@@ -302,34 +302,24 @@ export default function ProposalPrint() {
             <p style={{ marginTop: 24, fontSize: 16, color: MUTED }}>
               Prepared for <span style={{ fontWeight: 700, color: WHITE }}>{campaign.client_name}</span>
             </p>
-            <div style={{ marginTop: 28, display: "flex", gap: 32, justifyContent: "center", fontSize: 13, color: MUTED }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Calendar className="h-4 w-4" style={{ color: GOLD }} />
-                {flightLabel}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <MapPin className="h-4 w-4" style={{ color: GOLD }} />
-                {primaryMarket}
-              </span>
-            </div>
             {campaign.client_logo_url && (
-              <img src={campaign.client_logo_url} alt={campaign.client_name} style={{ marginTop: 28, height: 48, width: "auto", margin: "28px auto 0", borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 6 }} />
+              <img src={campaign.client_logo_url} alt={campaign.client_name} loading="eager" style={{ marginTop: 28, height: 48, width: "auto", margin: "28px auto 0", borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 6 }} />
             )}
           </div>
         </section>
 
         {/* ===== WHO WE ARE ===== */}
-        <div className="print-section-page">
+        <div className="print-section-page print-who-wrapper">
           <WhoWeAre />
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
         {campaign.vendor_overview_map_url && (
-          <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+          <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
-            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
+            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
           </section>
         )}
 
