@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Eye, DollarSign, Ruler, TrendingUp, Mail, Globe, Instagram } from "lucide-react";
+import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Globe, Instagram } from "lucide-react";
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
+import { WhoWeAre } from "@/components/WhoWeAre";
+import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress } from "@/lib/shortAddress";
-import { fmtCostLine } from "@/lib/format";
 import heatherPhoto from "@/assets/team-heather.jpg";
 import viaPhoto from "@/assets/team-via.webp";
 import roxiePhoto from "@/assets/team-roxie.jpg";
@@ -51,17 +52,12 @@ type Unit = {
   facing: string | null;
   city: string | null;
   zip: string | null;
+  latitude: number | null;
+  longitude: number | null;
   tier_a: boolean | null;
   tier_b: boolean | null;
   tier_c: boolean | null;
 };
-
-const NAVY = "#0A1628";
-const NAVY_LIGHT = "#122040";
-const GOLD = "#C9A84C";
-const OCEAN = "#3B82F6";
-const WHITE = "#FFFFFF";
-const MUTED = "#94A3B8";
 
 const fmtNum = (n: number | null) =>
   n == null ? "—" : new Intl.NumberFormat("en-US").format(Math.round(n));
@@ -70,6 +66,21 @@ const fmtMoney = (n: number | null) =>
     ? "—"
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
+
+/* ─── Branding colours for section pages ─── */
+const NAVY = "#0A1628";
+const NAVY_LIGHT = "#122040";
+const GOLD = "#C9A84C";
+const OCEAN = "#3B82F6";
+const WHITE = "#FFFFFF";
+const MUTED = "#94A3B8";
+
+/* ─── Quote page colours (white background) ─── */
+const Q_NAVY = "#0F2A44";
+const Q_GOLD = "#C9A24A";
+const Q_GREY = "#6B7280";
+const Q_BORDER = "#E5E7EB";
+const Q_SOFT = "#F8FAFC";
 
 export default function ProposalPrint() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -89,7 +100,7 @@ export default function ProposalPrint() {
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -111,19 +122,12 @@ export default function ProposalPrint() {
     })();
   }, [campaignId]);
 
-  // Auto-trigger print dialog once loaded
   useEffect(() => {
     if (!loading && campaign) {
       const t = setTimeout(() => window.print(), 1200);
       return () => clearTimeout(t);
     }
   }, [loading, campaign]);
-
-  const activeTiers = useMemo(() => [
-    campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
-    campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
-    campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
-  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[], [campaign]);
 
   if (loading) {
     return (
@@ -147,28 +151,45 @@ export default function ProposalPrint() {
   const flightLabel = `${fmtDateShort(campaign.flight_start)} – ${fmtDateShort(campaign.flight_end)}`;
   const primaryMarket = campaign.markets?.[0] ?? "—";
 
-  const team = [
-    { name: "Heather", role: "Founder & CEO", photo: heatherPhoto },
-    { name: "Via", role: "Creative Media Coordinator", photo: viaPhoto },
-    { name: "Roxie", role: "Chief Happiness Officer", photo: roxiePhoto },
-  ];
+  /* Build market-indexed unit numbering: 01.01, 01.02, 02.01 … */
+  const marketMap = new Map<string, number>();
+  let marketCounter = 0;
+  const unitLabels = units.map((u) => {
+    const m = u.market ?? "Other";
+    if (!marketMap.has(m)) marketMap.set(m, ++marketCounter);
+    const mIdx = marketMap.get(m)!;
+    const withinMarket = units.filter((x) => (x.market ?? "Other") === m).indexOf(u) + 1;
+    return `${String(mIdx).padStart(2, "0")}.${String(withinMarket).padStart(2, "0")}`;
+  });
 
   return (
     <>
       <style>{`
-        @page { size: Letter landscape; margin: 0; }
+        @page {
+          size: Letter portrait;
+          margin: 0.5in 0.6in;
+        }
         @media print {
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          *, *::before, *::after { animation: none !important; transition: none !important; }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          *, *::before, *::after {
+            animation: none !important;
+            animation-duration: 0s !important;
+            transition: none !important;
+            transform: none !important;
+          }
           body { margin: 0; }
           nav, header, footer, .sticky, .no-print { display: none !important; }
-          .print-cover { height: 100vh; overflow: hidden; page-break-after: always; }
           .print-section-page { page-break-after: always; page-break-inside: avoid; }
-          .print-unit-page { page-break-after: always; page-break-inside: avoid; min-height: 100vh; }
+          .print-unit-page { page-break-after: always; page-break-inside: avoid; }
           img[src=""], img:not([src]) { display: none; }
         }
         @media screen {
-          .print-page-wrapper { max-width: 1100px; margin: 0 auto; }
+          .print-page-wrapper { max-width: 820px; margin: 0 auto; }
+          .print-unit-page { margin-bottom: 40px; border: 1px solid #e5e7eb; border-radius: 8px; }
+          .print-section-page { margin-bottom: 40px; }
         }
       `}</style>
 
@@ -186,9 +207,8 @@ export default function ProposalPrint() {
           </button>
         </div>
 
-        {/* ===== PAGE 1 — COVER ===== */}
-        <section className="print-cover" style={{ background: NAVY, color: WHITE, height: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
-          {/* Background hero image overlay */}
+        {/* ===== COVER PAGE ===== */}
+        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
               <img src={heroPhoto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -222,222 +242,38 @@ export default function ProposalPrint() {
           </div>
         </section>
 
-        {/* ===== PAGE 2 — WHO WE ARE ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", alignItems: "center", padding: "60px 80px" }}>
-          <div style={{ maxWidth: 900 }}>
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-              About the Agency
-            </p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 44, fontWeight: 800, textTransform: "uppercase", lineHeight: 1, marginBottom: 16 }}>
-              Who <span style={{ color: OCEAN }}>We Are</span>
-            </h2>
-            <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 28 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.7, color: MUTED, marginBottom: 16 }}>
-              <span style={{ fontWeight: 700, color: WHITE }}>Coastal Maverick</span> is a woman-owned boutique out-of-home (OOH) media agency specializing in high-impact, highly customized OOH campaigns. From concept to completion, we serve as a strategic partner for brands looking to make a bold visual statement in the physical world.
-            </p>
-            <p style={{ fontSize: 16, lineHeight: 1.7, color: MUTED, marginBottom: 28 }}>
-              With 360-degree experience across media owner, client, and agency sides, we bring a unique perspective that fuels smarter strategy and greater impact.
-            </p>
-            <div style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 20 }}>
-              {["Woman-Owned.", "Boutique.", "Built for Impact."].map((t) => (
-                <p key={t} style={{ fontFamily: "Montserrat, sans-serif", fontSize: 22, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8, color: WHITE }}>
-                  {t}
-                </p>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* ===== WHO WE ARE ===== */}
+        <div className="print-section-page">
+          <WhoWeAre />
+        </div>
 
-        {/* ===== PAGE 3 — CAMPAIGN COVERAGE MAP ===== */}
+        {/* ===== CAMPAIGN COVERAGE MAP ===== */}
         {campaign.vendor_overview_map_url && (
           <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-              Coverage
-            </p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>
-              Campaign Coverage Map
-            </h2>
+            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
+            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
-            <img
-              src={campaign.vendor_overview_map_url}
-              alt="Campaign coverage map"
-              style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }}
-            />
+            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
           </section>
         )}
 
-        {/* ===== PAGE 4 — CAMPAIGN OPTIONS ===== */}
-        {activeTiers.length >= 2 && (
-          <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "60px 80px" }}>
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-              Choose Your Option
-            </p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 8 }}>
-              Campaign Options
-            </h2>
-            <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 40 }} />
-
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeTiers.length}, 1fr)`, gap: 24 }}>
-              {activeTiers.map((tier) => {
-                const tierUnits = units.filter((u) => u.included && u[tier.key]);
-                const totalCost = tierUnits.reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
-                const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
-                return (
-                  <div key={tier.key} style={{ border: `2px solid ${GOLD}`, borderRadius: 16, padding: 28, background: NAVY_LIGHT }}>
-                    <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: GOLD, fontWeight: 700, marginBottom: 8 }}>
-                      {tier.label}
-                    </p>
-                    {totalCost > 0 ? (
-                      <p style={{ fontSize: 32, fontWeight: 800, color: WHITE }}>{fmtMoney(totalCost)}</p>
-                    ) : (
-                      <p style={{ fontSize: 18, fontWeight: 600, color: MUTED, fontStyle: "italic" }}>Contact for pricing</p>
-                    )}
-                    <div style={{ borderTop: `1px solid rgba(255,255,255,0.1)`, marginTop: 16, paddingTop: 16 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
-                        <span style={{ color: MUTED }}>Placements</span>
-                        <span style={{ fontWeight: 700, color: WHITE }}>{tierUnits.length} units</span>
-                      </div>
-                      {totalImpressions > 0 && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                          <span style={{ color: MUTED }}>4-Week Impressions</span>
-                          <span style={{ fontWeight: 700, color: WHITE }}>{fmtNum(totalImpressions)}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ borderTop: `1px solid rgba(255,255,255,0.1)`, marginTop: 16, paddingTop: 16 }}>
-                      <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: GOLD, fontWeight: 600, marginBottom: 8 }}>Includes</p>
-                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                        {tierUnits.map((u) => (
-                          <li key={u.id} style={{ fontSize: 12, color: MUTED, marginBottom: 3 }}>
-                            • {u.location_description ?? u.unit_number}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* ===== UNIT PAGES ===== */}
+        {/* ===== UNIT QUOTE PAGES (white, matching Portal PDF) ===== */}
         {units.map((unit, idx) => (
-          <section key={unit.id} className="print-unit-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", padding: 0 }}>
-            {/* Dark navy header bar */}
-            <div style={{ background: NAVY_LIGHT, padding: "16px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${GOLD}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: GOLD }}>
-                  #{unit.unit_number}
-                </span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: WHITE }}>
-                  {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: MUTED }}>
-                {unit.market && <span>{unit.market}</span>}
-                {unit.zip && <span>ZIP {unit.zip}</span>}
-                {unit.recommended && (
-                  <span style={{ background: GOLD, color: NAVY, padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em" }}>
-                    Recommended
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Main content area */}
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "55% 45%", padding: "24px 40px", gap: 24 }}>
-              {/* Left — billboard photo */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ flex: 1, borderRadius: 12, overflow: "hidden", background: NAVY_LIGHT, minHeight: 280, position: "relative" }}>
-                  {unit.billboard_photo_url ? (
-                    <img
-                      src={unit.billboard_photo_url}
-                      alt={`Unit ${unit.unit_number}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
-                    />
-                  ) : (
-                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: MUTED }}>
-                      <ImageOff style={{ width: 40, height: 40, marginBottom: 8 }} />
-                      <span style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700 }}>#{unit.unit_number}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Highlights */}
-                {(unit.highlights || (unit.insight_bullets && unit.insight_bullets.length > 0)) && (
-                  <div style={{ borderLeft: `3px solid ${GOLD}`, padding: "10px 14px", background: NAVY_LIGHT, borderRadius: 8, fontSize: 13 }}>
-                    {unit.insight_bullets && unit.insight_bullets.length > 0 ? (
-                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                        {unit.insight_bullets.slice(0, 4).map((b, i) => (
-                          <li key={i} style={{ display: "flex", gap: 8, marginBottom: 4, color: MUTED }}>
-                            <Sparkles style={{ width: 12, height: 12, marginTop: 3, flexShrink: 0, color: GOLD }} />
-                            <span>{b}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p style={{ color: MUTED, margin: 0 }}>{unit.highlights}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Right — stats + map */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* Stat pills */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <PrintStat label="Format" value={unit.format ?? "—"} />
-                  <PrintStat label="Size" value={unit.size ?? "—"} />
-                  <PrintStat label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
-                  <PrintStat label="4-Week Rate" value={fmtMoney(unit.total_cost)} highlight />
-                </div>
-
-                {/* Additional costs */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {unit.weekly_impressions != null && (
-                    <PrintStat label="Weekly Impressions" value={fmtNum(unit.weekly_impressions)} />
-                  )}
-                  {unit.cpm != null && (
-                    <PrintStat label="CPM" value={`$${unit.cpm.toFixed(2)}`} />
-                  )}
-                </div>
-
-                <div style={{ fontSize: 12, color: MUTED }}>
-                  {fmtCostLine("Production", unit.production_cost)} · {fmtCostLine("Install", unit.install_cost)}
-                </div>
-
-                {/* Inset map */}
-                {unit.inset_map_url && (
-                  <div style={{ flex: 1, borderRadius: 12, overflow: "hidden", background: NAVY_LIGHT, minHeight: 180 }}>
-                    <img
-                      src={unit.inset_map_url}
-                      alt={`Map for unit ${unit.unit_number}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div style={{ padding: "10px 40px", display: "flex", justifyContent: "space-between", fontSize: 10, color: MUTED, borderTop: `1px solid rgba(255,255,255,0.08)` }}>
-              <span>coastalmaverick.com</span>
-              <span>{campaign.client_name} · Unit {idx + 1} of {units.length}</span>
-            </div>
-          </section>
+          <div key={unit.id} className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
+            <PrintableQuote
+              unit={unit}
+              market={unit.market ?? "Other"}
+              campaign={campaign}
+              indexLabel={unitLabels[idx]}
+            />
+          </div>
         ))}
 
         {/* ===== NEXT STEPS ===== */}
         <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-            03 · Process
-          </p>
-          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>
-            Next Steps
-          </h2>
+          <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
+          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>Next Steps</h2>
           <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 48 }} />
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 32, maxWidth: 900, width: "100%" }}>
             {[
               { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
@@ -446,12 +282,8 @@ export default function ProposalPrint() {
               { n: "04", title: "Campaign Goes Live", body: "Creative installed, monitoring begins." },
             ].map((s) => (
               <div key={s.n} style={{ textAlign: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${OCEAN}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: OCEAN }}>
-                  {s.n}
-                </div>
-                <h3 style={{ marginTop: 16, fontFamily: "Montserrat, sans-serif", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>
-                  {s.title}
-                </h3>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${OCEAN}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: OCEAN }}>{s.n}</div>
+                <h3 style={{ marginTop: 16, fontFamily: "Montserrat, sans-serif", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>{s.title}</h3>
                 <p style={{ marginTop: 8, fontSize: 13, color: MUTED, lineHeight: 1.5 }}>{s.body}</p>
               </div>
             ))}
@@ -459,73 +291,26 @@ export default function ProposalPrint() {
         </section>
 
         {/* ===== MEET THE TEAM ===== */}
-        <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-            The Team
-          </p>
-          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>
-            Meet The Team
-          </h2>
-          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 12 }} />
-          <p style={{ fontSize: 15, color: MUTED, marginBottom: 48, maxWidth: 520, textAlign: "center", lineHeight: 1.6 }}>
-            The people behind the placements — hands-on, collaborative, and committed to standout campaigns from start to finish.
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40, maxWidth: 800 }}>
-            {team.map((m) => (
-              <div key={m.name} style={{ textAlign: "center" }}>
-                {m.photo && (
-                  <div style={{ width: 160, height: 160, borderRadius: "50%", overflow: "hidden", margin: "0 auto", border: `4px solid ${NAVY_LIGHT}`, boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
-                    <img
-                      src={m.photo}
-                      alt={`${m.name} — ${m.role}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                )}
-                <div style={{ height: 3, width: 40, background: GOLD, borderRadius: 2, margin: "16px auto 0" }} />
-                <h3 style={{ marginTop: 12, fontFamily: "Montserrat, sans-serif", fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>
-                  {m.name}
-                </h3>
-                <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: OCEAN, fontWeight: 600, marginTop: 4 }}>
-                  {m.role}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <div className="print-section-page">
+          <MeetTheTeam />
+        </div>
 
         {/* ===== CLOSING CTA ===== */}
         <section className="print-section-page" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
-          {/* Navy branded panel */}
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
-            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>
-              Coastal Maverick Media
-            </p>
+            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>Coastal Maverick Media</p>
             <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 16 }} />
-            <blockquote style={{ marginTop: 28, fontStyle: "italic", fontSize: 17, color: GOLD, lineHeight: 1.6 }}>
-              "Positioned where your audience moves."
-            </blockquote>
+            <blockquote style={{ marginTop: 28, fontStyle: "italic", fontSize: 17, color: GOLD, lineHeight: 1.6 }}>"Positioned where your audience moves."</blockquote>
           </div>
-
-          {/* CTA panel */}
           <div style={{ padding: "60px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>
-              For {campaign.client_name}
-            </p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 48, fontWeight: 800, textTransform: "uppercase", lineHeight: 0.95, color: WHITE }}>
-              Let's Get<br />To Work.
-            </h2>
+            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>For {campaign.client_name}</p>
+            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 48, fontWeight: 800, textTransform: "uppercase", lineHeight: 0.95, color: WHITE }}>Let's Get<br />To Work.</h2>
             <div style={{ height: 3, width: 80, background: GOLD, borderRadius: 2, marginTop: 20 }} />
-
             <div style={{ marginTop: 36 }}>
-              <p style={{ fontFamily: "Montserrat, sans-serif", fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: WHITE }}>
-                Heather Waisanen
-              </p>
+              <p style={{ fontFamily: "Montserrat, sans-serif", fontSize: 18, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: WHITE }}>Heather Waisanen</p>
               <p style={{ fontSize: 13, color: MUTED }}>Founder & CEO</p>
             </div>
-
             <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
               <a href="mailto:heather.waisanen@gmail.com" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
                 <Mail className="h-4 w-4" /> heather.waisanen@gmail.com
@@ -544,21 +329,200 @@ export default function ProposalPrint() {
   );
 }
 
-/* =================== Print Stat Pill =================== */
-function PrintStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+/* ====================================================================
+   PrintableQuote — exact copy from Portal.tsx
+   White background, black text, clean quote layout
+   ==================================================================== */
+
+function PrintableQuote({
+  unit,
+  market,
+  indexLabel,
+  campaign,
+}: {
+  unit: Unit;
+  market: string;
+  indexLabel: string;
+  campaign: Campaign | null;
+}) {
   return (
-    <div style={{
-      background: highlight ? GOLD : NAVY_LIGHT,
-      borderRadius: 10,
-      padding: "12px 14px",
-      border: highlight ? "none" : `1px solid rgba(255,255,255,0.08)`,
-    }}>
-      <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", fontWeight: 600, color: highlight ? NAVY : GOLD, marginBottom: 4 }}>
+    <article
+      style={{
+        background: "#ffffff",
+        color: "#111827",
+        fontFamily: "Inter, system-ui, sans-serif",
+        padding: "8px",
+      }}
+    >
+      {/* Brand header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: `3px solid ${Q_GOLD}`,
+          paddingBottom: 10,
+          marginBottom: 14,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: "0.25em", color: Q_NAVY, fontWeight: 700 }}>
+            COASTAL MAVERICK · {market.toUpperCase()}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: Q_NAVY, marginTop: 2 }}>
+            {campaign?.proposal_name || campaign?.campaign_name || "Proposal"}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", color: Q_GREY }}>QUOTE</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: Q_NAVY, lineHeight: 1 }}>
+            {indexLabel}
+          </div>
+        </div>
+      </div>
+
+      {/* Title row */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 9, letterSpacing: "0.2em", color: Q_GREY, fontWeight: 600 }}>
+          UNIT #{unit.unit_number}
+          {unit.recommended ? "  ·  ★ RECOMMENDED" : ""}
+        </div>
+        <h2
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: "#111827",
+            margin: "4px 0 0",
+            lineHeight: 1.2,
+          }}
+        >
+          {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+        </h2>
+        {unit.location_description && (
+          <div style={{ fontSize: 11, color: Q_GREY, marginTop: 2 }}>{unit.location_description}</div>
+        )}
+      </div>
+
+      {/* Photos row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <PhotoBox label="Location photo" src={unit.billboard_photo_url} />
+        <PhotoBox label="Location map" src={unit.inset_map_url} />
+      </div>
+
+      {/* Highlights */}
+      {unit.highlights && (
+        <div
+          style={{
+            background: Q_SOFT,
+            borderLeft: `3px solid ${Q_GOLD}`,
+            padding: "8px 10px",
+            marginBottom: 12,
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: "#1F2937",
+          }}
+        >
+          {unit.highlights}
+        </div>
+      )}
+
+      {/* Structured details + Investment */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <DetailBlock title="Quote details">
+          {unit.geopath_id && <Row k="Geopath ID" v={unit.geopath_id} />}
+          {unit.media_type && <Row k="Media Type" v={unit.media_type} />}
+          {unit.facing && <Row k="Facing" v={unit.facing} />}
+          {unit.size && <Row k="Size" v={unit.size} />}
+          {unit.city && <Row k="City" v={unit.city} />}
+          {unit.zip && <Row k="Zip" v={unit.zip} />}
+          {unit.latitude != null && <Row k="Latitude" v={unit.latitude.toFixed(5)} />}
+          {unit.longitude != null && <Row k="Longitude" v={unit.longitude.toFixed(5)} />}
+        </DetailBlock>
+
+        <DetailBlock title="Performance & Investment">
+          {unit.weekly_impressions != null && (
+            <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} />
+          )}
+          {unit.four_week_impressions != null && (
+            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} />
+          )}
+          {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} />}
+          <div style={{ borderTop: `1px solid ${Q_BORDER}`, margin: "6px 0" }} />
+          {unit.production_cost != null && (
+            <Row k="Production" v={fmtMoney(unit.production_cost)} />
+          )}
+          {unit.install_cost != null && (
+            <Row k="Install" v={fmtMoney(unit.install_cost)} />
+          )}
+          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} bold />
+        </DetailBlock>
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 8,
+          borderTop: `1px solid ${Q_BORDER}`,
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 9,
+          color: Q_GREY,
+          letterSpacing: "0.05em",
+        }}
+      >
+        <span>coastalmaverick.com</span>
+        <span>{campaign?.client_name ?? ""}</span>
+      </div>
+    </article>
+  );
+}
+
+function PhotoBox({ src, label }: { src: string | null; label: string }) {
+  return (
+    <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, overflow: "hidden", background: "#F3F4F6" }}>
+      {src ? (
+        <img
+          src={src}
+          alt={label}
+          crossOrigin="anonymous"
+          style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>
+          No image available
+        </div>
+      )}
+      <div style={{ padding: "4px 8px", fontSize: 9, letterSpacing: "0.18em", color: Q_GREY, fontWeight: 600, textTransform: "uppercase" as const, background: "#fff" }}>
         {label}
-      </p>
-      <p style={{ fontSize: 17, fontWeight: 700, color: highlight ? NAVY : WHITE, fontFamily: "Montserrat, sans-serif" }}>
-        {value}
-      </p>
+      </div>
+    </div>
+  );
+}
+
+function DetailBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, background: Q_SOFT, padding: 10 }}>
+      <div style={{ fontSize: 10, letterSpacing: "0.18em", color: Q_NAVY, fontWeight: 700, textTransform: "uppercase" as const, marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${Q_BORDER}` }}>
+        {title}
+      </div>
+      <dl style={{ margin: 0 }}>{children}</dl>
+    </div>
+  );
+}
+
+function Row({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", fontSize: 10.5 }}>
+      <dt style={{ color: Q_GREY, margin: 0 }}>{k}</dt>
+      <dd style={{ margin: 0, color: "#111827", fontWeight: bold ? 700 : 500, textAlign: "right" }}>{v}</dd>
     </div>
   );
 }
