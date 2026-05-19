@@ -118,9 +118,30 @@ export default function Auth() {
                     disabled={sending}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={sending || !email}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send magic link"}
+                {mode === "password" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={sending}
+                    />
+                  </div>
+                )}
+                <Button type="submit" className="w-full" disabled={sending || !email || (mode === "password" && !password)}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "password" ? "Sign in" : "Send magic link"}
                 </Button>
+                <button
+                  type="button"
+                  className="block w-full pt-1 text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => setMode(mode === "password" ? "magic" : "password")}
+                >
+                  {mode === "password" ? "Use magic link instead" : "Use password instead"}
+                </button>
                 <p className="pt-2 text-center text-xs text-muted-foreground">
                   Access is restricted to the Coastal Maverick team.
                 </p>
