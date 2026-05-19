@@ -32,6 +32,20 @@ export default function Auth() {
     e.preventDefault();
     if (!email) return;
     setSending(true);
+
+    if (mode === "password") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      setSending(false);
+      if (error) {
+        toast({ title: "Sign-in failed", description: error.message, variant: "destructive" });
+        return;
+      }
+      return;
+    }
+
     const redirectTo = `${window.location.origin}/`;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
@@ -40,7 +54,6 @@ export default function Auth() {
     setSending(false);
 
     if (error) {
-      // Allowlist trigger or disabled-signup blocks unknown emails.
       const msg =
         /allowlist|signups? not allowed|disabled/i.test(error.message)
           ? "This email isn't authorized. Ask the Coastal Maverick team to add you."
