@@ -11,6 +11,8 @@ import { useEffect } from "react";
 import { Logo } from "@/components/Logo";
 
 export default function Auth() {
+  const [mode, setMode] = useState<"magic" | "password">("password");
+  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
