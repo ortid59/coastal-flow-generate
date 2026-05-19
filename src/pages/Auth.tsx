@@ -11,6 +11,8 @@ import { useEffect } from "react";
 import { Logo } from "@/components/Logo";
 
 export default function Auth() {
+  const [mode, setMode] = useState<"magic" | "password">("password");
+  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -30,6 +32,20 @@ export default function Auth() {
     e.preventDefault();
     if (!email) return;
     setSending(true);
+
+    if (mode === "password") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      setSending(false);
+      if (error) {
+        toast({ title: "Sign-in failed", description: error.message, variant: "destructive" });
+        return;
+      }
+      return;
+    }
+
     const redirectTo = `${window.location.origin}/`;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
@@ -38,7 +54,6 @@ export default function Auth() {
     setSending(false);
 
     if (error) {
-      // Allowlist trigger or disabled-signup blocks unknown emails.
       const msg =
         /allowlist|signups? not allowed|disabled/i.test(error.message)
           ? "This email isn't authorized. Ask the Coastal Maverick team to add you."
@@ -103,9 +118,30 @@ export default function Auth() {
                     disabled={sending}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={sending || !email}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send magic link"}
+                {mode === "password" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={sending}
+                    />
+                  </div>
+                )}
+                <Button type="submit" className="w-full" disabled={sending || !email || (mode === "password" && !password)}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "password" ? "Sign in" : "Send magic link"}
                 </Button>
+                <button
+                  type="button"
+                  className="block w-full pt-1 text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => setMode(mode === "password" ? "magic" : "password")}
+                >
+                  {mode === "password" ? "Use magic link instead" : "Use password instead"}
+                </button>
                 <p className="pt-2 text-center text-xs text-muted-foreground">
                   Access is restricted to the Coastal Maverick team.
                 </p>
