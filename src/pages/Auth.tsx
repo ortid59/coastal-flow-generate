@@ -104,48 +104,59 @@ export default function Auth() {
                 </Button>
               </div>
             ) : (
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    placeholder="you@coastalmaverick.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={sending}
-                  />
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode("password")}
+                    className={`rounded px-3 py-1.5 text-sm font-medium transition ${mode === "password" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("magic")}
+                    className={`rounded px-3 py-1.5 text-sm font-medium transition ${mode === "magic" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    Magic link
+                  </button>
                 </div>
-                {mode === "password" && (
+                <form onSubmit={onSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="email">Email address</Label>
                     <Input
-                      id="password"
-                      type="password"
-                      autoComplete="current-password"
+                      id="email"
+                      type="email"
+                      autoComplete="email"
                       required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="you@coastalmaverick.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       disabled={sending}
                     />
                   </div>
-                )}
-                <Button type="submit" className="w-full" disabled={sending || !email || (mode === "password" && !password)}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "password" ? "Sign in" : "Send magic link"}
-                </Button>
-                <button
-                  type="button"
-                  className="block w-full pt-1 text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
-                  onClick={() => setMode(mode === "password" ? "magic" : "password")}
-                >
-                  {mode === "password" ? "Use magic link instead" : "Use password instead"}
-                </button>
-                <p className="pt-2 text-center text-xs text-muted-foreground">
-                  Access is restricted to the Coastal Maverick team.
-                </p>
-              </form>
+                  {mode === "password" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={sending}
+                      />
+                    </div>
+                  )}
+                  <Button type="submit" className="w-full" disabled={sending || !email || (mode === "password" && !password)}>
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "password" ? "Sign in" : "Send magic link"}
+                  </Button>
+                  <p className="pt-2 text-center text-xs text-muted-foreground">
+                    Access is restricted to the Coastal Maverick team.
+                  </p>
+                </form>
+              </>
             )}
           </div>
         </div>
