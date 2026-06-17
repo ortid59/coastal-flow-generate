@@ -172,6 +172,7 @@ export default function CampaignReview() {
     if (!id) return;
     const silent = !!opts?.silent;
     if (!silent) setExtracting(true);
+    setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
