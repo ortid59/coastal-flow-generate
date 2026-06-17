@@ -565,6 +565,34 @@ export default function CampaignReview() {
         </div>
       </header>
 
+      {(extracting || extractProgress.total > 0) && (
+        <div className="surface-card mb-4 flex flex-col gap-2 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Extracting billboard photos & maps…
+            </div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {extractProgress.total > 0
+                ? `${extractProgress.current} / ${extractProgress.total} pages`
+                : "Preparing…"}
+            </div>
+          </div>
+          <Progress
+            value={
+              extractProgress.total > 0
+                ? Math.min(100, (extractProgress.current / extractProgress.total) * 100)
+                : 5
+            }
+            className="h-2"
+          />
+          {extractProgress.label && (
+            <p className="text-[11px] text-muted-foreground truncate">{extractProgress.label}</p>
+          )}
+        </div>
+      )}
+
+
       {campaign?.status === "parsing" && units.length === 0 ? (
         <div className="surface-card flex flex-col items-center gap-3 p-12 text-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
