@@ -28,6 +28,7 @@ import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
 
 import { HighlightsCell } from "@/components/HighlightsCell";
 import { LogoReplace } from "@/components/LogoReplace";
+import { Progress } from "@/components/ui/progress";
 import { parseShortAddress } from "@/lib/shortAddress";
 
 type Campaign = {
@@ -90,6 +91,11 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<{ current: number; total: number; label: string }>({
+    current: 0,
+    total: 0,
+    label: "",
+  });
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -166,6 +172,7 @@ export default function CampaignReview() {
     if (!id) return;
     const silent = !!opts?.silent;
     if (!silent) setExtracting(true);
+    setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -207,6 +214,7 @@ export default function CampaignReview() {
        const mapCrop       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
 
       for (const file of pdfFiles) {
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage
           .from('uploads')
           .download(file.storage_path);
@@ -217,9 +225,11 @@ export default function CampaignReview() {
 
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
+          setExtractProgress((p) => ({ ...p, label: `Page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
           const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
@@ -264,11 +274,13 @@ export default function CampaignReview() {
               console.warn('[extractPhotos] overview map failed:', e);
             }
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
           if (!match) {
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
@@ -279,6 +291,7 @@ export default function CampaignReview() {
           if (!unit) {
             console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
@@ -372,6 +385,7 @@ export default function CampaignReview() {
           if (okMap) totalMaps++;
 
           page.cleanup();
+          setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
         }
       }
 
@@ -393,6 +407,7 @@ export default function CampaignReview() {
       }
     } finally {
       if (!silent) setExtracting(false);
+      setExtractProgress({ current: 0, total: 0, label: "" });
     }
   };
 
@@ -549,6 +564,34 @@ export default function CampaignReview() {
           </Button>
         </div>
       </header>
+
+      {(extracting || extractProgress.total > 0) && (
+        <div className="surface-card mb-4 flex flex-col gap-2 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Extracting billboard photos & maps…
+            </div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {extractProgress.total > 0
+                ? `${extractProgress.current} / ${extractProgress.total} pages`
+                : "Preparing…"}
+            </div>
+          </div>
+          <Progress
+            value={
+              extractProgress.total > 0
+                ? Math.min(100, (extractProgress.current / extractProgress.total) * 100)
+                : 5
+            }
+            className="h-2"
+          />
+          {extractProgress.label && (
+            <p className="text-[11px] text-muted-foreground truncate">{extractProgress.label}</p>
+          )}
+        </div>
+      )}
+
 
       {campaign?.status === "parsing" && units.length === 0 ? (
         <div className="surface-card flex flex-col items-center gap-3 p-12 text-center">
