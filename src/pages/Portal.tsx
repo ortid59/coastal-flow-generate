@@ -377,19 +377,6 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       {byMarket.length > 0 && (
         <section className="bg-[hsl(var(--off-white))]">
           <div className="container-app py-20 md:py-28">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="text-center"
-            >
-              <div className="eyebrow">02 · Placements</div>
-              <h2 className="mt-3 font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight text-foreground">
-                Recommended Placements
-              </h2>
-              <span className="mx-auto mt-5 gold-rule" />
-            </motion.div>
 
             {/* Campaign Coverage Map */}
             {campaign?.vendor_overview_map_url && (
