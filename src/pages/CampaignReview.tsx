@@ -28,6 +28,7 @@ import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
 
 import { HighlightsCell } from "@/components/HighlightsCell";
 import { LogoReplace } from "@/components/LogoReplace";
+import { Progress } from "@/components/ui/progress";
 import { parseShortAddress } from "@/lib/shortAddress";
 
 type Campaign = {
