@@ -382,6 +382,7 @@ export default function CampaignReview() {
           if (okMap) totalMaps++;
 
           page.cleanup();
+          setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
         }
       }
 
