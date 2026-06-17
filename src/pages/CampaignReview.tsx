@@ -407,6 +407,7 @@ export default function CampaignReview() {
       }
     } finally {
       if (!silent) setExtracting(false);
+      setExtractProgress({ current: 0, total: 0, label: "" });
     }
   };
 
