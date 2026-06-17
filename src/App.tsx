@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { lazy, Suspense } from "react";
+const GuidePage = lazy(() => import("./pages/GuidePage"));
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,6 +30,7 @@ const App = () => (
           <AppHeader />
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/guide" element={<Suspense fallback={null}><GuidePage /></Suspense>} />
             {/* Public, password-gated proposal page */}
             <Route path="/p/:token" element={<PortalGate />} />
             <Route

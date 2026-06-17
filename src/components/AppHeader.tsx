@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Settings as SettingsIcon } from "lucide-react";
+import { LogOut, Settings as SettingsIcon, HelpCircle } from "lucide-react";
 import { Logo } from "@/components/Logo";
 
 export function AppHeader() {
@@ -23,6 +23,17 @@ export function AppHeader() {
             </div>
           </div>
         </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href="/guide"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="User Guide"
+            aria-label="Open User Guide"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:text-foreground hover:border-foreground/40"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </a>
         {user && (
           <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
