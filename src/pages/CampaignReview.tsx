@@ -214,6 +214,7 @@ export default function CampaignReview() {
        const mapCrop       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
 
       for (const file of pdfFiles) {
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage
           .from('uploads')
           .download(file.storage_path);
@@ -224,9 +225,11 @@ export default function CampaignReview() {
 
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
+          setExtractProgress((p) => ({ ...p, label: `Page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
           const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
