@@ -159,6 +159,16 @@ export default function Auth() {
               </>
             )}
           </div>
+          <div className="mt-4 text-center">
+            <a
+              href="/guide"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              New here? View the User Guide
+            </a>
+          </div>
         </div>
       </main>
     </div>
