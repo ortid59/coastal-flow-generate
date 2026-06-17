@@ -274,11 +274,13 @@ export default function CampaignReview() {
               console.warn('[extractPhotos] overview map failed:', e);
             }
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
           if (!match) {
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
@@ -289,6 +291,7 @@ export default function CampaignReview() {
           if (!unit) {
             console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
             page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
           }
 
