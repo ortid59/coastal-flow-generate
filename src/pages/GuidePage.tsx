@@ -240,9 +240,10 @@ const guideHtml = `<!DOCTYPE html>
 export default function GuidePage() {
   return (
     <iframe
-      title="Coastal Maverick User Guide"
       srcDoc={guideHtml}
-      style={{ border: 0, width: "100vw", height: "100vh", display: "block" }}
+      style={{ width: "100%", height: "100vh", border: "none", display: "block" }}
+      title="User Guide"
+      sandbox="allow-same-origin allow-scripts"
     />
   );
 }
