@@ -90,6 +90,11 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<{ current: number; total: number; label: string }>({
+    current: 0,
+    total: 0,
+    label: "",
+  });
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
