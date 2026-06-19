@@ -375,7 +375,7 @@ export default function ProposalPrint() {
         <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
-            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>Coastal Maverick</p>
+            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
             <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 16 }} />
             <blockquote style={{ marginTop: 28, fontStyle: "italic", fontSize: 17, color: GOLD, lineHeight: 1.6 }}>"Positioned where your audience moves."</blockquote>
           </div>
