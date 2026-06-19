@@ -32,6 +32,8 @@ import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 
 type Campaign = {
   id: string;
