@@ -68,17 +68,17 @@ export function WhoWeAre() {
             transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-5"
           >
-            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">Coastal Maverick</span> is a
-              woman-owned boutique out-of-home (OOH) media agency specializing in
-              high-impact, highly customized OOH campaigns. From concept to completion, we
-              serve as a strategic partner for brands looking to make a bold visual
-              statement in the physical world.
-            </p>
-            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
-              With 360-degree experience across media owner, client, and agency sides, we
-              bring a unique perspective that fuels smarter strategy and greater impact.
-            </p>
+            {settings.who_we_are_body_1 && (
+              <p className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+                {settings.who_we_are_body_1}
+              </p>
+            )}
+            {settings.who_we_are_body_2 && (
+              <p className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+                {settings.who_we_are_body_2}
+              </p>
+            )}
+
 
             <div className="h-px w-full bg-border my-2" />
 
