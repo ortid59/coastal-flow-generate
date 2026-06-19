@@ -89,6 +89,8 @@ export default function ProposalPrint() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const settings = useProposalSettings();
+
 
   useEffect(() => {
     if (!campaignId) return;
