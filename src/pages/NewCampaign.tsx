@@ -6,14 +6,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, FileSpreadsheet, FileText, Image as ImageIcon, Loader2, Upload, X, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Upload,
+  X,
+  Sparkles,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
-type Picked = { file: File };
+type Vendor = {
+  id: string;
+  vendor_name: string;
+  excel_file: File | null;
+  photo_pdf: File | null;
+};
 
-const MAX_EXCELS = 50;
-const MAX_PHOTOS = 50;
-const MAX_BYTES = 50 * 1024 * 1024; // 50 MB per file
+const MAX_VENDORS = 25;
+const MAX_EXCEL_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_PDF_BYTES = 500 * 1024 * 1024; // 500 MB
+
+const newVendor = (): Vendor => ({
+  id: crypto.randomUUID(),
+  vendor_name: "",
+  excel_file: null,
+  photo_pdf: null,
+});
 
 export default function NewCampaign() {
   const { user } = useAuth();
@@ -28,45 +51,25 @@ export default function NewCampaign() {
   const [flightEnd, setFlightEnd] = useState("");
   const [marginPct, setMarginPct] = useState("20");
 
-  const [excels, setExcels] = useState<Picked[]>([]);
-  const [pdfs, setPdfs] = useState<Picked[]>([]);
-  const [photoSheets, setPhotoSheets] = useState<File | null>(null);
+  const [vendors, setVendors] = useState<Vendor[]>([newVendor()]);
   const [logo, setLogo] = useState<File | null>(null);
   const [cover, setCover] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<string>("");
 
-  const xlsxRef = useRef<HTMLInputElement>(null);
-  const pdfRef = useRef<HTMLInputElement>(null);
-  const photoSheetsRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = (
-    list: FileList | null,
-    setter: (p: Picked[]) => void,
-    current: Picked[],
-    accept: (name: string) => boolean,
-    label: string,
-    maxFiles: number,
-  ) => {
-    if (!list) return;
-    const incoming = Array.from(list)
-      .filter((f) => accept(f.name.toLowerCase()))
-      .filter((f) => {
-        if (f.size > MAX_BYTES) {
-          toast({ title: `${f.name} is too large`, description: "Max 50 MB per file.", variant: "destructive" });
-          return false;
-        }
-        return true;
-      })
-      .map((file) => ({ file }));
-    const next = [...current, ...incoming].slice(0, maxFiles);
-    if (current.length + incoming.length > maxFiles) {
-      toast({ title: `Limit ${maxFiles} ${label} files`, description: "Extra files were ignored." });
-    }
-    setter(next);
+  const updateVendor = (id: string, patch: Partial<Vendor>) =>
+    setVendors((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+
+  const removeVendor = (id: string) =>
+    setVendors((prev) => (prev.length === 1 ? [newVendor()] : prev.filter((v) => v.id !== id)));
+
+  const addVendor = () => {
+    if (vendors.length >= MAX_VENDORS) return;
+    setVendors((prev) => [...prev, newVendor()]);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -76,17 +79,25 @@ export default function NewCampaign() {
       toast({ title: "Missing details", description: "Client and campaign name are required.", variant: "destructive" });
       return;
     }
-    if (excels.length === 0) {
-      toast({ title: "Add at least one Excel", description: "Vendor RFP Template (.xlsx).", variant: "destructive" });
+
+    // Validate vendor cards
+    const cleaned = vendors
+      .map((v) => ({ ...v, vendor_name: v.vendor_name.trim() }))
+      .filter((v) => v.vendor_name || v.excel_file || v.photo_pdf);
+
+    if (cleaned.length === 0) {
+      toast({ title: "Add at least one vendor", variant: "destructive" });
       return;
     }
-    if (!photoSheets) {
-      toast({
-        title: "Vendor Photo Sheets PDF required",
-        description: "Upload the Maps/Photosheets PDF from your vendor.",
-        variant: "destructive",
-      });
-      return;
+    for (const v of cleaned) {
+      if (!v.vendor_name) {
+        toast({ title: "Vendor name is required", description: "Every vendor card needs a name.", variant: "destructive" });
+        return;
+      }
+      if (!v.excel_file) {
+        toast({ title: `${v.vendor_name}: Excel required`, description: "Each vendor needs a .xlsx file.", variant: "destructive" });
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -113,7 +124,7 @@ export default function NewCampaign() {
       if (insErr || !campaign) throw insErr ?? new Error("Failed to create campaign");
       const campaignId = campaign.id;
 
-      // Upload logo (public bucket)
+      // Logo
       let logoUrl: string | null = null;
       if (logo) {
         setProgress("Uploading logo…");
@@ -123,7 +134,6 @@ export default function NewCampaign() {
         const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
         logoUrl = pub.publicUrl;
       }
-      // Upload cover image (public bucket)
       let coverUrl: string | null = null;
       if (cover) {
         setProgress("Uploading cover image…");
@@ -143,48 +153,48 @@ export default function NewCampaign() {
           .eq("id", campaignId);
       }
 
-      // Upload xlsx + pdf to private uploads bucket
-      const total = excels.length + pdfs.length + 1; // +1 for photosheets
+      // Upload vendor files
+      const totalFiles = cleaned.reduce((n, v) => n + 1 + (v.photo_pdf ? 1 : 0), 0);
       let done = 0;
-      const records: Array<{ kind: "excel" | "pdf" | "image" | "photosheets"; storage_path: string; original_name: string }> = [];
+      const records: Array<{
+        kind: "excel" | "photosheets";
+        storage_path: string;
+        original_name: string;
+        vendor: string;
+      }> = [];
 
-      for (const { file } of excels) {
-        done += 1;
-        setProgress(`Uploading file ${done}/${total} — ${file.name}`);
-        const path = `${campaignId}/excel/${Date.now()}-${safeName(file.name)}`;
-        const up = await supabase.storage.from("uploads").upload(path, file, { upsert: false });
-        if (up.error) throw up.error;
-        records.push({ kind: "excel", storage_path: path, original_name: file.name });
-      }
-      for (const { file } of pdfs) {
-        done += 1;
-        setProgress(`Uploading file ${done}/${total} — ${file.name}`);
-        const isPdf = /\.pdf$/i.test(file.name);
-        const folder = isPdf ? "pdf" : "image";
-        const path = `${campaignId}/${folder}/${Date.now()}-${safeName(file.name)}`;
-        const up = await supabase.storage.from("uploads").upload(path, file, { upsert: false });
-        if (up.error) throw up.error;
-        records.push({ kind: isPdf ? "pdf" : "image", storage_path: path, original_name: file.name });
-      }
+      let hasAnyPdf = false;
 
-      // Photo sheets PDF — fixed path so the highlights extractor can find it
-      done += 1;
-      setProgress(`Uploading file ${done}/${total} — ${photoSheets.name}`);
-      const psPath = `${campaignId}/photosheets.pdf`;
-      const psUp = await supabase.storage.from("uploads").upload(psPath, photoSheets, { upsert: true });
-      if (psUp.error) throw psUp.error;
-      records.push({ kind: "photosheets", storage_path: psPath, original_name: photoSheets.name });
+      for (const v of cleaned) {
+        // Excel
+        done += 1;
+        setProgress(`Uploading file ${done}/${totalFiles} — ${v.excel_file!.name}`);
+        const xPath = `${campaignId}/excel/${Date.now()}-${safeName(v.vendor_name)}-${safeName(v.excel_file!.name)}`;
+        const xUp = await supabase.storage.from("uploads").upload(xPath, v.excel_file!, { upsert: false });
+        if (xUp.error) throw xUp.error;
+        records.push({ kind: "excel", storage_path: xPath, original_name: v.excel_file!.name, vendor: v.vendor_name });
+
+        // Photo PDF
+        if (v.photo_pdf) {
+          done += 1;
+          setProgress(`Uploading file ${done}/${totalFiles} — ${v.photo_pdf.name}`);
+          const pPath = `${campaignId}/photosheets/${Date.now()}-${safeName(v.vendor_name)}-${safeName(v.photo_pdf.name)}`;
+          const pUp = await supabase.storage.from("uploads").upload(pPath, v.photo_pdf, { upsert: false });
+          if (pUp.error) throw pUp.error;
+          records.push({ kind: "photosheets", storage_path: pPath, original_name: v.photo_pdf.name, vendor: v.vendor_name });
+          hasAnyPdf = true;
+        }
+      }
 
       if (records.length) {
         setProgress("Saving file records…");
-        const { error: vfErr } = await supabase.from("vendor_files").insert(
-          records.map((r) => ({ campaign_id: campaignId, ...r })),
-        );
+        const { error: vfErr } = await supabase
+          .from("vendor_files")
+          .insert(records.map((r) => ({ campaign_id: campaignId, ...r })));
         if (vfErr) throw vfErr;
       }
 
       toast({ title: "Campaign created", description: "Parsing vendor Excel…" });
-      // Fire and forget: parse excel, then extract photos & highlights. Review screen polls status.
       supabase.functions
         .invoke("parse-excel", { body: { campaign_id: campaignId } })
         .then(({ error }) => {
@@ -192,19 +202,18 @@ export default function NewCampaign() {
             console.error("parse-excel invoke error", error);
             return;
           }
-          if (pdfs.length > 0) {
+          if (hasAnyPdf) {
             supabase.functions
               .invoke("extract-photos", { body: { campaign_id: campaignId } })
               .then(({ error: pErr }) => {
                 if (pErr) console.error("extract-photos invoke error", pErr);
               });
+            supabase.functions
+              .invoke("extract-highlights", { body: { campaign_id: campaignId } })
+              .then(({ error: hErr }) => {
+                if (hErr) console.error("extract-highlights invoke error", hErr);
+              });
           }
-          // Always run highlights extraction since photosheets is required
-          supabase.functions
-            .invoke("extract-highlights", { body: { campaign_id: campaignId } })
-            .then(({ error: hErr }) => {
-              if (hErr) console.error("extract-highlights invoke error", hErr);
-            });
         });
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
@@ -231,12 +240,12 @@ export default function NewCampaign() {
       <div className="mb-8">
         <h1 className="font-heading">New Campaign</h1>
         <p className="mt-2 text-muted-foreground">
-          Upload vendor Excels and photo PDFs. We'll parse them on the next step.
+          Upload one card per vendor. We'll parse the Excels and tag each unit with its vendor.
         </p>
       </div>
 
-      <form onSubmit={submit} className="grid gap-6 lg:grid-cols-3">
-        <section className="surface-card p-6 lg:col-span-2 space-y-5">
+      <form onSubmit={submit} className="space-y-6">
+        <section className="surface-card p-6 space-y-5">
           <h3 className="font-heading">Campaign details</h3>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -277,21 +286,11 @@ export default function NewCampaign() {
               <Label>Campaign Dates</Label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Input
-                    id="start"
-                    type="date"
-                    value={flightStart}
-                    onChange={(e) => setFlightStart(e.target.value)}
-                  />
+                  <Input id="start" type="date" value={flightStart} onChange={(e) => setFlightStart(e.target.value)} />
                   <p className="text-[11px] text-muted-foreground pl-1">Start date</p>
                 </div>
                 <div className="space-y-1">
-                  <Input
-                    id="end"
-                    type="date"
-                    value={flightEnd}
-                    onChange={(e) => setFlightEnd(e.target.value)}
-                  />
+                  <Input id="end" type="date" value={flightEnd} onChange={(e) => setFlightEnd(e.target.value)} />
                   <p className="text-[11px] text-muted-foreground pl-1">End date</p>
                 </div>
               </div>
@@ -354,85 +353,40 @@ export default function NewCampaign() {
               </p>
             </div>
           </div>
-
-          {/* Vendor Photo Sheets PDF — required, single file */}
-          <div className="space-y-2 rounded-lg border border-[hsl(var(--accent-gold)/0.4)] bg-[hsl(var(--accent-gold)/0.04)] p-4">
-            <Label className="flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-[hsl(var(--accent-gold))]" />
-              Vendor Photo Sheets PDF *
-            </Label>
-            <p className="text-[11px] text-muted-foreground">
-              The Maps/Photosheets PDF from your vendor — used to extract location highlights for each unit.
-            </p>
-            <input
-              ref={photoSheetsRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                if (f && f.size > MAX_BYTES) {
-                  toast({ title: "File too large", description: "Max 50 MB.", variant: "destructive" });
-                  return;
-                }
-                setPhotoSheets(f);
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="outline" size="sm" onClick={() => photoSheetsRef.current?.click()}>
-                <Upload className="h-4 w-4" /> {photoSheets ? "Replace PDF" : "Choose PDF"}
-              </Button>
-              {photoSheets && (
-                <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {photoSheets.name}
-                  <button
-                    type="button"
-                    onClick={() => setPhotoSheets(null)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
-            </div>
-          </div>
         </section>
 
-        <aside className="space-y-6">
-          <FileDropZone
-            title="Vendor Excels"
-            hint={`Up to ${MAX_EXCELS} .xlsx files (Clear Channel / OutFront RFP Template)`}
-            icon={<FileSpreadsheet className="h-5 w-5" />}
-            inputRef={xlsxRef}
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            files={excels}
-            maxFiles={MAX_EXCELS}
-            onAdd={(fl) => addFiles(fl, setExcels, excels, (n) => n.endsWith(".xlsx"), "Excel", MAX_EXCELS)}
-            onRemove={(i) => setExcels(excels.filter((_, idx) => idx !== i))}
-          />
-          <FileDropZone
-            title="Vendor billboard photos"
-            hint={`Up to ${MAX_PHOTOS} files — .pdf, .jpg, .png, .webp`}
-            icon={<FileText className="h-5 w-5" />}
-            inputRef={pdfRef}
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-            files={pdfs}
-            maxFiles={MAX_PHOTOS}
-            onAdd={(fl) =>
-              addFiles(
-                fl,
-                setPdfs,
-                pdfs,
-                (n) => /\.(pdf|jpe?g|png|webp)$/i.test(n),
-                "photo",
-                MAX_PHOTOS,
-              )
-            }
-            onRemove={(i) => setPdfs(pdfs.filter((_, idx) => idx !== i))}
-          />
-        </aside>
+        <section className="surface-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-heading">Vendors</h3>
+              <p className="text-[12px] text-muted-foreground">
+                Add one card per vendor. Excel up to 50 MB, photo sheet PDF up to 500 MB. Max {MAX_VENDORS} vendors.
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground">{vendors.length} / {MAX_VENDORS}</span>
+          </div>
 
-        <div className="lg:col-span-3 flex flex-wrap items-center justify-end gap-3 border-t pt-6">
+          <div className="space-y-3">
+            {vendors.map((v, idx) => (
+              <VendorCard
+                key={v.id}
+                index={idx}
+                vendor={v}
+                onChange={(patch) => updateVendor(v.id, patch)}
+                onRemove={() => removeVendor(v.id)}
+                toastFn={toast}
+              />
+            ))}
+          </div>
+
+          {vendors.length < MAX_VENDORS && (
+            <Button type="button" variant="outline" size="sm" onClick={addVendor}>
+              <Plus className="h-4 w-4" /> Add Vendor
+            </Button>
+          )}
+        </section>
+
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-6">
           {progress && (
             <span className="mr-auto flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> {progress}
@@ -455,82 +409,140 @@ function safeName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function FileDropZone({
-  title,
-  hint,
-  icon,
-  accept,
-  files,
-  inputRef,
-  maxFiles,
-  onAdd,
+function VendorCard({
+  index,
+  vendor,
+  onChange,
   onRemove,
+  toastFn,
 }: {
-  title: string;
-  hint: string;
-  icon: React.ReactNode;
-  accept: string;
-  files: Picked[];
-  inputRef: React.RefObject<HTMLInputElement>;
-  maxFiles: number;
-  onAdd: (fl: FileList | null) => void;
-  onRemove: (index: number) => void;
+  index: number;
+  vendor: Vendor;
+  onChange: (patch: Partial<Vendor>) => void;
+  onRemove: () => void;
+  toastFn: ReturnType<typeof useToast>["toast"];
 }) {
-  const [drag, setDrag] = useState(false);
+  const xlsxRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+
   return (
-    <div className="surface-card p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-          {icon}
-        </div>
-        <div>
-          <h4 className="font-heading text-base">{title}</h4>
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        </div>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={accept}
-        className="hidden"
-        onChange={(e) => onAdd(e.target.files)}
-      />
-
+    <div className="relative rounded-lg border bg-card/40 p-4">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDrag(true);
-        }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDrag(false);
-          onAdd(e.dataTransfer.files);
-        }}
-        className={`flex w-full flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 text-sm transition-colors ${
-          drag ? "border-primary bg-secondary/40" : "border-border hover:border-primary/40 hover:bg-muted/40"
-        }`}
+        onClick={onRemove}
+        className="absolute right-2 top-2 rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        aria-label="Remove vendor"
       >
-        <Upload className="h-5 w-5 text-muted-foreground" />
-        <span className="font-medium text-foreground">Click or drag files here</span>
-        <span className="text-xs text-muted-foreground">{files.length} / {maxFiles} added</span>
+        <Trash2 className="h-4 w-4" />
       </button>
 
-      {files.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
-          {files.map((f, i) => (
-            <li key={i} className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-1.5 text-xs">
-              <span className="truncate">{f.file.name}</span>
-              <button type="button" onClick={() => onRemove(i)} className="ml-2 text-muted-foreground hover:text-destructive">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
+      <div className="mb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        Vendor {index + 1}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_1fr_1fr]">
+        <div className="space-y-1.5">
+          <Label htmlFor={`vname-${vendor.id}`} className="text-xs">Vendor Name *</Label>
+          <Input
+            id={`vname-${vendor.id}`}
+            value={vendor.vendor_name}
+            onChange={(e) => onChange({ vendor_name: e.target.value })}
+            placeholder="e.g. Lamar"
+            className="h-9"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs flex items-center gap-1.5">
+            <FileSpreadsheet className="h-3 w-3" /> Vendor Excel (.xlsx) *
+          </Label>
+          <input
+            ref={xlsxRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              if (!f) return;
+              if (!/\.xlsx$/i.test(f.name)) {
+                toastFn({ title: "Excel must be .xlsx", variant: "destructive" });
+                return;
+              }
+              if (f.size > MAX_EXCEL_BYTES) {
+                toastFn({ title: `${f.name} too large`, description: "Max 50 MB.", variant: "destructive" });
+                return;
+              }
+              onChange({ excel_file: f });
+            }}
+          />
+          <FilePickerRow
+            file={vendor.excel_file}
+            onPick={() => xlsxRef.current?.click()}
+            onClear={() => onChange({ excel_file: null })}
+            placeholder="Choose .xlsx"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs flex items-center gap-1.5">
+            <FileText className="h-3 w-3" /> Photo Sheet PDF
+          </Label>
+          <input
+            ref={pdfRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              if (!f) return;
+              if (!/\.pdf$/i.test(f.name)) {
+                toastFn({ title: "Photo sheet must be PDF", variant: "destructive" });
+                return;
+              }
+              if (f.size > MAX_PDF_BYTES) {
+                toastFn({ title: `${f.name} too large`, description: "Max 500 MB.", variant: "destructive" });
+                return;
+              }
+              onChange({ photo_pdf: f });
+            }}
+          />
+          <FilePickerRow
+            file={vendor.photo_pdf}
+            onPick={() => pdfRef.current?.click()}
+            onClear={() => onChange({ photo_pdf: null })}
+            placeholder="Choose PDF (optional)"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilePickerRow({
+  file,
+  onPick,
+  onClear,
+  placeholder,
+}: {
+  file: File | null;
+  onPick: () => void;
+  onClear: () => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="outline" size="sm" onClick={onPick} className="h-9 shrink-0">
+        <Upload className="h-3.5 w-3.5" /> {file ? "Replace" : "Choose"}
+      </Button>
+      {file ? (
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate">{file.name}</span>
+          <button type="button" onClick={onClear} className="shrink-0 text-muted-foreground hover:text-destructive">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ) : (
+        <span className="truncate text-xs text-muted-foreground">{placeholder}</span>
       )}
     </div>
   );

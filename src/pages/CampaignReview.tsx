@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ import {
   FileText,
   Eye,
   Upload,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
@@ -99,6 +101,26 @@ export default function CampaignReview() {
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [collapsedVendors, setCollapsedVendors] = useState<Set<string>>(new Set());
+
+  const groupedUnits = useMemo(() => {
+    const map = new Map<string, Unit[]>();
+    for (const u of units) {
+      const key = (u.vendor && u.vendor.trim()) || "Unspecified Vendor";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(u);
+    }
+    return Array.from(map.entries()).map(([vendor, list]) => ({ vendor, units: list }));
+  }, [units]);
+
+  const toggleVendorCollapse = (vendor: string) => {
+    setCollapsedVendors((prev) => {
+      const next = new Set(prev);
+      if (next.has(vendor)) next.delete(vendor);
+      else next.add(vendor);
+      return next;
+    });
+  };
 
   const load = async () => {
     if (!id) return;
@@ -746,7 +768,26 @@ export default function CampaignReview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {units.map((u) => {
+                    {groupedUnits.map(({ vendor, units: vendorUnits }) => {
+                      const collapsed = collapsedVendors.has(vendor);
+                      return (
+                      <Fragment key={vendor}>
+                        <tr className="bg-muted/60 sticky">
+                          <td colSpan={14} className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleVendorCollapse(vendor)}
+                              className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground hover:text-primary"
+                            >
+                              {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              <span>{vendor}</span>
+                              <span className="ml-1 normal-case font-normal text-muted-foreground">
+                                · {vendorUnits.length} {vendorUnits.length === 1 ? "unit" : "units"}
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                        {!collapsed && vendorUnits.map((u) => {
                       const excluded = u.included === false;
                       const isHighlighted = u.id === highlightedId;
                       return (
@@ -926,6 +967,9 @@ export default function CampaignReview() {
                             </td>
                           ))}
                         </tr>
+                      );
+                    })}
+                      </Fragment>
                       );
                     })}
                       </tbody>
