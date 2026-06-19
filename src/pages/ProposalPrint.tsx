@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Globe, Instagram } from "lucide-react";
+import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Phone, Globe, Instagram } from "lucide-react";
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress } from "@/lib/shortAddress";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 import heatherPhoto from "@/assets/team-heather.jpg";
 import viaPhoto from "@/assets/team-via.webp";
 import roxiePhoto from "@/assets/team-roxie.jpg";
