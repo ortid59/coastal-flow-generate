@@ -388,9 +388,14 @@ export default function ProposalPrint() {
               <p style={{ fontSize: 13, color: MUTED }}>Founder & CEO</p>
             </div>
             <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-              <a href="mailto:heather.waisanen@gmail.com" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
-                <Mail className="h-4 w-4" /> heather.waisanen@gmail.com
+              <a href={`mailto:${settings.company_email || "heather.waisanen@gmail.com"}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
+                <Mail className="h-4 w-4" /> {settings.company_email || "heather.waisanen@gmail.com"}
               </a>
+              {settings.company_phone && (
+                <a href={`tel:${settings.company_phone.replace(/[^0-9+]/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
+                  <Phone className="h-4 w-4" /> {settings.company_phone}
+                </a>
+              )}
               <a href="https://www.instagram.com/coastalmaverick/" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
                 <Instagram className="h-4 w-4" /> @coastalmaverick
               </a>
@@ -398,6 +403,12 @@ export default function ProposalPrint() {
                 <Globe className="h-4 w-4" /> coastalmaverick.com
               </a>
             </div>
+            {settings.footer_tagline && (
+              <p style={{ marginTop: 32, fontSize: 12, color: MUTED, whiteSpace: "pre-line", lineHeight: 1.5 }}>
+                {settings.footer_tagline}
+              </p>
+            )}
+
           </div>
         </section>
       </div>
