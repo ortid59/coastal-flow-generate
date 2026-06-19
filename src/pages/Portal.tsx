@@ -16,6 +16,7 @@ import {
   Eye,
   
   Mail,
+  Phone,
   Globe,
   Instagram,
 } from "lucide-react";
@@ -32,6 +33,8 @@ import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 
 type Campaign = {
   id: string;
@@ -554,9 +557,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       <ClosingCTA clientName={campaign.client_name} />
 
       {/* Footer */}
-      <footer className="border-t bg-card py-8 text-center text-xs text-muted-foreground">
-        Prepared by {brand.name} · Confidential — intended only for {campaign.client_name}.
-      </footer>
+      <PortalFooter clientName={campaign.client_name} />
+
     </div>
   );
 }
@@ -628,8 +630,22 @@ function MetricCard({
   );
 }
 
+/* =================== Portal Footer =================== */
+function PortalFooter({ clientName }: { clientName: string }) {
+  const s = useProposalSettings();
+  const name = s.company_name || brand.name;
+  return (
+    <footer className="border-t bg-card py-8 text-center text-xs text-muted-foreground space-y-1">
+      <div>Prepared by {name} · Confidential — intended only for {clientName}.</div>
+      {s.footer_tagline && <div className="whitespace-pre-line">{s.footer_tagline}</div>}
+    </footer>
+  );
+}
+
 /* =================== Next Steps =================== */
 function NextSteps() {
+  const s = useProposalSettings();
+
   const steps = [
     { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
     { n: "02", title: "Final Approval", body: "Confirm the unit list and flight dates." },
@@ -649,9 +665,15 @@ function NextSteps() {
         >
           <div className="eyebrow">03 · Process</div>
           <h2 className="mt-3 font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight text-foreground">
-            Next Steps
+            {s.next_steps_heading || "Next Steps"}
           </h2>
           <span className="mx-auto mt-5 gold-rule" />
+          {s.next_steps_body && (
+            <p className="mx-auto mt-6 max-w-2xl text-base md:text-lg text-muted-foreground whitespace-pre-line">
+              {s.next_steps_body}
+            </p>
+          )}
+
         </motion.div>
 
         <div className="mt-16 grid gap-8 md:grid-cols-4 relative">
@@ -692,6 +714,8 @@ function NextSteps() {
 
 /* =================== Closing CTA =================== */
 function ClosingCTA({ clientName }: { clientName: string }) {
+  const s = useProposalSettings();
+  const email = s.company_email || "heather.waisanen@gmail.com";
   return (
     <section className="bg-card">
       <div className="grid lg:grid-cols-[40%_60%]">
@@ -705,7 +729,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
         >
           <Logo size={48} variant="onDark" className="self-start" />
           <div className="mt-8 font-heading text-sm font-bold uppercase tracking-[0.25em]">
-            Coastal Maverick
+            {s.company_name || "Coastal Maverick"}
           </div>
           <span className="mt-4 block h-[2px] w-12 bg-[hsl(var(--accent-gold))] rounded-full" />
           <blockquote className="mt-8 font-body italic text-base md:text-lg text-[hsl(var(--accent-gold))] leading-relaxed">
@@ -738,9 +762,16 @@ function ClosingCTA({ clientName }: { clientName: string }) {
           <ul className="mt-6 space-y-2 text-sm">
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
               <Mail className="h-4 w-4" />
-              <a href="mailto:heather.waisanen@gmail.com">heather.waisanen@gmail.com</a>
+              <a href={`mailto:${email}`}>{email}</a>
             </li>
+            {s.company_phone && (
+              <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
+                <Phone className="h-4 w-4" />
+                <a href={`tel:${s.company_phone.replace(/[^0-9+]/g, "")}`}>{s.company_phone}</a>
+              </li>
+            )}
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
+
               <Instagram className="h-4 w-4" />
               <a href="https://www.instagram.com/coastalmaverick/" target="_blank" rel="noreferrer">
                 @coastalmaverick

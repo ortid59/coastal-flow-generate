@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Globe, Instagram } from "lucide-react";
+import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Phone, Globe, Instagram } from "lucide-react";
 import { format } from "date-fns";
 import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress } from "@/lib/shortAddress";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 import heatherPhoto from "@/assets/team-heather.jpg";
 import viaPhoto from "@/assets/team-via.webp";
 import roxiePhoto from "@/assets/team-roxie.jpg";
@@ -87,6 +89,8 @@ export default function ProposalPrint() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const settings = useProposalSettings();
+
 
   useEffect(() => {
     if (!campaignId) return;
@@ -338,8 +342,14 @@ export default function ProposalPrint() {
         {/* ===== NEXT STEPS ===== */}
         <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
-          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>Next Steps</h2>
-          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 48 }} />
+          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>{settings.next_steps_heading || "Next Steps"}</h2>
+          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: settings.next_steps_body ? 24 : 48 }} />
+          {settings.next_steps_body && (
+            <p style={{ maxWidth: 720, textAlign: "center", color: WHITE, fontSize: 14, lineHeight: 1.6, marginBottom: 40, whiteSpace: "pre-line" }}>
+              {settings.next_steps_body}
+            </p>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 32, maxWidth: 900, width: "100%" }}>
             {[
               { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
@@ -365,7 +375,7 @@ export default function ProposalPrint() {
         <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
-            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>Coastal Maverick</p>
+            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
             <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 16 }} />
             <blockquote style={{ marginTop: 28, fontStyle: "italic", fontSize: 17, color: GOLD, lineHeight: 1.6 }}>"Positioned where your audience moves."</blockquote>
           </div>
@@ -378,9 +388,14 @@ export default function ProposalPrint() {
               <p style={{ fontSize: 13, color: MUTED }}>Founder & CEO</p>
             </div>
             <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-              <a href="mailto:heather.waisanen@gmail.com" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
-                <Mail className="h-4 w-4" /> heather.waisanen@gmail.com
+              <a href={`mailto:${settings.company_email || "heather.waisanen@gmail.com"}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
+                <Mail className="h-4 w-4" /> {settings.company_email || "heather.waisanen@gmail.com"}
               </a>
+              {settings.company_phone && (
+                <a href={`tel:${settings.company_phone.replace(/[^0-9+]/g, "")}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
+                  <Phone className="h-4 w-4" /> {settings.company_phone}
+                </a>
+              )}
               <a href="https://www.instagram.com/coastalmaverick/" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: OCEAN, textDecoration: "none" }}>
                 <Instagram className="h-4 w-4" /> @coastalmaverick
               </a>
@@ -388,6 +403,12 @@ export default function ProposalPrint() {
                 <Globe className="h-4 w-4" /> coastalmaverick.com
               </a>
             </div>
+            {settings.footer_tagline && (
+              <p style={{ marginTop: 32, fontSize: 12, color: MUTED, whiteSpace: "pre-line", lineHeight: 1.5 }}>
+                {settings.footer_tagline}
+              </p>
+            )}
+
           </div>
         </section>
       </div>

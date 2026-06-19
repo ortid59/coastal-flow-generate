@@ -1,7 +1,16 @@
 import { motion } from "framer-motion";
 import { Megaphone, Target, Lightbulb } from "lucide-react";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 
 export function WhoWeAre() {
+  const settings = useProposalSettings();
+  const heading = settings.who_we_are_heading || "Who We Are";
+  // Split heading on whitespace for the two-line decorative layout.
+  const parts = heading.trim().split(/\s+/);
+  const headTop = parts.length > 1 ? parts.slice(0, Math.ceil(parts.length / 2)).join(" ") : parts[0];
+  const headBottom = parts.length > 1 ? parts.slice(Math.ceil(parts.length / 2)).join(" ") : "";
+
   return (
     <section className="relative overflow-hidden bg-[hsl(var(--off-white))]">
       <div className="container-app relative py-24 md:py-32">
@@ -17,7 +26,7 @@ export function WhoWeAre() {
               className="pointer-events-none select-none absolute -top-8 -left-2 font-heading font-bold leading-[0.85] uppercase text-foreground"
               style={{ fontSize: "clamp(80px, 12vw, 160px)" }}
             >
-              Who<br />We Are
+              {headTop}{headBottom && (<><br />{headBottom}</>)}
             </motion.span>
 
             <motion.div
@@ -29,7 +38,8 @@ export function WhoWeAre() {
             >
               <div className="eyebrow">About the Agency</div>
               <h2 className="mt-3 font-heading text-5xl md:text-6xl font-bold tracking-tight uppercase leading-[0.95] text-foreground">
-                Who<br /><span className="text-[hsl(var(--ocean))]">We Are</span>
+                {headTop}{headBottom && (<><br /><span className="text-[hsl(var(--ocean))]">{headBottom}</span></>)}
+
               </h2>
               <span className="mt-5 gold-rule" />
 
@@ -58,17 +68,17 @@ export function WhoWeAre() {
             transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-5"
           >
-            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">Coastal Maverick</span> is a
-              woman-owned boutique out-of-home (OOH) media agency specializing in
-              high-impact, highly customized OOH campaigns. From concept to completion, we
-              serve as a strategic partner for brands looking to make a bold visual
-              statement in the physical world.
-            </p>
-            <p className="text-base md:text-lg leading-relaxed text-muted-foreground">
-              With 360-degree experience across media owner, client, and agency sides, we
-              bring a unique perspective that fuels smarter strategy and greater impact.
-            </p>
+            {settings.who_we_are_body_1 && (
+              <p className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+                {settings.who_we_are_body_1}
+              </p>
+            )}
+            {settings.who_we_are_body_2 && (
+              <p className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-line">
+                {settings.who_we_are_body_2}
+              </p>
+            )}
+
 
             <div className="h-px w-full bg-border my-2" />
 
