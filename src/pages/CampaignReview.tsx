@@ -19,6 +19,8 @@ import {
   FileText,
   Eye,
   Upload,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
