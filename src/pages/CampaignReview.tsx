@@ -768,7 +768,26 @@ export default function CampaignReview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {units.map((u) => {
+                    {groupedUnits.map(({ vendor, units: vendorUnits }) => {
+                      const collapsed = collapsedVendors.has(vendor);
+                      return (
+                      <Fragment key={vendor}>
+                        <tr className="bg-muted/60 sticky">
+                          <td colSpan={14} className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleVendorCollapse(vendor)}
+                              className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground hover:text-primary"
+                            >
+                              {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              <span>{vendor}</span>
+                              <span className="ml-1 normal-case font-normal text-muted-foreground">
+                                · {vendorUnits.length} {vendorUnits.length === 1 ? "unit" : "units"}
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                        {!collapsed && vendorUnits.map((u) => {
                       const excluded = u.included === false;
                       const isHighlighted = u.id === highlightedId;
                       return (
