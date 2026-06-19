@@ -762,9 +762,16 @@ function ClosingCTA({ clientName }: { clientName: string }) {
           <ul className="mt-6 space-y-2 text-sm">
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
               <Mail className="h-4 w-4" />
-              <a href="mailto:heather.waisanen@gmail.com">heather.waisanen@gmail.com</a>
+              <a href={`mailto:${email}`}>{email}</a>
             </li>
+            {s.company_phone && (
+              <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
+                <Phone className="h-4 w-4" />
+                <a href={`tel:${s.company_phone.replace(/[^0-9+]/g, "")}`}>{s.company_phone}</a>
+              </li>
+            )}
             <li className="flex items-center gap-2 text-[hsl(var(--ocean))] hover:underline">
+
               <Instagram className="h-4 w-4" />
               <a href="https://www.instagram.com/coastalmaverick/" target="_blank" rel="noreferrer">
                 @coastalmaverick
