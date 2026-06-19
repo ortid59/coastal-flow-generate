@@ -14,6 +14,7 @@ const team: Member[] = [
 ];
 
 export function MeetTheTeam() {
+  const settings = useProposalSettings();
   return (
     <section className="relative overflow-hidden bg-card">
       <div className="container-app relative py-24 md:py-32">
@@ -27,9 +28,10 @@ export function MeetTheTeam() {
         >
           <div className="eyebrow">The Team</div>
           <h2 className="mt-3 font-heading text-4xl md:text-5xl font-bold uppercase tracking-tight text-foreground">
-            Meet The Team
+            {settings.meet_the_team_heading || "Meet The Team"}
           </h2>
           <span className="mx-auto mt-5 gold-rule" />
+
           <p className="mx-auto mt-6 max-w-xl text-base md:text-lg text-muted-foreground">
             The people behind the placements — hands-on, collaborative, and committed to
             standout campaigns from start to finish.
