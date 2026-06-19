@@ -714,6 +714,8 @@ function NextSteps() {
 
 /* =================== Closing CTA =================== */
 function ClosingCTA({ clientName }: { clientName: string }) {
+  const s = useProposalSettings();
+  const email = s.company_email || "heather.waisanen@gmail.com";
   return (
     <section className="bg-card">
       <div className="grid lg:grid-cols-[40%_60%]">
