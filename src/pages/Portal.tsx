@@ -16,6 +16,7 @@ import {
   Eye,
   
   Mail,
+  Phone,
   Globe,
   Instagram,
 } from "lucide-react";
