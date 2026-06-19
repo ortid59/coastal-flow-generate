@@ -556,9 +556,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       <ClosingCTA clientName={campaign.client_name} />
 
       {/* Footer */}
-      <footer className="border-t bg-card py-8 text-center text-xs text-muted-foreground">
-        Prepared by {brand.name} · Confidential — intended only for {campaign.client_name}.
-      </footer>
+      <PortalFooter clientName={campaign.client_name} />
+
     </div>
   );
 }
