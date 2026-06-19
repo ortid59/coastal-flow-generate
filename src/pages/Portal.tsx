@@ -664,9 +664,15 @@ function NextSteps() {
         >
           <div className="eyebrow">03 · Process</div>
           <h2 className="mt-3 font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight text-foreground">
-            Next Steps
+            {s.next_steps_heading || "Next Steps"}
           </h2>
           <span className="mx-auto mt-5 gold-rule" />
+          {s.next_steps_body && (
+            <p className="mx-auto mt-6 max-w-2xl text-base md:text-lg text-muted-foreground whitespace-pre-line">
+              {s.next_steps_body}
+            </p>
+          )}
+
         </motion.div>
 
         <div className="mt-16 grid gap-8 md:grid-cols-4 relative">
