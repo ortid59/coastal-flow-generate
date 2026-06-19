@@ -145,6 +145,51 @@ export type Database = {
           },
         ]
       }
+      proposal_settings: {
+        Row: {
+          company_email: string
+          company_name: string
+          company_phone: string
+          footer_tagline: string
+          id: number
+          meet_the_team_heading: string
+          next_steps_body: string
+          next_steps_heading: string
+          updated_at: string
+          who_we_are_body_1: string
+          who_we_are_body_2: string
+          who_we_are_heading: string
+        }
+        Insert: {
+          company_email?: string
+          company_name?: string
+          company_phone?: string
+          footer_tagline?: string
+          id?: number
+          meet_the_team_heading?: string
+          next_steps_body?: string
+          next_steps_heading?: string
+          updated_at?: string
+          who_we_are_body_1?: string
+          who_we_are_body_2?: string
+          who_we_are_heading?: string
+        }
+        Update: {
+          company_email?: string
+          company_name?: string
+          company_phone?: string
+          footer_tagline?: string
+          id?: number
+          meet_the_team_heading?: string
+          next_steps_body?: string
+          next_steps_heading?: string
+          updated_at?: string
+          who_we_are_body_1?: string
+          who_we_are_body_2?: string
+          who_we_are_heading?: string
+        }
+        Relationships: []
+      }
       units: {
         Row: {
           artwork_due_date: string | null
