@@ -4,6 +4,13 @@ import { useProposalSettings } from "@/hooks/useProposalSettings";
 
 
 export function WhoWeAre() {
+  const settings = useProposalSettings();
+  const heading = settings.who_we_are_heading || "Who We Are";
+  // Split heading on whitespace for the two-line decorative layout.
+  const parts = heading.trim().split(/\s+/);
+  const headTop = parts.length > 1 ? parts.slice(0, Math.ceil(parts.length / 2)).join(" ") : parts[0];
+  const headBottom = parts.length > 1 ? parts.slice(Math.ceil(parts.length / 2)).join(" ") : "";
+
   return (
     <section className="relative overflow-hidden bg-[hsl(var(--off-white))]">
       <div className="container-app relative py-24 md:py-32">
