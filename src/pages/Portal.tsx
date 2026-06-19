@@ -629,8 +629,22 @@ function MetricCard({
   );
 }
 
+/* =================== Portal Footer =================== */
+function PortalFooter({ clientName }: { clientName: string }) {
+  const s = useProposalSettings();
+  const name = s.company_name || brand.name;
+  return (
+    <footer className="border-t bg-card py-8 text-center text-xs text-muted-foreground space-y-1">
+      <div>Prepared by {name} · Confidential — intended only for {clientName}.</div>
+      {s.footer_tagline && <div className="whitespace-pre-line">{s.footer_tagline}</div>}
+    </footer>
+  );
+}
+
 /* =================== Next Steps =================== */
 function NextSteps() {
+  const s = useProposalSettings();
+
   const steps = [
     { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
     { n: "02", title: "Final Approval", body: "Confirm the unit list and flight dates." },
