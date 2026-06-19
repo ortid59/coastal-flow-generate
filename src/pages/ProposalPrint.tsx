@@ -342,8 +342,14 @@ export default function ProposalPrint() {
         {/* ===== NEXT STEPS ===== */}
         <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
-          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>Next Steps</h2>
-          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 48 }} />
+          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>{settings.next_steps_heading || "Next Steps"}</h2>
+          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: settings.next_steps_body ? 24 : 48 }} />
+          {settings.next_steps_body && (
+            <p style={{ maxWidth: 720, textAlign: "center", color: WHITE, fontSize: 14, lineHeight: 1.6, marginBottom: 40, whiteSpace: "pre-line" }}>
+              {settings.next_steps_body}
+            </p>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 32, maxWidth: 900, width: "100%" }}>
             {[
               { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
