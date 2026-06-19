@@ -101,6 +101,26 @@ export default function CampaignReview() {
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [collapsedVendors, setCollapsedVendors] = useState<Set<string>>(new Set());
+
+  const groupedUnits = useMemo(() => {
+    const map = new Map<string, Unit[]>();
+    for (const u of units) {
+      const key = (u.vendor && u.vendor.trim()) || "Unspecified Vendor";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(u);
+    }
+    return Array.from(map.entries()).map(([vendor, list]) => ({ vendor, units: list }));
+  }, [units]);
+
+  const toggleVendorCollapse = (vendor: string) => {
+    setCollapsedVendors((prev) => {
+      const next = new Set(prev);
+      if (next.has(vendor)) next.delete(vendor);
+      else next.add(vendor);
+      return next;
+    });
+  };
 
   const load = async () => {
     if (!id) return;
