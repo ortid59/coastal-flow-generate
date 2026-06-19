@@ -969,6 +969,9 @@ export default function CampaignReview() {
                         </tr>
                       );
                     })}
+                      </Fragment>
+                      );
+                    })}
                       </tbody>
                     </table>
                   </div>
