@@ -26,7 +26,7 @@ export function WhoWeAre() {
               className="pointer-events-none select-none absolute -top-8 -left-2 font-heading font-bold leading-[0.85] uppercase text-foreground"
               style={{ fontSize: "clamp(80px, 12vw, 160px)" }}
             >
-              Who<br />We Are
+              {headTop}{headBottom && (<><br />{headBottom}</>)}
             </motion.span>
 
             <motion.div
@@ -38,7 +38,8 @@ export function WhoWeAre() {
             >
               <div className="eyebrow">About the Agency</div>
               <h2 className="mt-3 font-heading text-5xl md:text-6xl font-bold tracking-tight uppercase leading-[0.95] text-foreground">
-                Who<br /><span className="text-[hsl(var(--ocean))]">We Are</span>
+                {headTop}{headBottom && (<><br /><span className="text-[hsl(var(--ocean))]">{headBottom}</span></>)}
+
               </h2>
               <span className="mt-5 gold-rule" />
 
