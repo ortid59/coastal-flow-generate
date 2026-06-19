@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { Megaphone, Target, Lightbulb } from "lucide-react";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 
 export function WhoWeAre() {
   return (
