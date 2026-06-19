@@ -705,7 +705,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
         >
           <Logo size={48} variant="onDark" className="self-start" />
           <div className="mt-8 font-heading text-sm font-bold uppercase tracking-[0.25em]">
-            Coastal Maverick Media
+            Coastal Maverick
           </div>
           <span className="mt-4 block h-[2px] w-12 bg-[hsl(var(--accent-gold))] rounded-full" />
           <blockquote className="mt-8 font-body italic text-base md:text-lg text-[hsl(var(--accent-gold))] leading-relaxed">
