@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import heather from "@/assets/team-heather.jpg";
 import via from "@/assets/team-via.webp";
 import roxie from "@/assets/team-roxie.jpg";
+import { useProposalSettings } from "@/hooks/useProposalSettings";
+
 
 type Member = { name: string; role: string; photo: string };
 
