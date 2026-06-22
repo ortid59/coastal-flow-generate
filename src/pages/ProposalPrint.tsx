@@ -184,6 +184,12 @@ export default function ProposalPrint() {
     return `${String(mIdx).padStart(2, "0")}.${String(withinMarket).padStart(2, "0")}`;
   });
 
+  const activeTiers = [
+    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
+    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
+    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+
   return (
     <>
       <style>{`
