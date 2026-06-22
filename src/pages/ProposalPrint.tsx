@@ -335,6 +335,55 @@ export default function ProposalPrint() {
           </section>
         )}
 
+        {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
+        {activeTiers.length >= 2 && (
+          <section className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: Q_GOLD, fontWeight: 600, marginBottom: 12 }}>Choose Your Option</p>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 32, fontWeight: 800, textTransform: "uppercase", color: Q_NAVY, marginBottom: 12 }}>Campaign Options</h2>
+              <div style={{ height: 3, width: 64, background: Q_GOLD, borderRadius: 2, margin: "0 auto" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeTiers.length}, 1fr)`, gap: 20 }}>
+              {activeTiers.map((tier) => {
+                const tierUnits = units.filter((u) => u.included !== false && u[tier.key]);
+                const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0), 0);
+                const totalImpressions = tierUnits.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+                const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0);
+                const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * (u.four_week_periods ?? 0), 0);
+                const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 8 };
+                const labelStyle: React.CSSProperties = { color: Q_GREY };
+                const valStyle: React.CSSProperties = { color: Q_NAVY, fontWeight: 600 };
+                return (
+                  <div key={tier.key} style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 12, padding: 24, background: Q_SOFT, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: Q_GREY, fontWeight: 700 }}>{tier.label}</p>
+                    <div style={{ borderTop: `1px solid ${Q_BORDER}`, paddingTop: 4 }}>
+                      <div style={rowStyle}><span style={labelStyle}>Placements</span><span style={valStyle}>{tierUnits.length} units</span></div>
+                      <div style={rowStyle}>
+                        <span style={labelStyle}>Four-Week Rate</span>
+                        <span style={valStyle}>{fourWeekRate > 0 ? `$${fourWeekRate.toLocaleString()}` : <span style={{ color: Q_GREY, fontWeight: 400, fontStyle: "italic" }}>Contact for pricing</span>}</span>
+                      </div>
+                      {totalImpressions > 0 && (
+                        <div style={rowStyle}><span style={labelStyle}>Four-Week Impressions</span><span style={valStyle}>{totalImpressions.toLocaleString()}</span></div>
+                      )}
+                      {totalCampaignCost > 0 && (
+                        <div style={rowStyle}>
+                          <span style={labelStyle}>Total Campaign Cost</span>
+                          <span style={valStyle}>
+                            {totalPeriods > 0 && (
+                              <span style={{ color: Q_GREY, fontWeight: 400 }}>{totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} · </span>
+                            )}
+                            ${totalCampaignCost.toLocaleString()} total
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* ===== UNIT QUOTE PAGES (white, matching Portal PDF) ===== */}
         {units.map((unit, idx) => (
           <div key={unit.id} className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
