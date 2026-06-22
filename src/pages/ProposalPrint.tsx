@@ -106,7 +106,7 @@ export default function ProposalPrint() {
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
