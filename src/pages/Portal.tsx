@@ -68,6 +68,7 @@ type Unit = {
   weekly_impressions: number | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk: number | null;
   production_cost: number | null;
   install_cost: number | null;
   four_week_periods: number | null;
@@ -122,7 +123,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .from("units")
           .select(
             // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -411,8 +412,13 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <div className={`grid gap-4 ${activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
                   {activeTiers.map((tier) => {
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
-                    const totalCost = tierUnits.reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+                    const fourWeekRate = tierUnits.reduce((sum, u) => sum + (u.negotiated_rate_4wk ?? 0), 0);
                     const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
+                    const totalPeriods = tierUnits.reduce((sum, u) => sum + (u.four_week_periods ?? 0), 0);
+                    const totalCampaignCost = tierUnits.reduce(
+                      (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * (u.four_week_periods ?? 0),
+                      0,
+                    );
                     const isSelected = selectedTier === tier.key;
                     const isExpanded = expandedTier === tier.key;
                     const visibleUnits = isExpanded ? tierUnits : tierUnits.slice(0, 4);
@@ -438,15 +444,6 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                             {tier.label}
                           </p>
-                          {totalCost > 0 ? (
-                            <p className="text-3xl font-extrabold text-foreground">
-                              ${totalCost.toLocaleString()}
-                            </p>
-                          ) : (
-                            <p className="text-lg font-semibold text-muted-foreground italic">
-                              Contact for pricing
-                            </p>
-                          )}
                         </div>
 
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
@@ -454,10 +451,34 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                             <span className="text-muted-foreground">Placements</span>
                             <span className="font-semibold">{tierUnits.length} units</span>
                           </div>
+                          {fourWeekRate > 0 ? (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Four-Week Rate</span>
+                              <span className="font-semibold">${fourWeekRate.toLocaleString()}</span>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Four-Week Rate</span>
+                              <span className="font-semibold italic text-muted-foreground">Contact for pricing</span>
+                            </div>
+                          )}
                           {totalImpressions > 0 && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">4-Week Impressions</span>
+                              <span className="text-muted-foreground">Four-Week Impressions</span>
                               <span className="font-semibold">{totalImpressions.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {totalCampaignCost > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Total Campaign Cost</span>
+                              <span className="font-semibold">
+                                {totalPeriods > 0 && (
+                                  <span className="text-muted-foreground font-normal">
+                                    {totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} ·{' '}
+                                  </span>
+                                )}
+                                ${totalCampaignCost.toLocaleString()} total
+                              </span>
                             </div>
                           )}
                         </div>
