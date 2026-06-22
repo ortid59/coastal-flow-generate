@@ -42,6 +42,8 @@ type Unit = {
   weekly_impressions: number | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk: number | null;
+  four_week_periods: number | null;
   production_cost: number | null;
   install_cost: number | null;
   cpm: number | null;
@@ -104,7 +106,7 @@ export default function ProposalPrint() {
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -181,6 +183,12 @@ export default function ProposalPrint() {
     const withinMarket = units.filter((x) => (x.market ?? "Other") === m).indexOf(u) + 1;
     return `${String(mIdx).padStart(2, "0")}.${String(withinMarket).padStart(2, "0")}`;
   });
+
+  const activeTiers = [
+    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
+    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
+    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
 
   return (
     <>
@@ -324,6 +332,55 @@ export default function ProposalPrint() {
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
             <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
+          </section>
+        )}
+
+        {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
+        {activeTiers.length >= 2 && (
+          <section className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: Q_GOLD, fontWeight: 600, marginBottom: 12 }}>Choose Your Option</p>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 32, fontWeight: 800, textTransform: "uppercase", color: Q_NAVY, marginBottom: 12 }}>Campaign Options</h2>
+              <div style={{ height: 3, width: 64, background: Q_GOLD, borderRadius: 2, margin: "0 auto" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeTiers.length}, 1fr)`, gap: 20 }}>
+              {activeTiers.map((tier) => {
+                const tierUnits = units.filter((u) => u.included !== false && u[tier.key]);
+                const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0), 0);
+                const totalImpressions = tierUnits.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+                const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0);
+                const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * (u.four_week_periods ?? 0), 0);
+                const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 8 };
+                const labelStyle: React.CSSProperties = { color: Q_GREY };
+                const valStyle: React.CSSProperties = { color: Q_NAVY, fontWeight: 600 };
+                return (
+                  <div key={tier.key} style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 12, padding: 24, background: Q_SOFT, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: Q_GREY, fontWeight: 700 }}>{tier.label}</p>
+                    <div style={{ borderTop: `1px solid ${Q_BORDER}`, paddingTop: 4 }}>
+                      <div style={rowStyle}><span style={labelStyle}>Placements</span><span style={valStyle}>{tierUnits.length} units</span></div>
+                      <div style={rowStyle}>
+                        <span style={labelStyle}>Four-Week Rate</span>
+                        <span style={valStyle}>{fourWeekRate > 0 ? `$${fourWeekRate.toLocaleString()}` : <span style={{ color: Q_GREY, fontWeight: 400, fontStyle: "italic" }}>Contact for pricing</span>}</span>
+                      </div>
+                      {totalImpressions > 0 && (
+                        <div style={rowStyle}><span style={labelStyle}>Four-Week Impressions</span><span style={valStyle}>{totalImpressions.toLocaleString()}</span></div>
+                      )}
+                      {totalCampaignCost > 0 && (
+                        <div style={rowStyle}>
+                          <span style={labelStyle}>Total Campaign Cost</span>
+                          <span style={valStyle}>
+                            {totalPeriods > 0 && (
+                              <span style={{ color: Q_GREY, fontWeight: 400 }}>{totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} · </span>
+                            )}
+                            ${totalCampaignCost.toLocaleString()} total
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 
