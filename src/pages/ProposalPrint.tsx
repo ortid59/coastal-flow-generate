@@ -42,6 +42,8 @@ type Unit = {
   weekly_impressions: number | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk: number | null;
+  four_week_periods: number | null;
   production_cost: number | null;
   install_cost: number | null;
   cpm: number | null;
