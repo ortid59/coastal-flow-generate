@@ -130,6 +130,16 @@ const unitNumberTokens = (unitNumber: string | null | undefined) => {
   return Array.from(tokens).filter((token) => token && token !== "NAN").sort((a, b) => b.length - a.length);
 };
 
+const EXTRACTION_STEP_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTION_STEP_TIMEOUT_MS): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId!));
+}
+
 const locationTokens = (location: string | null | undefined) => {
   const normalized = normalizeMatchText(location).replace(/[,.();:/]/g, " ").replace(/\s+/g, " ").trim();
   if (!normalized) return [];
