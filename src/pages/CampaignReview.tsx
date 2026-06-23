@@ -91,6 +91,167 @@ const fmtNum = (n: number | null) =>
 const fmtMoney = (n: number | null) =>
   n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
+type ExtractableUnit = {
+  id: string;
+  unit_number: string | null;
+  vendor?: string | null;
+  location_description?: string | null;
+};
+
+const normalizeMatchText = (value: string | null | undefined) =>
+  String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[–—]/g, "-")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const normalizeVendor = (value: string | null | undefined) =>
+  normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
+
+const escapeRe = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasBoundedToken = (text: string, token: string) => {
+  const normalized = normalizeMatchText(token);
+  if (normalized.length < 4) return false;
+  return new RegExp(`(^|[^A-Z0-9])${escapeRe(normalized)}([^A-Z0-9]|$)`).test(text);
+};
+
+const unitNumberTokens = (unitNumber: string | null | undefined) => {
+  const raw = normalizeMatchText(unitNumber);
+  const tokens = new Set<string>();
+  if (raw) tokens.add(raw);
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 5) {
+    tokens.add(digits);
+    tokens.add(String(parseInt(digits, 10)));
+    if (digits.length < 6) tokens.add(digits.padStart(6, "0"));
+  }
+  return Array.from(tokens).filter((token) => token && token !== "NAN").sort((a, b) => b.length - a.length);
+};
+
+const locationTokens = (location: string | null | undefined) => {
+  const normalized = normalizeMatchText(location).replace(/[,.();:/]/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  const tokens = new Set<string>();
+  const street = normalized.match(/\b\d{2,6}\s+[A-Z0-9]+(?:\s+[A-Z0-9]+){0,5}\b/);
+  if (street?.[0] && street[0].length >= 8) tokens.add(street[0]);
+  normalized
+    .split(/\s+(?:AND|AT|@|&|E\/O|W\/O|N\/O|S\/O)\s+|\s+-\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 10 && /[A-Z]{3}/.test(part))
+    .slice(0, 3)
+    .forEach((part) => tokens.add(part));
+  return Array.from(tokens).sort((a, b) => b.length - a.length);
+};
+
+function findUnitForPage<T extends ExtractableUnit>(text: string, units: T[], fileVendor?: string | null): T | undefined {
+  const haystack = normalizeMatchText(text);
+  if (!haystack || !units.length) return undefined;
+
+  const targetVendor = normalizeVendor(fileVendor);
+  const vendorUnits = targetVendor
+    ? units.filter((u) => {
+        const unitVendor = normalizeVendor(u.vendor);
+        return unitVendor && (unitVendor === targetVendor || unitVendor.includes(targetVendor) || targetVendor.includes(unitVendor));
+      })
+    : [];
+  const pool = vendorUnits.length ? vendorUnits : units;
+
+  const scored = pool
+    .map((unit) => {
+      let score = 0;
+      for (const token of unitNumberTokens(unit.unit_number)) {
+        if (hasBoundedToken(haystack, token)) score = Math.max(score, 100 + token.length);
+      }
+      for (const token of locationTokens(unit.location_description)) {
+        if (haystack.includes(token)) score = Math.max(score, 45 + Math.min(25, token.length / 2));
+      }
+      return { unit, score };
+    })
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return undefined;
+  const [best, second] = scored;
+  if (second && best.score >= 100 && second.score >= 100 && best.score - second.score <= 5) return undefined;
+  return best.score >= 45 ? best.unit : undefined;
+}
+
+const BOILERPLATE_PATTERNS: RegExp[] = [
+  /geopath/i,
+  /audience\s+location\s+measurement/i,
+  /all\s+rights\s+reserved/i,
+  /copyright/i,
+  /proprietary/i,
+  /source\s*:/i,
+  /spot\s+in\s+rotation/i,
+  /proposal\s*\/\s*photosheet/i,
+];
+
+function stripBoilerplateSentences(text: string) {
+  const sentences = text.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) ?? [text];
+  return sentences
+    .filter((sentence) => !BOILERPLATE_PATTERNS.some((re) => re.test(sentence)))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractHighlightText(items: Array<{ str: string; transform?: number[] }>) {
+  const lines: { y: number; text: string }[] = [];
+  for (const item of items) {
+    const text = (item.str ?? "").trim();
+    if (!text) continue;
+    const y = item.transform?.[5] ?? 0;
+    const last = lines[lines.length - 1];
+    if (last && Math.abs(last.y - y) < 2) last.text += ` ${text}`;
+    else lines.push({ y, text });
+  }
+  if (!lines.length) return "";
+  lines.sort((a, b) => b.y - a.y);
+
+  const gaps = lines.slice(1).map((line, index) => Math.abs(lines[index].y - line.y));
+  const medianGap = gaps.length ? gaps.slice().sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 14;
+  const paragraphs: string[] = [];
+  let current = lines[0].text;
+  for (let i = 1; i < lines.length; i++) {
+    const gap = Math.abs(lines[i - 1].y - lines[i].y);
+    if (gap > medianGap * 1.8) {
+      if (current.trim()) paragraphs.push(current.trim());
+      current = lines[i].text;
+    } else {
+      current += ` ${lines[i].text}`;
+    }
+  }
+  if (current.trim()) paragraphs.push(current.trim());
+
+  const bestParagraph = paragraphs
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter((paragraph) => paragraph.length > 45)
+    .filter((paragraph) => /[A-Za-z]{3}/.test(paragraph))
+    .filter((paragraph) => !/^[\s\d$%.,:/\-]+$/.test(paragraph))
+    .filter((paragraph) => !BOILERPLATE_PATTERNS.some((re) => re.test(paragraph)))
+    .map((paragraph) => {
+      const words = paragraph.split(/\s+/).length;
+      const sentences = (paragraph.match(/[.!?]/g) ?? []).length;
+      const numericRatio = (paragraph.match(/\d/g)?.length ?? 0) / paragraph.length;
+      return { paragraph, score: words + sentences * 5 - numericRatio * 40 };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.paragraph;
+
+  if (bestParagraph) return stripBoilerplateSentences(bestParagraph);
+
+  const fallbackLine = lines
+    .map((line) => line.text.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 30 && line.length <= 220)
+    .filter((line) => /[A-Za-z]{3}/.test(line))
+    .filter((line) => !BOILERPLATE_PATTERNS.some((re) => re.test(line)))
+    .sort((a, b) => b.length - a.length)[0];
+
+  return fallbackLine ? stripBoilerplateSentences(fallbackLine) : "";
+}
+
 export default function CampaignReview() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
