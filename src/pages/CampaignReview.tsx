@@ -357,8 +357,9 @@ export default function CampaignReview() {
     else {
       toast({ title: "Parsing started" });
       await load();
-      // Auto-run photo extraction after re-parse (silent if no PDF exists)
-      extractPhotos({ silent: true });
+      // Auto-run PDF extraction after re-parse (silent if no PDF exists)
+      await extractPhotos({ silent: true });
+      await extractHighlights({ silent: true });
     }
   };
 
