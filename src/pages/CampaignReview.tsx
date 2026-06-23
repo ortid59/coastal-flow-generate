@@ -420,7 +420,9 @@ export default function CampaignReview() {
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
 
-          if (pageNum === 1) {
+          const matchedPageUnit = findUnitForPage(text, units, file.vendor);
+
+          if (pageNum === 1 && !matchedPageUnit) {
             // Page 1 = campaign overview map with all locations pinned
             try {
               const ovViewport = page.getViewport({ scale: 1.5 });
@@ -464,7 +466,7 @@ export default function CampaignReview() {
             continue;
           }
 
-          const unit = findUnitForPage(text, units, file.vendor);
+          const unit = matchedPageUnit;
           const unitNumber = unit?.unit_number ? String(unit.unit_number) : null;
           if (!unit || !unitNumber) {
             page.cleanup();
