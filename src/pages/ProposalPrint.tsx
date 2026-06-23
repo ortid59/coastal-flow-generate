@@ -76,6 +76,18 @@ const fmtMoney = (n: number | null) =>
     ? "—"
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
+const parseLocalDate = (s: string) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
+const fmtTierRange = (s: string | null, e: string | null): string | null => {
+  if (!s || !e) return null;
+  const sd = parseLocalDate(s);
+  const ed = parseLocalDate(e);
+  return sd.getFullYear() === ed.getFullYear()
+    ? `${format(sd, "MMM d")} – ${format(ed, "MMM d, yyyy")}`
+    : `${format(sd, "MMM d, yyyy")} – ${format(ed, "MMM d, yyyy")}`;
+};
 
 /* ─── Branding colours for section pages ─── */
 const NAVY = "#0A1628";
