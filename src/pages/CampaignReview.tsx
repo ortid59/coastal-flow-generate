@@ -79,10 +79,11 @@ type Unit = {
 
 type TierKey = "tier_a" | "tier_b" | "tier_c";
 type ShowTierKey = "show_tier_a" | "show_tier_b" | "show_tier_c";
-const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string }[] = [
-  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A" },
-  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B" },
-  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C" },
+type DateKey = "option_a_start" | "option_a_end" | "option_b_start" | "option_b_end" | "option_c_start" | "option_c_end";
+const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string; startField: DateKey; endField: DateKey }[] = [
+  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A", startField: "option_a_start", endField: "option_a_end" },
+  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B", startField: "option_b_start", endField: "option_b_end" },
+  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C", startField: "option_c_start", endField: "option_c_end" },
 ];
 
 const fmtNum = (n: number | null) =>
