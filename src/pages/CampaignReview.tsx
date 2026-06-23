@@ -586,17 +586,92 @@ export default function CampaignReview() {
   const extractHighlights = async () => {
     if (!id) return;
     setExtractingHl(true);
-    const { data, error } = await supabase.functions.invoke("extract-highlights", { body: { campaign_id: id } });
-    setExtractingHl(false);
-    if (error) {
-      toast({ title: "Highlights extraction failed", description: error.message, variant: "destructive" });
-    } else {
-      const s = (data as any)?.summary;
+    setExtractProgress({ current: 0, total: 0, label: "Preparing highlights…" });
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+      const { data: units, error: uErr } = await supabase
+        .from('units')
+        .select('id, unit_number, vendor, location_description')
+        .eq('campaign_id', id);
+      if (uErr) throw uErr;
+      if (!units?.length) throw new Error('No units found. Parse the Excel file first.');
+
+      const { data: vendorFiles, error: fErr } = await supabase
+        .from('vendor_files')
+        .select('id, storage_path, original_name, kind, vendor')
+        .eq('campaign_id', id);
+      if (fErr) throw fErr;
+
+      const pdfFiles = (vendorFiles ?? []).filter((file) =>
+        file.kind === 'photosheets' || file.original_name?.toLowerCase().endsWith('.pdf'),
+      );
+      if (!pdfFiles.length) throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
+
+      const collected = new Map<string, string[]>();
+      let pagesProcessed = 0;
+
+      for (const file of pdfFiles) {
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from('uploads')
+          .download(file.storage_path);
+        if (dlErr || !blob) {
+          console.warn('PDF download failed:', dlErr?.message);
+          continue;
+        }
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          try {
+            pagesProcessed++;
+            setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+            const textContent = await page.getTextContent();
+            const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+            const text = items.map((item) => item.str).join(' ');
+            const unit = findUnitForPage(text, units, file.vendor);
+            const paragraph = unit ? extractHighlightText(items) : "";
+            if (unit && paragraph) {
+              const existing = collected.get(unit.id) ?? [];
+              existing.push(paragraph);
+              collected.set(unit.id, existing);
+            }
+          } finally {
+            page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
+          }
+        }
+        pdf.destroy?.();
+      }
+
+      let unitsWithHighlights = 0;
+      for (const [unitId, paragraphs] of collected) {
+        const merged = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+        if (!merged) continue;
+        const { error: updateErr } = await supabase
+          .from('units')
+          .update({ highlights: merged })
+          .eq('id', unitId);
+        if (updateErr) throw updateErr;
+        unitsWithHighlights++;
+      }
+
       toast({
         title: "Highlights extracted",
-        description: s ? `${s.units_with_highlights} units · ${s.pages_processed} pages` : "Done",
+        description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
       });
-      load();
+      await load();
+    } catch (err: any) {
+      console.error('[extractHighlights]', err);
+      toast({ title: "Highlights extraction failed", description: err.message ?? "Unknown error", variant: "destructive" });
+    } finally {
+      setExtractingHl(false);
+      setExtractProgress({ current: 0, total: 0, label: "" });
     }
   };
 
