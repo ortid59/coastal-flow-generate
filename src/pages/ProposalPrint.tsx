@@ -203,10 +203,10 @@ export default function ProposalPrint() {
   });
 
   const activeTiers = [
-    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
-    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
-    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
-  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A', dateRange: fmtTierRange(campaign.option_a_start, campaign.option_a_end) },
+    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B', dateRange: fmtTierRange(campaign.option_b_start, campaign.option_b_end) },
+    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C', dateRange: fmtTierRange(campaign.option_c_start, campaign.option_c_end) },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string; dateRange: string | null }[];
 
   return (
     <>
