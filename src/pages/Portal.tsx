@@ -462,6 +462,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                             {tier.label}
                           </p>
+                          {tier.dateRange && (
+                            <p className="text-xs text-foreground/70 font-medium">{tier.dateRange}</p>
+                          )}
                         </div>
 
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">
