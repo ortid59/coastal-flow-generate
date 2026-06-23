@@ -797,7 +797,7 @@ export default function CampaignReview() {
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
           </Button>
-          <Button variant="outline" size="sm" onClick={extractHighlights} disabled={extractingHl || units.length === 0}>
+          <Button variant="outline" size="sm" onClick={() => extractHighlights()} disabled={extractingHl || units.length === 0}>
             {extractingHl ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Extract highlights
           </Button>
