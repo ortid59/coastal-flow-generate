@@ -1276,7 +1276,8 @@ export default function CampaignReview() {
           campaignId={campaign.id}
           onDone={async () => {
             await load();
-            extractPhotos({ silent: true });
+            await extractPhotos({ silent: true });
+            await extractHighlights({ silent: true });
           }}
         />
       )}
