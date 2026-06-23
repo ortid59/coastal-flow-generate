@@ -524,10 +524,16 @@ Deno.serve(async (req) => {
       }
 
       if (inserts.length > 0) {
+        // Dedupe by unit_number within this file — Postgres ON CONFLICT cannot
+        // affect the same row twice in a single statement. Last occurrence wins.
+        const seen = new Map<string, any>();
+        for (const row of inserts) seen.set(row.unit_number, row);
+        const deduped = Array.from(seen.values());
+
         // Upsert in batches of 200 — preserves photo URLs, map URLs, and any
         // admin edits because we match on (campaign_id, unit_number).
-        for (let i = 0; i < inserts.length; i += 200) {
-          const chunk = inserts.slice(i, i + 200);
+        for (let i = 0; i < deduped.length; i += 200) {
+          const chunk = deduped.slice(i, i + 200);
           const { error: insErr } = await supabase
             .from("units")
             .upsert(chunk, {
