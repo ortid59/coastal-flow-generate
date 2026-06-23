@@ -277,7 +277,6 @@ export default function CampaignReview() {
           setExtractProgress((p) => ({ ...p, label: `Page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
-          const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
 
           if (pageNum === 1) {
             // Page 1 = campaign overview map with all locations pinned
@@ -323,18 +322,29 @@ export default function CampaignReview() {
             continue;
           }
 
-          if (!match) {
-            page.cleanup();
-            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
-            continue;
+          // Try the original Clear-Channel-style header first, then fall back to
+          // searching for any known unit number anywhere in the page text. This
+          // handles vendor PDFs whose unit IDs don't follow "######-Letter".
+          let unitNumber: string | null = null;
+          let unit: (typeof units)[number] | undefined;
+          const headerMatch = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
+          if (headerMatch) {
+            unitNumber = headerMatch[1];
+            unit = unitByNumber.get(unitNumber)
+              ?? unitByNumber.get(unitNumber.padStart(6, '0'))
+              ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
           }
-
-          const unitNumber = match[1];
-          const unit = unitByNumber.get(unitNumber)
-            ?? unitByNumber.get(unitNumber.padStart(6, '0'))
-            ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
           if (!unit) {
-            console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
+            const upper = text.toUpperCase();
+            for (const { token, unit: u } of unitTokens) {
+              if (upper.includes(token.toUpperCase())) {
+                unit = u;
+                unitNumber = String(u.unit_number);
+                break;
+              }
+            }
+          }
+          if (!unit || !unitNumber) {
             page.cleanup();
             setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
