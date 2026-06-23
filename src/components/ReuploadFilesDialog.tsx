@@ -126,28 +126,15 @@ export function ReuploadFilesDialog({ open, onOpenChange, campaignId, onDone }: 
         if (vfErr) throw vfErr;
       }
 
-      // Re-trigger extractions in the background. CRITICAL: parse-excel must
-      // finish BEFORE extract-photos so that the units exist for matching.
-      // We chain them rather than firing in parallel.
+      // Re-trigger parsing first. The review page runs browser-based PDF
+      // extraction after this callback so large multi-vendor PDFs don't exceed
+      // backend memory limits.
       (async () => {
         try {
           if (excels.length) {
             setStep("Re-parsing Excel quotes…");
             await supabase.functions.invoke("parse-excel", { body: { campaign_id: campaignId } });
           }
-          // Highlights and photos depend on units existing — run after parse.
-          const after: Promise<unknown>[] = [];
-          if (photoSheets) {
-            after.push(
-              supabase.functions.invoke("extract-highlights", { body: { campaign_id: campaignId } }),
-            );
-          }
-          if (photos.length || photoSheets) {
-            after.push(
-              supabase.functions.invoke("extract-photos", { body: { campaign_id: campaignId } }),
-            );
-          }
-          await Promise.allSettled(after);
         } finally {
           onDone();
         }

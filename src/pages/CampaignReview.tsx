@@ -91,6 +91,167 @@ const fmtNum = (n: number | null) =>
 const fmtMoney = (n: number | null) =>
   n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
+type ExtractableUnit = {
+  id: string;
+  unit_number: string | null;
+  vendor?: string | null;
+  location_description?: string | null;
+};
+
+const normalizeMatchText = (value: string | null | undefined) =>
+  String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[–—]/g, "-")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const normalizeVendor = (value: string | null | undefined) =>
+  normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
+
+const escapeRe = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasBoundedToken = (text: string, token: string) => {
+  const normalized = normalizeMatchText(token);
+  if (normalized.length < 4) return false;
+  return new RegExp(`(^|[^A-Z0-9])${escapeRe(normalized)}([^A-Z0-9]|$)`).test(text);
+};
+
+const unitNumberTokens = (unitNumber: string | null | undefined) => {
+  const raw = normalizeMatchText(unitNumber);
+  const tokens = new Set<string>();
+  if (raw) tokens.add(raw);
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 5) {
+    tokens.add(digits);
+    tokens.add(String(parseInt(digits, 10)));
+    if (digits.length < 6) tokens.add(digits.padStart(6, "0"));
+  }
+  return Array.from(tokens).filter((token) => token && token !== "NAN").sort((a, b) => b.length - a.length);
+};
+
+const locationTokens = (location: string | null | undefined) => {
+  const normalized = normalizeMatchText(location).replace(/[,.();:/]/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  const tokens = new Set<string>();
+  const street = normalized.match(/\b\d{2,6}\s+[A-Z0-9]+(?:\s+[A-Z0-9]+){0,5}\b/);
+  if (street?.[0] && street[0].length >= 8) tokens.add(street[0]);
+  normalized
+    .split(/\s+(?:AND|AT|@|&|E\/O|W\/O|N\/O|S\/O)\s+|\s+-\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 10 && /[A-Z]{3}/.test(part))
+    .slice(0, 3)
+    .forEach((part) => tokens.add(part));
+  return Array.from(tokens).sort((a, b) => b.length - a.length);
+};
+
+function findUnitForPage<T extends ExtractableUnit>(text: string, units: T[], fileVendor?: string | null): T | undefined {
+  const haystack = normalizeMatchText(text);
+  if (!haystack || !units.length) return undefined;
+
+  const targetVendor = normalizeVendor(fileVendor);
+  const vendorUnits = targetVendor
+    ? units.filter((u) => {
+        const unitVendor = normalizeVendor(u.vendor);
+        return unitVendor && (unitVendor === targetVendor || unitVendor.includes(targetVendor) || targetVendor.includes(unitVendor));
+      })
+    : [];
+  const pool = vendorUnits.length ? vendorUnits : units;
+
+  const scored = pool
+    .map((unit) => {
+      let score = 0;
+      for (const token of unitNumberTokens(unit.unit_number)) {
+        if (hasBoundedToken(haystack, token)) score = Math.max(score, 100 + token.length);
+      }
+      for (const token of locationTokens(unit.location_description)) {
+        if (haystack.includes(token)) score = Math.max(score, 45 + Math.min(25, token.length / 2));
+      }
+      return { unit, score };
+    })
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (!scored.length) return undefined;
+  const [best, second] = scored;
+  if (second && best.score >= 100 && second.score >= 100 && best.score - second.score <= 5) return undefined;
+  return best.score >= 45 ? best.unit : undefined;
+}
+
+const BOILERPLATE_PATTERNS: RegExp[] = [
+  /geopath/i,
+  /audience\s+location\s+measurement/i,
+  /all\s+rights\s+reserved/i,
+  /copyright/i,
+  /proprietary/i,
+  /source\s*:/i,
+  /spot\s+in\s+rotation/i,
+  /proposal\s*\/\s*photosheet/i,
+];
+
+function stripBoilerplateSentences(text: string) {
+  const sentences = text.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) ?? [text];
+  return sentences
+    .filter((sentence) => !BOILERPLATE_PATTERNS.some((re) => re.test(sentence)))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractHighlightText(items: Array<{ str: string; transform?: number[] }>) {
+  const lines: { y: number; text: string }[] = [];
+  for (const item of items) {
+    const text = (item.str ?? "").trim();
+    if (!text) continue;
+    const y = item.transform?.[5] ?? 0;
+    const last = lines[lines.length - 1];
+    if (last && Math.abs(last.y - y) < 2) last.text += ` ${text}`;
+    else lines.push({ y, text });
+  }
+  if (!lines.length) return "";
+  lines.sort((a, b) => b.y - a.y);
+
+  const gaps = lines.slice(1).map((line, index) => Math.abs(lines[index].y - line.y));
+  const medianGap = gaps.length ? gaps.slice().sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 14;
+  const paragraphs: string[] = [];
+  let current = lines[0].text;
+  for (let i = 1; i < lines.length; i++) {
+    const gap = Math.abs(lines[i - 1].y - lines[i].y);
+    if (gap > medianGap * 1.8) {
+      if (current.trim()) paragraphs.push(current.trim());
+      current = lines[i].text;
+    } else {
+      current += ` ${lines[i].text}`;
+    }
+  }
+  if (current.trim()) paragraphs.push(current.trim());
+
+  const bestParagraph = paragraphs
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter((paragraph) => paragraph.length > 45)
+    .filter((paragraph) => /[A-Za-z]{3}/.test(paragraph))
+    .filter((paragraph) => !/^[\s\d$%.,:/\-]+$/.test(paragraph))
+    .filter((paragraph) => !BOILERPLATE_PATTERNS.some((re) => re.test(paragraph)))
+    .map((paragraph) => {
+      const words = paragraph.split(/\s+/).length;
+      const sentences = (paragraph.match(/[.!?]/g) ?? []).length;
+      const numericRatio = (paragraph.match(/\d/g)?.length ?? 0) / paragraph.length;
+      return { paragraph, score: words + sentences * 5 - numericRatio * 40 };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.paragraph;
+
+  if (bestParagraph) return stripBoilerplateSentences(bestParagraph);
+
+  const fallbackLine = lines
+    .map((line) => line.text.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 30 && line.length <= 220)
+    .filter((line) => /[A-Za-z]{3}/.test(line))
+    .filter((line) => !BOILERPLATE_PATTERNS.some((re) => re.test(line)))
+    .sort((a, b) => b.length - a.length)[0];
+
+  return fallbackLine ? stripBoilerplateSentences(fallbackLine) : "";
+}
+
 export default function CampaignReview() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -176,9 +337,13 @@ export default function CampaignReview() {
     if (campaign.status === "parsing") return;
     if (units.length === 0) return;
     const needsPhotos = units.some((u) => !u.billboard_photo_url || !u.inset_map_url);
-    if (!needsPhotos) return;
+    const needsHighlights = units.some((u) => !u.highlights);
+    if (!needsPhotos && !needsHighlights) return;
     setAutoExtracted(true);
-    extractPhotos({ silent: true });
+    (async () => {
+      if (needsPhotos) await extractPhotos({ silent: true });
+      if (needsHighlights) await extractHighlights({ silent: true });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.status, units.length, autoExtracted]);
 
@@ -192,8 +357,9 @@ export default function CampaignReview() {
     else {
       toast({ title: "Parsing started" });
       await load();
-      // Auto-run photo extraction after re-parse (silent if no PDF exists)
-      extractPhotos({ silent: true });
+      // Auto-run PDF extraction after re-parse (silent if no PDF exists)
+      await extractPhotos({ silent: true });
+      await extractHighlights({ silent: true });
     }
   };
 
@@ -208,38 +374,14 @@ export default function CampaignReview() {
 
       const { data: units, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, billboard_photo_url, inset_map_url')
+        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
 
-      const unitByNumber = new Map<string, (typeof units)[number]>();
-      // Also build a list of search tokens per unit so we can locate it inside
-      // arbitrary vendor PDF layouts (formats vary: "175211", "CA-175211",
-      // "010110", "10110", etc.).
-      const unitTokens: Array<{ token: string; unit: (typeof units)[number] }> = [];
-      const addToken = (t: string, u: (typeof units)[number]) => {
-        if (!t) return;
-        if (!unitByNumber.has(t)) unitByNumber.set(t, u);
-        unitTokens.push({ token: t, unit: u });
-      };
-      for (const u of units) {
-        const raw = String(u.unit_number).trim();
-        addToken(raw, u);
-        addToken(raw.toUpperCase(), u);
-        const digits = raw.replace(/\D/g, '');
-        if (digits) {
-          addToken(digits, u);
-          addToken(String(parseInt(digits, 10)), u);
-          if (digits.length < 6) addToken(digits.padStart(6, '0'), u);
-        }
-      }
-      // Longer tokens first so "CA-175211" wins over "175211".
-      unitTokens.sort((a, b) => b.token.length - a.token.length);
-
       const { data: vendorFiles, error: fErr } = await supabase
         .from('vendor_files')
-        .select('id, storage_path, original_name')
+        .select('id, storage_path, original_name, vendor')
         .eq('campaign_id', id);
       if (fErr) throw fErr;
 
@@ -278,7 +420,9 @@ export default function CampaignReview() {
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
 
-          if (pageNum === 1) {
+          const matchedPageUnit = findUnitForPage(text, units, file.vendor);
+
+          if (pageNum === 1 && !matchedPageUnit) {
             // Page 1 = campaign overview map with all locations pinned
             try {
               const ovViewport = page.getViewport({ scale: 1.5 });
@@ -322,28 +466,8 @@ export default function CampaignReview() {
             continue;
           }
 
-          // Try the original Clear-Channel-style header first, then fall back to
-          // searching for any known unit number anywhere in the page text. This
-          // handles vendor PDFs whose unit IDs don't follow "######-Letter".
-          let unitNumber: string | null = null;
-          let unit: (typeof units)[number] | undefined;
-          const headerMatch = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
-          if (headerMatch) {
-            unitNumber = headerMatch[1];
-            unit = unitByNumber.get(unitNumber)
-              ?? unitByNumber.get(unitNumber.padStart(6, '0'))
-              ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
-          }
-          if (!unit) {
-            const upper = text.toUpperCase();
-            for (const { token, unit: u } of unitTokens) {
-              if (upper.includes(token.toUpperCase())) {
-                unit = u;
-                unitNumber = String(u.unit_number);
-                break;
-              }
-            }
-          }
+          const unit = matchedPageUnit;
+          const unitNumber = unit?.unit_number ? String(unit.unit_number) : null;
           if (!unit || !unitNumber) {
             page.cleanup();
             setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
@@ -466,20 +590,100 @@ export default function CampaignReview() {
     }
   };
 
-  const extractHighlights = async () => {
+  const extractHighlights = async (opts?: { silent?: boolean }) => {
     if (!id) return;
+    const silent = !!opts?.silent;
     setExtractingHl(true);
-    const { data, error } = await supabase.functions.invoke("extract-highlights", { body: { campaign_id: id } });
-    setExtractingHl(false);
-    if (error) {
-      toast({ title: "Highlights extraction failed", description: error.message, variant: "destructive" });
-    } else {
-      const s = (data as any)?.summary;
-      toast({
-        title: "Highlights extracted",
-        description: s ? `${s.units_with_highlights} units · ${s.pages_processed} pages` : "Done",
-      });
-      load();
+    setExtractProgress({ current: 0, total: 0, label: "Preparing highlights…" });
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+      const { data: units, error: uErr } = await supabase
+        .from('units')
+        .select('id, unit_number, vendor, location_description')
+        .eq('campaign_id', id);
+      if (uErr) throw uErr;
+      if (!units?.length) throw new Error('No units found. Parse the Excel file first.');
+
+      const { data: vendorFiles, error: fErr } = await supabase
+        .from('vendor_files')
+        .select('id, storage_path, original_name, kind, vendor')
+        .eq('campaign_id', id);
+      if (fErr) throw fErr;
+
+      const pdfFiles = (vendorFiles ?? []).filter((file) =>
+        file.kind === 'photosheets' || file.original_name?.toLowerCase().endsWith('.pdf'),
+      );
+      if (!pdfFiles.length) throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
+
+      const collected = new Map<string, string[]>();
+      let pagesProcessed = 0;
+
+      for (const file of pdfFiles) {
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from('uploads')
+          .download(file.storage_path);
+        if (dlErr || !blob) {
+          console.warn('PDF download failed:', dlErr?.message);
+          continue;
+        }
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          try {
+            pagesProcessed++;
+            setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+            const textContent = await page.getTextContent();
+            const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+            const text = items.map((item) => item.str).join(' ');
+            const unit = findUnitForPage(text, units, file.vendor);
+            const paragraph = unit ? extractHighlightText(items) : "";
+            if (unit && paragraph) {
+              const existing = collected.get(unit.id) ?? [];
+              existing.push(paragraph);
+              collected.set(unit.id, existing);
+            }
+          } finally {
+            page.cleanup();
+            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
+          }
+        }
+        pdf.destroy?.();
+      }
+
+      let unitsWithHighlights = 0;
+      for (const [unitId, paragraphs] of collected) {
+        const merged = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+        if (!merged) continue;
+        const { error: updateErr } = await supabase
+          .from('units')
+          .update({ highlights: merged })
+          .eq('id', unitId);
+        if (updateErr) throw updateErr;
+        unitsWithHighlights++;
+      }
+
+      if (!silent || unitsWithHighlights > 0) {
+        toast({
+          title: "Highlights extracted",
+          description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
+        });
+      }
+      await load();
+    } catch (err: any) {
+      console.error('[extractHighlights]', err);
+      if (!silent) {
+        toast({ title: "Highlights extraction failed", description: err.message ?? "Unknown error", variant: "destructive" });
+      }
+    } finally {
+      setExtractingHl(false);
+      setExtractProgress({ current: 0, total: 0, label: "" });
     }
   };
 
@@ -596,7 +800,7 @@ export default function CampaignReview() {
             {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
             Extract photos
           </Button>
-          <Button variant="outline" size="sm" onClick={extractHighlights} disabled={extractingHl || units.length === 0}>
+          <Button variant="outline" size="sm" onClick={() => extractHighlights()} disabled={extractingHl || units.length === 0}>
             {extractingHl ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Extract highlights
           </Button>
@@ -1075,7 +1279,8 @@ export default function CampaignReview() {
           campaignId={campaign.id}
           onDone={async () => {
             await load();
-            extractPhotos({ silent: true });
+            await extractPhotos({ silent: true });
+            await extractHighlights({ silent: true });
           }}
         />
       )}

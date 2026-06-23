@@ -163,8 +163,6 @@ export default function NewCampaign() {
         vendor: string;
       }> = [];
 
-      let hasAnyPdf = false;
-
       for (const v of cleaned) {
         // Excel
         done += 1;
@@ -182,7 +180,6 @@ export default function NewCampaign() {
           const pUp = await supabase.storage.from("uploads").upload(pPath, v.photo_pdf, { upsert: false });
           if (pUp.error) throw pUp.error;
           records.push({ kind: "photosheets", storage_path: pPath, original_name: v.photo_pdf.name, vendor: v.vendor_name });
-          hasAnyPdf = true;
         }
       }
 
@@ -201,18 +198,6 @@ export default function NewCampaign() {
           if (error) {
             console.error("parse-excel invoke error", error);
             return;
-          }
-          if (hasAnyPdf) {
-            supabase.functions
-              .invoke("extract-photos", { body: { campaign_id: campaignId } })
-              .then(({ error: pErr }) => {
-                if (pErr) console.error("extract-photos invoke error", pErr);
-              });
-            supabase.functions
-              .invoke("extract-highlights", { body: { campaign_id: campaignId } })
-              .then(({ error: hErr }) => {
-                if (hErr) console.error("extract-highlights invoke error", hErr);
-              });
           }
         });
       navigate(`/campaigns/${campaignId}/review`);
