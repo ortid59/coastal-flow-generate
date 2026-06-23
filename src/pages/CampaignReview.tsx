@@ -214,12 +214,28 @@ export default function CampaignReview() {
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
 
       const unitByNumber = new Map<string, (typeof units)[number]>();
+      // Also build a list of search tokens per unit so we can locate it inside
+      // arbitrary vendor PDF layouts (formats vary: "175211", "CA-175211",
+      // "010110", "10110", etc.).
+      const unitTokens: Array<{ token: string; unit: (typeof units)[number] }> = [];
+      const addToken = (t: string, u: (typeof units)[number]) => {
+        if (!t) return;
+        if (!unitByNumber.has(t)) unitByNumber.set(t, u);
+        unitTokens.push({ token: t, unit: u });
+      };
       for (const u of units) {
         const raw = String(u.unit_number).trim();
-        unitByNumber.set(raw, u);
-        unitByNumber.set(raw.padStart(6, '0'), u);
-        unitByNumber.set(String(parseInt(raw, 10)), u);
+        addToken(raw, u);
+        addToken(raw.toUpperCase(), u);
+        const digits = raw.replace(/\D/g, '');
+        if (digits) {
+          addToken(digits, u);
+          addToken(String(parseInt(digits, 10)), u);
+          if (digits.length < 6) addToken(digits.padStart(6, '0'), u);
+        }
       }
+      // Longer tokens first so "CA-175211" wins over "175211".
+      unitTokens.sort((a, b) => b.token.length - a.token.length);
 
       const { data: vendorFiles, error: fErr } = await supabase
         .from('vendor_files')
