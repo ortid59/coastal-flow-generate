@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -133,11 +133,13 @@ const unitNumberTokens = (unitNumber: string | null | undefined) => {
 const EXTRACTION_STEP_TIMEOUT_MS = 45_000;
 
 function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTION_STEP_TIMEOUT_MS): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout>;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId!));
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
 }
 
 const locationTokens = (location: string | null | undefined) => {
@@ -342,9 +344,12 @@ export default function CampaignReview() {
   // Auto-run photo extraction once parsing finishes (covers initial campaign
   // creation flow, where NewCampaign navigates here while status === "parsing").
   const [autoExtracted, setAutoExtracted] = useState(false);
+  const previousStatusRef = useRef<string | null>(null);
   useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = campaign?.status ?? null;
     if (!campaign || autoExtracted) return;
-    if (campaign.status === "parsing") return;
+    if (previousStatus !== "parsing" || campaign.status === "parsing") return;
     if (units.length === 0) return;
     const needsPhotos = units.some((u) => !u.billboard_photo_url || !u.inset_map_url);
     const needsHighlights = units.some((u) => !u.highlights);
