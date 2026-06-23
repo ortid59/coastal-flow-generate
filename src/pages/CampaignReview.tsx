@@ -134,7 +134,7 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
         .eq("id", id)
         .single(),
       supabase
