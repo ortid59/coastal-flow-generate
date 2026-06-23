@@ -725,22 +725,46 @@ export default function CampaignReview() {
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {TIERS.map((t) => (
-                  <label
+                  <div
                     key={t.key}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2.5"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Switch
-                        checked={!!campaign[t.show]}
-                        onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
-                      />
-                      <span className="text-sm font-medium">Include {t.label}</span>
-                    </div>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
-                      <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
-                    </span>
-                  </label>
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Switch
+                          checked={!!campaign[t.show]}
+                          onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
+                        />
+                        <span className="text-sm font-medium">Include {t.label}</span>
+                      </div>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
+                        <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
+                      </span>
+                    </label>
+                    {stats.tierCounts[t.key] > 0 && (
+                      <div className="pl-[44px] flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Flight Dates
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="date"
+                            value={campaign[t.startField] ?? ""}
+                            onChange={(e) => updateCampaignDate(t.startField, e.target.value)}
+                            className="flex-1 min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                          />
+                          <span className="text-xs text-muted-foreground">–</span>
+                          <input
+                            type="date"
+                            value={campaign[t.endField] ?? ""}
+                            onChange={(e) => updateCampaignDate(t.endField, e.target.value)}
+                            className="flex-1 min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </section>
