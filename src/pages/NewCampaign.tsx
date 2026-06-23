@@ -198,6 +198,7 @@ export default function NewCampaign() {
         .then(({ error }) => {
           if (error) {
             console.error("parse-excel invoke error", error);
+            supabase.from("campaigns").update({ status: "error" }).eq("id", campaignId);
             return;
           }
         });
