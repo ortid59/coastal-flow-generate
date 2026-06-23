@@ -471,6 +471,18 @@ export default function CampaignReview() {
     }
   };
 
+  const updateCampaignDate = async (field: DateKey, value: string) => {
+    if (!campaign) return;
+    const next = value || null;
+    const prev = campaign[field];
+    setCampaign({ ...campaign, [field]: next });
+    const { error } = await supabase.from("campaigns").update({ [field]: next } as any).eq("id", campaign.id);
+    if (error) {
+      toast({ title: "Couldn't save dates", description: error.message, variant: "destructive" });
+      setCampaign({ ...campaign, [field]: prev });
+    }
+  };
+
   const toggleCampaignTier = async (field: ShowTierKey, value: boolean) => {
     if (!campaign) return;
     setCampaign({ ...campaign, [field]: value });
