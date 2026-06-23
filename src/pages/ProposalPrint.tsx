@@ -374,6 +374,9 @@ export default function ProposalPrint() {
                 return (
                   <div key={tier.key} style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 12, padding: 24, background: Q_SOFT, display: "flex", flexDirection: "column", gap: 12 }}>
                     <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: Q_GREY, fontWeight: 700 }}>{tier.label}</p>
+                    {tier.dateRange && (
+                      <p style={{ fontSize: 12, color: Q_NAVY, fontWeight: 500, marginTop: -4 }}>{tier.dateRange}</p>
+                    )}
                     <div style={{ borderTop: `1px solid ${Q_BORDER}`, paddingTop: 4 }}>
                       <div style={rowStyle}><span style={labelStyle}>Placements</span><span style={valStyle}>{tierUnits.length} units</span></div>
                       <div style={rowStyle}>
