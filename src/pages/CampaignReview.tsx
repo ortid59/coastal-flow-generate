@@ -587,8 +587,9 @@ export default function CampaignReview() {
     }
   };
 
-  const extractHighlights = async () => {
+  const extractHighlights = async (opts?: { silent?: boolean }) => {
     if (!id) return;
+    const silent = !!opts?.silent;
     setExtractingHl(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing highlights…" });
     try {
@@ -665,14 +666,18 @@ export default function CampaignReview() {
         unitsWithHighlights++;
       }
 
-      toast({
-        title: "Highlights extracted",
-        description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
-      });
+      if (!silent || unitsWithHighlights > 0) {
+        toast({
+          title: "Highlights extracted",
+          description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
+        });
+      }
       await load();
     } catch (err: any) {
       console.error('[extractHighlights]', err);
-      toast({ title: "Highlights extraction failed", description: err.message ?? "Unknown error", variant: "destructive" });
+      if (!silent) {
+        toast({ title: "Highlights extraction failed", description: err.message ?? "Unknown error", variant: "destructive" });
+      }
     } finally {
       setExtractingHl(false);
       setExtractProgress({ current: 0, total: 0, label: "" });
