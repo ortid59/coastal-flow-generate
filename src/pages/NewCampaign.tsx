@@ -203,16 +203,8 @@ export default function NewCampaign() {
             return;
           }
           if (hasAnyPdf) {
-            supabase.functions
-              .invoke("extract-photos", { body: { campaign_id: campaignId } })
-              .then(({ error: pErr }) => {
-                if (pErr) console.error("extract-photos invoke error", pErr);
-              });
-            supabase.functions
-              .invoke("extract-highlights", { body: { campaign_id: campaignId } })
-              .then(({ error: hErr }) => {
-                if (hErr) console.error("extract-highlights invoke error", hErr);
-              });
+            // The review page runs browser-based extraction after parsing so large
+            // multi-vendor PDFs don't exceed backend memory limits.
           }
         });
       navigate(`/campaigns/${campaignId}/review`);
