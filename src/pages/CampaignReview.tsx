@@ -866,12 +866,12 @@ export default function CampaignReview() {
         </div>
       </header>
 
-      {(extracting || extractProgress.total > 0) && (
+      {(extracting || extractingHl || extractProgress.total > 0) && (
         <div className="surface-card mb-4 flex flex-col gap-2 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              Extracting billboard photos & maps…
+              {extracting ? "Extracting billboard photos & maps…" : "Extracting highlights…"}
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
               {extractProgress.total > 0
