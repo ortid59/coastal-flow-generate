@@ -44,6 +44,12 @@ type Campaign = {
   show_tier_a: boolean | null;
   show_tier_b: boolean | null;
   show_tier_c: boolean | null;
+  option_a_start: string | null;
+  option_a_end: string | null;
+  option_b_start: string | null;
+  option_b_end: string | null;
+  option_c_start: string | null;
+  option_c_end: string | null;
 };
 
 type Unit = {
@@ -73,10 +79,11 @@ type Unit = {
 
 type TierKey = "tier_a" | "tier_b" | "tier_c";
 type ShowTierKey = "show_tier_a" | "show_tier_b" | "show_tier_c";
-const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string }[] = [
-  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A" },
-  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B" },
-  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C" },
+type DateKey = "option_a_start" | "option_a_end" | "option_b_start" | "option_b_end" | "option_c_start" | "option_c_end";
+const TIERS: { key: TierKey; show: ShowTierKey; label: string; short: string; startField: DateKey; endField: DateKey }[] = [
+  { key: "tier_a", show: "show_tier_a", label: "Option A", short: "A", startField: "option_a_start", endField: "option_a_end" },
+  { key: "tier_b", show: "show_tier_b", label: "Option B", short: "B", startField: "option_b_start", endField: "option_b_end" },
+  { key: "tier_c", show: "show_tier_c", label: "Option C", short: "C", startField: "option_c_start", endField: "option_c_end" },
 ];
 
 const fmtNum = (n: number | null) =>
@@ -127,7 +134,7 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
         .eq("id", id)
         .single(),
       supabase
@@ -464,6 +471,18 @@ export default function CampaignReview() {
     }
   };
 
+  const updateCampaignDate = async (field: DateKey, value: string) => {
+    if (!campaign) return;
+    const next = value || null;
+    const prev = campaign[field];
+    setCampaign({ ...campaign, [field]: next });
+    const { error } = await supabase.from("campaigns").update({ [field]: next } as any).eq("id", campaign.id);
+    if (error) {
+      toast({ title: "Couldn't save dates", description: error.message, variant: "destructive" });
+      setCampaign({ ...campaign, [field]: prev });
+    }
+  };
+
   const toggleCampaignTier = async (field: ShowTierKey, value: boolean) => {
     if (!campaign) return;
     setCampaign({ ...campaign, [field]: value });
@@ -706,22 +725,46 @@ export default function CampaignReview() {
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {TIERS.map((t) => (
-                  <label
+                  <div
                     key={t.key}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2.5"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Switch
-                        checked={!!campaign[t.show]}
-                        onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
-                      />
-                      <span className="text-sm font-medium">Include {t.label}</span>
-                    </div>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
-                      <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
-                    </span>
-                  </label>
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Switch
+                          checked={!!campaign[t.show]}
+                          onCheckedChange={(v) => toggleCampaignTier(t.show, v)}
+                        />
+                        <span className="text-sm font-medium">Include {t.label}</span>
+                      </div>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {stats.tierCounts[t.key]} unit{stats.tierCounts[t.key] === 1 ? "" : "s"} ·{" "}
+                        <span className="font-semibold text-foreground">{fmtMoney(stats.tierTotals[t.key])}</span>
+                      </span>
+                    </label>
+                    {stats.tierCounts[t.key] > 0 && (
+                      <div className="pl-[44px] flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Flight Dates
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="date"
+                            value={campaign[t.startField] ?? ""}
+                            onChange={(e) => updateCampaignDate(t.startField, e.target.value)}
+                            className="flex-1 min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                          />
+                          <span className="text-xs text-muted-foreground">–</span>
+                          <input
+                            type="date"
+                            value={campaign[t.endField] ?? ""}
+                            onChange={(e) => updateCampaignDate(t.endField, e.target.value)}
+                            className="flex-1 min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </section>

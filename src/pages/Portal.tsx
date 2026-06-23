@@ -50,6 +50,12 @@ type Campaign = {
   show_tier_a: boolean | null;
   show_tier_b: boolean | null;
   show_tier_c: boolean | null;
+  option_a_start: string | null;
+  option_a_end: string | null;
+  option_b_start: string | null;
+  option_b_end: string | null;
+  option_c_start: string | null;
+  option_c_end: string | null;
 };
 
 type Unit = {
@@ -97,6 +103,18 @@ const fmtMoney = (n: number | null) =>
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const fmtDate = (d: string | null) => (d ? format(new Date(d), "MMM d, yyyy") : "—");
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
+const parseLocalDate = (s: string) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
+const fmtTierRange = (s: string | null, e: string | null): string | null => {
+  if (!s || !e) return null;
+  const sd = parseLocalDate(s);
+  const ed = parseLocalDate(e);
+  return sd.getFullYear() === ed.getFullYear()
+    ? `${format(sd, "MMM d")} – ${format(ed, "MMM d, yyyy")}`
+    : `${format(sd, "MMM d, yyyy")} – ${format(ed, "MMM d, yyyy")}`;
+};
 
 export default function Portal({ token, campaignId }: { token: string; campaignId: string }) {
   const { toast } = useToast();
@@ -116,7 +134,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -189,10 +207,10 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   }, [displayedUnits]);
 
   const activeTiers = [
-    campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
-    campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
-    campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
-  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+    campaign?.show_tier_a && { key: 'tier_a' as const, label: 'Option A', dateRange: fmtTierRange(campaign?.option_a_start ?? null, campaign?.option_a_end ?? null) },
+    campaign?.show_tier_b && { key: 'tier_b' as const, label: 'Option B', dateRange: fmtTierRange(campaign?.option_b_start ?? null, campaign?.option_b_end ?? null) },
+    campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C', dateRange: fmtTierRange(campaign?.option_c_start ?? null, campaign?.option_c_end ?? null) },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string; dateRange: string | null }[];
 
   const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') =>
     units
@@ -444,6 +462,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                             {tier.label}
                           </p>
+                          {tier.dateRange && (
+                            <p className="text-xs text-foreground/70 font-medium">{tier.dateRange}</p>
+                          )}
                         </div>
 
                         <div className="border-t border-border/30 pt-4 flex flex-col gap-2">

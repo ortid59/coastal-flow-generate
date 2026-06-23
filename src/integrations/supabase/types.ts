@@ -46,6 +46,12 @@ export type Database = {
           id: string
           margin_pct: number | null
           markets: string[] | null
+          option_a_end: string | null
+          option_a_start: string | null
+          option_b_end: string | null
+          option_b_start: string | null
+          option_c_end: string | null
+          option_c_start: string | null
           portal_password_hash: string | null
           portal_password_set_at: string | null
           portal_token: string | null
@@ -70,6 +76,12 @@ export type Database = {
           id?: string
           margin_pct?: number | null
           markets?: string[] | null
+          option_a_end?: string | null
+          option_a_start?: string | null
+          option_b_end?: string | null
+          option_b_start?: string | null
+          option_c_end?: string | null
+          option_c_start?: string | null
           portal_password_hash?: string | null
           portal_password_set_at?: string | null
           portal_token?: string | null
@@ -94,6 +106,12 @@ export type Database = {
           id?: string
           margin_pct?: number | null
           markets?: string[] | null
+          option_a_end?: string | null
+          option_a_start?: string | null
+          option_b_end?: string | null
+          option_b_start?: string | null
+          option_c_end?: string | null
+          option_c_start?: string | null
           portal_password_hash?: string | null
           portal_password_set_at?: string | null
           portal_token?: string | null

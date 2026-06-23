@@ -28,6 +28,12 @@ type Campaign = {
   show_tier_a: boolean | null;
   show_tier_b: boolean | null;
   show_tier_c: boolean | null;
+  option_a_start: string | null;
+  option_a_end: string | null;
+  option_b_start: string | null;
+  option_b_end: string | null;
+  option_c_start: string | null;
+  option_c_end: string | null;
 };
 
 type Unit = {
@@ -70,6 +76,18 @@ const fmtMoney = (n: number | null) =>
     ? "—"
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
+const parseLocalDate = (s: string) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
+const fmtTierRange = (s: string | null, e: string | null): string | null => {
+  if (!s || !e) return null;
+  const sd = parseLocalDate(s);
+  const ed = parseLocalDate(e);
+  return sd.getFullYear() === ed.getFullYear()
+    ? `${format(sd, "MMM d")} – ${format(ed, "MMM d, yyyy")}`
+    : `${format(sd, "MMM d, yyyy")} – ${format(ed, "MMM d, yyyy")}`;
+};
 
 /* ─── Branding colours for section pages ─── */
 const NAVY = "#0A1628";
@@ -100,7 +118,7 @@ export default function ProposalPrint() {
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -185,10 +203,10 @@ export default function ProposalPrint() {
   });
 
   const activeTiers = [
-    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A' },
-    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B' },
-    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C' },
-  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[];
+    campaign.show_tier_a && { key: 'tier_a' as const, label: 'Option A', dateRange: fmtTierRange(campaign.option_a_start, campaign.option_a_end) },
+    campaign.show_tier_b && { key: 'tier_b' as const, label: 'Option B', dateRange: fmtTierRange(campaign.option_b_start, campaign.option_b_end) },
+    campaign.show_tier_c && { key: 'tier_c' as const, label: 'Option C', dateRange: fmtTierRange(campaign.option_c_start, campaign.option_c_end) },
+  ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string; dateRange: string | null }[];
 
   return (
     <>
@@ -356,6 +374,9 @@ export default function ProposalPrint() {
                 return (
                   <div key={tier.key} style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 12, padding: 24, background: Q_SOFT, display: "flex", flexDirection: "column", gap: 12 }}>
                     <p style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: Q_GREY, fontWeight: 700 }}>{tier.label}</p>
+                    {tier.dateRange && (
+                      <p style={{ fontSize: 12, color: Q_NAVY, fontWeight: 500, marginTop: -4 }}>{tier.dateRange}</p>
+                    )}
                     <div style={{ borderTop: `1px solid ${Q_BORDER}`, paddingTop: 4 }}>
                       <div style={rowStyle}><span style={labelStyle}>Placements</span><span style={valStyle}>{tierUnits.length} units</span></div>
                       <div style={rowStyle}>
