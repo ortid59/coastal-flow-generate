@@ -214,12 +214,28 @@ export default function CampaignReview() {
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
 
       const unitByNumber = new Map<string, (typeof units)[number]>();
+      // Also build a list of search tokens per unit so we can locate it inside
+      // arbitrary vendor PDF layouts (formats vary: "175211", "CA-175211",
+      // "010110", "10110", etc.).
+      const unitTokens: Array<{ token: string; unit: (typeof units)[number] }> = [];
+      const addToken = (t: string, u: (typeof units)[number]) => {
+        if (!t) return;
+        if (!unitByNumber.has(t)) unitByNumber.set(t, u);
+        unitTokens.push({ token: t, unit: u });
+      };
       for (const u of units) {
         const raw = String(u.unit_number).trim();
-        unitByNumber.set(raw, u);
-        unitByNumber.set(raw.padStart(6, '0'), u);
-        unitByNumber.set(String(parseInt(raw, 10)), u);
+        addToken(raw, u);
+        addToken(raw.toUpperCase(), u);
+        const digits = raw.replace(/\D/g, '');
+        if (digits) {
+          addToken(digits, u);
+          addToken(String(parseInt(digits, 10)), u);
+          if (digits.length < 6) addToken(digits.padStart(6, '0'), u);
+        }
       }
+      // Longer tokens first so "CA-175211" wins over "175211".
+      unitTokens.sort((a, b) => b.token.length - a.token.length);
 
       const { data: vendorFiles, error: fErr } = await supabase
         .from('vendor_files')
@@ -261,7 +277,6 @@ export default function CampaignReview() {
           setExtractProgress((p) => ({ ...p, label: `Page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
           const textContent = await page.getTextContent();
           const text = textContent.items.map((item: any) => item.str).join(' ');
-          const match = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
 
           if (pageNum === 1) {
             // Page 1 = campaign overview map with all locations pinned
@@ -307,18 +322,29 @@ export default function CampaignReview() {
             continue;
           }
 
-          if (!match) {
-            page.cleanup();
-            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
-            continue;
+          // Try the original Clear-Channel-style header first, then fall back to
+          // searching for any known unit number anywhere in the page text. This
+          // handles vendor PDFs whose unit IDs don't follow "######-Letter".
+          let unitNumber: string | null = null;
+          let unit: (typeof units)[number] | undefined;
+          const headerMatch = text.match(/(\b\d{6})\s*[–\-]\s*[A-Za-z]/);
+          if (headerMatch) {
+            unitNumber = headerMatch[1];
+            unit = unitByNumber.get(unitNumber)
+              ?? unitByNumber.get(unitNumber.padStart(6, '0'))
+              ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
           }
-
-          const unitNumber = match[1];
-          const unit = unitByNumber.get(unitNumber)
-            ?? unitByNumber.get(unitNumber.padStart(6, '0'))
-            ?? unitByNumber.get(String(parseInt(unitNumber, 10)));
           if (!unit) {
-            console.warn(`Unit ${unitNumber} not found in campaign, skipping`);
+            const upper = text.toUpperCase();
+            for (const { token, unit: u } of unitTokens) {
+              if (upper.includes(token.toUpperCase())) {
+                unit = u;
+                unitNumber = String(u.unit_number);
+                break;
+              }
+            }
+          }
+          if (!unit || !unitNumber) {
             page.cleanup();
             setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             continue;
