@@ -192,11 +192,13 @@ export default function NewCampaign() {
       }
 
       toast({ title: "Campaign created", description: "Parsing vendor Excel…" });
+      await supabase.from("campaigns").update({ status: "parsing" }).eq("id", campaignId);
       supabase.functions
         .invoke("parse-excel", { body: { campaign_id: campaignId } })
         .then(({ error }) => {
           if (error) {
             console.error("parse-excel invoke error", error);
+            supabase.from("campaigns").update({ status: "error" }).eq("id", campaignId);
             return;
           }
         });
