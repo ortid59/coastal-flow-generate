@@ -44,6 +44,12 @@ type Campaign = {
   show_tier_a: boolean | null;
   show_tier_b: boolean | null;
   show_tier_c: boolean | null;
+  option_a_start: string | null;
+  option_a_end: string | null;
+  option_b_start: string | null;
+  option_b_end: string | null;
+  option_c_start: string | null;
+  option_c_end: string | null;
 };
 
 type Unit = {
