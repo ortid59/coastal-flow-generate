@@ -188,8 +188,53 @@ function pickCrops(
   return { billboard: strip(billboard), map: strip(map) };
 }
 
+async function cropPng(
+  fullPng: Uint8Array,
+  crop: { x: number; y: number; w: number; h: number },
+  pageW: number,
+  pageH: number,
+): Promise<Uint8Array> {
+  const img = await createImageBitmap(new Blob([fullPng], { type: "image/png" }));
+  const sx = Math.max(0, Math.round(pageW * crop.x));
+  const sy = Math.max(0, Math.round(pageH * crop.y));
+  const sw = Math.max(1, Math.round(pageW * crop.w));
+  const sh = Math.max(1, Math.round(pageH * crop.h));
+  const canvas = new OffscreenCanvas(sw, sh);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+function extractUnitNumber(text: string, validUnits: string[]): string | null {
+  if (!text) return null;
+  // Build normalized lookup of valid unit numbers.
+  const normToOriginal = new Map<string, string>();
+  for (const u of validUnits) {
+    normToOriginal.set(normalizeUnitToken(u), u);
+  }
+  // Collect all candidate tokens from the page text.
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  let m: RegExpExecArray | null;
+  UNIT_TOKEN_RE.lastIndex = 0;
+  while ((m = UNIT_TOKEN_RE.exec(text)) !== null) {
+    const norm = normalizeUnitToken(m[1]);
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    candidates.push(norm);
+  }
+  // Prefer longer matches first so "TM-CH-003" beats "003".
+  candidates.sort((a, b) => b.length - a.length);
+  for (const c of candidates) {
+    const hit = normToOriginal.get(c);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // ---------- main handler ----------
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
