@@ -348,6 +348,21 @@ export default function CampaignReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Load saved vendor crop profiles so we can skip detection on known vendors
+  // and surface a "Save crop as default" action in the admin UI.
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase.from('vendor_crop_profiles').select('*');
+      if (error) return;
+      const map: Record<string, VendorCropProfile> = {};
+      for (const p of (data ?? []) as VendorCropProfile[]) {
+        const key = normalizeVendor(p.vendor);
+        if (key) map[key] = p;
+      }
+      setVendorCropProfiles(map);
+    })();
+  }, []);
+
   // Poll while parsing
   useEffect(() => {
     if (!campaign) return;
