@@ -98,6 +98,20 @@ type ExtractableUnit = {
   location_description?: string | null;
 };
 
+type CropBox = { x: number; y: number; w: number; h: number };
+type VendorCropProfile = {
+  vendor: string;
+  has_inset_map: boolean;
+  photo_x: number | null;
+  photo_y: number | null;
+  photo_w: number | null;
+  photo_h: number | null;
+  map_x: number | null;
+  map_y: number | null;
+  map_w: number | null;
+  map_h: number | null;
+};
+
 const normalizeMatchText = (value: string | null | undefined) =>
   String(value ?? "")
     .replace(/\u00a0/g, " ")
