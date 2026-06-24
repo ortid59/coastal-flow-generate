@@ -393,6 +393,37 @@ export default function CampaignReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.status, units.length, autoExtracted]);
 
+  // Persist the most recently detected crop for a vendor as the saved default,
+  // so future campaigns from the same vendor skip detection entirely.
+  const saveVendorCropDefault = async (vendor: string | null | undefined) => {
+    if (!vendor) return;
+    const key = normalizeVendor(vendor);
+    const detected = detectedVendorCropsRef.current[key];
+    if (!detected) {
+      toast({
+        title: 'No crop to save',
+        description: 'Re-run "Extract photos" first so the layout is detected from the PDF.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const row = {
+      vendor,
+      has_inset_map: !!detected.map,
+      photo_x: detected.photo.x, photo_y: detected.photo.y, photo_w: detected.photo.w, photo_h: detected.photo.h,
+      map_x: detected.map?.x ?? null, map_y: detected.map?.y ?? null, map_w: detected.map?.w ?? null, map_h: detected.map?.h ?? null,
+    };
+    const { error } = await supabase
+      .from('vendor_crop_profiles')
+      .upsert(row, { onConflict: 'vendor' });
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setVendorCropProfiles((prev) => ({ ...prev, [key]: row as VendorCropProfile }));
+    toast({ title: 'Crop default saved', description: `Future ${vendor} PDFs will use this layout automatically.` });
+  };
+
 
   const reparse = async () => {
     if (!id) return;
