@@ -414,6 +414,34 @@ export default function CampaignReview() {
     return Array.from(map.entries()).map(([vendor, list]) => ({ vendor, units: list }));
   }, [units]);
 
+  // Markets that have units but lack any PDF (headsheet) covering them.
+  // Heuristic: try to detect a market token in the PDF's original filename.
+  // If no PDF filename mentions the market (case-insensitive), warn.
+  const uncoveredMarkets = useMemo(() => {
+    const pdfs = vendorFiles.filter((f) => f.original_name?.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) return [];
+    const marketUnitCounts = new Map<string, number>();
+    for (const u of units) {
+      const m = (u.market ?? "").trim();
+      if (!m) continue;
+      if (u.billboard_photo_url) continue;
+      marketUnitCounts.set(m, (marketUnitCounts.get(m) ?? 0) + 1);
+    }
+    const out: Array<{ market: string; count: number }> = [];
+    for (const [market, count] of marketUnitCounts) {
+      const tokens = market
+        .split(/[\s,]+/)
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t)); // skip "IL", "CA"
+      const covered = pdfs.some((f) => {
+        const name = (f.original_name ?? "").toLowerCase();
+        return tokens.some((t) => name.includes(t));
+      });
+      if (!covered) out.push({ market, count });
+    }
+    return out;
+  }, [vendorFiles, units]);
+
   const toggleVendorCollapse = (vendor: string) => {
     setCollapsedVendors((prev) => {
       const next = new Set(prev);
