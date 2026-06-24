@@ -438,18 +438,22 @@ export default function CampaignReview() {
     const previousStatus = previousStatusRef.current;
     previousStatusRef.current = campaign?.status ?? null;
     if (!campaign || autoExtracted) return;
-    if (previousStatus !== "parsing" || campaign.status === "parsing") return;
+    if (campaign.status === "parsing") return;
     if (units.length === 0) return;
     const needsPhotos = units.some((u) => !u.billboard_photo_url);
     const needsHighlights = units.some((u) => !u.highlights);
     if (!needsPhotos && !needsHighlights) return;
-    setAutoExtracted(true);
-    (async () => {
-      if (needsPhotos) await extractPhotos({ silent: true });
-      if (needsHighlights) await extractHighlights({ silent: true });
-    })();
+    // Run on initial load (previousStatus === null) and after parsing→ready transition.
+    if (previousStatus === "parsing" || previousStatus === null) {
+      setAutoExtracted(true);
+      (async () => {
+        if (needsPhotos) await extractPhotos({ silent: true });
+        if (needsHighlights) await extractHighlights({ silent: true });
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.status, units.length, autoExtracted]);
+
 
   // Persist the most recently detected crop for a vendor as the saved default,
   // so future campaigns from the same vendor skip detection entirely.
