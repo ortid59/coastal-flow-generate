@@ -366,6 +366,51 @@ export type Database = {
           },
         ]
       }
+      vendor_crop_profiles: {
+        Row: {
+          created_at: string
+          has_inset_map: boolean
+          map_h: number | null
+          map_w: number | null
+          map_x: number | null
+          map_y: number | null
+          photo_h: number | null
+          photo_w: number | null
+          photo_x: number | null
+          photo_y: number | null
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          created_at?: string
+          has_inset_map?: boolean
+          map_h?: number | null
+          map_w?: number | null
+          map_x?: number | null
+          map_y?: number | null
+          photo_h?: number | null
+          photo_w?: number | null
+          photo_x?: number | null
+          photo_y?: number | null
+          updated_at?: string
+          vendor: string
+        }
+        Update: {
+          created_at?: string
+          has_inset_map?: boolean
+          map_h?: number | null
+          map_w?: number | null
+          map_x?: number | null
+          map_y?: number | null
+          photo_h?: number | null
+          photo_w?: number | null
+          photo_x?: number | null
+          photo_y?: number | null
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: []
+      }
       vendor_files: {
         Row: {
           campaign_id: string | null
