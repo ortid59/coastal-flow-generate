@@ -460,29 +460,78 @@ Deno.serve(async (req) => {
       const styleFillMap = await buildStyleFillMap(buf);
       const wb = XLSX.read(buf, { type: "array", cellStyles: true, cellDates: false });
 
-      // Pick the first sheet with a header row that maps to our schema
+      // Detect the workbook format:
+      //   Type A — standard "RFP Template" (≥8 standard headers in rows 0-4)
+      //   Type B — CCO: header row contains "Panel ID" + "Display Size (h x w)"
+      //   Type C — OFM: sheet named "Location List" OR header row (rows 0-11)
+      //                  with "Inventory #" + "Location Description"
       let chosen: XLSX.WorkSheet | null = null;
       let headerRow = 0;
       let headerIdx: Record<string, number> = {};
+      let formatKind: "A" | "B" | "C" = "A";
+      let flightNameCol: number | null = null; // CCO market fallback
 
+      // Pass 1: Type A (existing behavior).
       for (const sn of wb.SheetNames) {
         const ws = wb.Sheets[sn];
         const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
         for (let r = 0; r < Math.min(grid.length, 5); r++) {
           const idx = buildHeaderIndex(grid[r]);
           if (Object.keys(idx).length >= 8) {
-            chosen = ws;
-            headerRow = r;
-            headerIdx = idx;
+            chosen = ws; headerRow = r; headerIdx = idx; formatKind = "A";
             break;
           }
         }
         if (chosen) break;
       }
+
+      // Pass 2: Type B (CCO) — scan rows 0-11 for "Panel ID" + "Display Size (h x w)".
+      if (!chosen) {
+        for (const sn of wb.SheetNames) {
+          const ws = wb.Sheets[sn];
+          const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
+          for (let r = 0; r < Math.min(grid.length, 12); r++) {
+            if (rowHasHeaders(grid[r], ["Panel ID", "Display Size (h x w)"])) {
+              chosen = ws; headerRow = r; formatKind = "B";
+              headerIdx = buildHeaderIndexFrom(grid[r], COLUMN_MAP_B);
+              // Find Flight Name column for market fallback.
+              grid[r].forEach((cell, idx) => {
+                if (cell != null && norm(String(cell)) === norm(CCO_MARKET_FALLBACK_HEADER)) {
+                  flightNameCol = idx;
+                }
+              });
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+      }
+
+      // Pass 3: Type C (OFM) — sheet named "Location List", or header row 0-11
+      // with "Inventory #" + "Location Description".
+      if (!chosen) {
+        const ofmSheet = wb.SheetNames.find((sn) => norm(sn) === "location list");
+        const candidateSheets = ofmSheet ? [ofmSheet] : wb.SheetNames;
+        for (const sn of candidateSheets) {
+          const ws = wb.Sheets[sn];
+          const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
+          for (let r = 0; r < Math.min(grid.length, 12); r++) {
+            if (rowHasHeaders(grid[r], ["Inventory #", "Location Description"])) {
+              chosen = ws; headerRow = r; formatKind = "C";
+              headerIdx = buildHeaderIndexFrom(grid[r], COLUMN_MAP_C);
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+      }
+
       if (!chosen) {
         console.warn(`[parse-excel] No usable sheet in ${f.original_name}`);
         continue;
       }
+      console.info(`[parse-excel] ${f.original_name}: detected format ${formatKind}, header row ${headerRow}, mapped fields:`, Object.keys(headerIdx));
+
 
       const grid = XLSX.utils.sheet_to_json<any[]>(chosen, { header: 1, raw: true, defval: null });
       const rows = grid.slice(headerRow + 1);
