@@ -656,7 +656,7 @@ export default function CampaignReview() {
           return { photoSaved: false, mapSaved: false };
         }
         const unitNumber = String(unit.unit_number);
-        const viewport = page.getViewport({ scale: 2.0 });
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
