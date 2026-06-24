@@ -432,27 +432,32 @@ export default function CampaignReview() {
 
   // Auto-run photo extraction once parsing finishes (covers initial campaign
   // creation flow, where NewCampaign navigates here while status === "parsing").
-  const [autoExtracted, setAutoExtracted] = useState(false);
-  const previousStatusRef = useRef<string | null>(null);
+  // Resumable auto-extract: a "currently running" guard plus a pass-count cap
+  // so partial failures get a second/third pass instead of being latched out forever.
+  const autoRunningRef = useRef(false);
+  const autoPassCountRef = useRef(0);
+  const MAX_AUTO_PASSES = 3;
   useEffect(() => {
-    const previousStatus = previousStatusRef.current;
-    previousStatusRef.current = campaign?.status ?? null;
-    if (!campaign || autoExtracted) return;
+    if (!campaign) return;
     if (campaign.status === "parsing") return;
     if (units.length === 0) return;
+    if (autoRunningRef.current) return;
+    if (autoPassCountRef.current >= MAX_AUTO_PASSES) return;
     const needsPhotos = units.some((u) => !u.billboard_photo_url);
     const needsHighlights = units.some((u) => !u.highlights);
     if (!needsPhotos && !needsHighlights) return;
-    // Run on initial load (previousStatus === null) and after parsing→ready transition.
-    if (previousStatus === "parsing" || previousStatus === null) {
-      setAutoExtracted(true);
-      (async () => {
+    autoRunningRef.current = true;
+    autoPassCountRef.current += 1;
+    (async () => {
+      try {
         if (needsPhotos) await extractPhotos({ silent: true });
         if (needsHighlights) await extractHighlights({ silent: true });
-      })();
-    }
+      } finally {
+        autoRunningRef.current = false;
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign?.status, units.length, autoExtracted]);
+  }, [campaign?.status, units]);
 
 
   // Persist the most recently detected crop for a vendor as the saved default,
