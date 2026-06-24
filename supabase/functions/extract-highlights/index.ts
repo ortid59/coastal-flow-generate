@@ -18,6 +18,15 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Strip leading '#' and surrounding whitespace, uppercase for comparison.
+function normalizeUnitToken(s: string): string {
+  return String(s ?? "").replace(/^#/, "").trim().toUpperCase();
+}
+
+// Broad unit-number token pattern, see extract-photos for the format list.
+const UNIT_TOKEN_RE = /#?\b([A-Z]{0,4}-?[A-Z]{0,4}-?\d{2,6}[A-Z]?)\b/gi;
+
+
 /**
  * Extract structured fields like Geopath ID, Media Type, Facing, City, Zip
  * from a page's flat text. Returns only fields that were confidently found.
@@ -205,6 +214,12 @@ Deno.serve(async (req) => {
     }
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
+    // Normalized unit_number -> original unit_number, for case-insensitive
+    // matching across vendor formats (#3001, 25001, TM-CH-003, 10A, ...).
+    const normToOriginal = new Map<string, string>(
+      units.map((u) => [normalizeUnitToken(u.unit_number), u.unit_number]),
+    );
+
 
     // Find the photosheets PDF for this campaign (kind='photosheets' OR
     // a single PDF whose name contains 'photosheet' or 'maps').
@@ -264,7 +279,10 @@ Deno.serve(async (req) => {
           const items = tc.items as Array<{ str: string; transform?: number[] }>;
           const flatText = items.map((it) => it.str).join(" ");
 
-          // Match a unit number on this page (prefer longest)
+          // Match a unit number on this page. Try the legacy exact-string
+          // match first (handles 6-digit Clear Channel IDs cleanly), then
+          // fall back to scanning broad tokens (#3001, TM-CH-003, 10A, ...)
+          // and resolving them against normalized real unit numbers.
           const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
           let match: string | null = null;
           for (const u of sorted) {
@@ -274,7 +292,25 @@ Deno.serve(async (req) => {
               break;
             }
           }
+          if (!match) {
+            const seen = new Set<string>();
+            const candidates: string[] = [];
+            let mm: RegExpExecArray | null;
+            UNIT_TOKEN_RE.lastIndex = 0;
+            while ((mm = UNIT_TOKEN_RE.exec(flatText)) !== null) {
+              const norm = normalizeUnitToken(mm[1]);
+              if (!norm || seen.has(norm)) continue;
+              seen.add(norm);
+              candidates.push(norm);
+            }
+            candidates.sort((a, b) => b.length - a.length);
+            for (const c of candidates) {
+              const hit = normToOriginal.get(c);
+              if (hit) { match = hit; break; }
+            }
+          }
           if (!match) continue;
+
 
           const para = extractLongestParagraph(items);
           if (para) {

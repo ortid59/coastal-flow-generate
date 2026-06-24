@@ -33,13 +33,24 @@ const corsHeaders = {
 const RENDER_SCALE = 2.0;
 const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 year
 
-// Crop regions tuned for Clear Channel photo-sheet layout.
-// Coordinates are fractions of the full page bounds.
+// Fallback crop regions (Clear Channel layout). Used only when image-region
+// detection fails for a given page.
 const CROP_BILLBOARD = { x: 0.00, y: 0.35, w: 0.58, h: 0.60 };
 const CROP_MAP       = { x: 0.58, y: 0.05, w: 0.42, h: 0.52 };
 
-// "001115 – Jacksonville" — 6 digits, en-dash or hyphen, then a city word.
-const UNIT_HEADER_RE = /(\b\d{6})\s*[–-]\s*[A-Za-z]/;
+// Broad unit-number matcher. Accepts:
+//   "#3001"      hash + digits
+//   "001115"     6 digits
+//   "25001"      5 digits
+//   "TM-CH-003"  alphanumeric with dashes
+//   "10A" "11A"  digits + letter
+// We capture candidates and then resolve them against the campaign's
+// real unit_number list (case-insensitive, # / whitespace stripped).
+const UNIT_TOKEN_RE = /#?\b([A-Z]{0,4}-?[A-Z]{0,4}-?\d{2,6}[A-Z]?)\b/gi;
+
+function normalizeUnitToken(s: string): string {
+  return String(s ?? "").replace(/^#/, "").trim().toUpperCase();
+}
 
 // ---------- helpers ----------
 
@@ -66,6 +77,117 @@ async function getPageText(page: any): Promise<string> {
   }
 }
 
+/**
+ * Detect image regions on a page using the operator list. Returns rects as
+ * fractions of the page (x, y from top-left, w, h). Empty array if detection
+ * fails or no images present.
+ */
+async function detectImageRegions(
+  page: any,
+  pageW: number,
+  pageH: number,
+): Promise<Array<{ x: number; y: number; w: number; h: number; area: number }>> {
+  try {
+    const ops = await page.getOperatorList();
+    const OPS = (pdfjs as any).OPS ?? {};
+    const SAVE = OPS.save, RESTORE = OPS.restore, TRANSFORM = OPS.transform;
+    const PAINT_IMG = OPS.paintImageXObject;
+    const PAINT_JPG = OPS.paintJpegXObject;
+    const PAINT_INLINE = OPS.paintInlineImageXObject;
+    const PAINT_IMG_REPEAT = OPS.paintImageXObjectRepeat;
+    const isImageOp = (op: number) =>
+      op === PAINT_IMG || op === PAINT_JPG || op === PAINT_INLINE || op === PAINT_IMG_REPEAT;
+
+    // Track CTM with a stack. Matrices are [a,b,c,d,e,f] (pdfjs convention).
+    const mul = (m1: number[], m2: number[]) => [
+      m1[0] * m2[0] + m1[2] * m2[1],
+      m1[1] * m2[0] + m1[3] * m2[1],
+      m1[0] * m2[2] + m1[2] * m2[3],
+      m1[1] * m2[2] + m1[3] * m2[3],
+      m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+      m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+    ];
+    let ctm = [1, 0, 0, 1, 0, 0];
+    const stack: number[][] = [];
+    const regions: Array<{ x: number; y: number; w: number; h: number; area: number }> = [];
+
+    const viewport = page.getViewport({ scale: RENDER_SCALE });
+
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      const args = ops.argsArray[i];
+      if (fn === SAVE) {
+        stack.push(ctm.slice());
+      } else if (fn === RESTORE) {
+        ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+      } else if (fn === TRANSFORM) {
+        ctm = mul(ctm, args as number[]);
+      } else if (isImageOp(fn)) {
+        // Image is drawn at unit square (0,0)-(1,1) under current CTM.
+        // Project the four corners and take bbox in PDF user space.
+        const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [
+          ctm[0] * x + ctm[2] * y + ctm[4],
+          ctm[1] * x + ctm[3] * y + ctm[5],
+        ]);
+        const xs = corners.map((c) => c[0]);
+        const ys = corners.map((c) => c[1]);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        // Convert to viewport pixel space, then to fractions of page render.
+        const [vx1, vy1] = viewport.convertToViewportPoint(minX, minY);
+        const [vx2, vy2] = viewport.convertToViewportPoint(maxX, maxY);
+        const x1 = Math.min(vx1, vx2), x2 = Math.max(vx1, vx2);
+        const y1 = Math.min(vy1, vy2), y2 = Math.max(vy1, vy2);
+        const w = (x2 - x1) / pageW;
+        const h = (y2 - y1) / pageH;
+        const x = x1 / pageW;
+        const y = y1 / pageH;
+        // Sanity: must be on page and at least 8% of width/height.
+        if (w >= 0.08 && h >= 0.08 && x >= -0.02 && y >= -0.02 && x + w <= 1.02 && y + h <= 1.02) {
+          regions.push({
+            x: Math.max(0, x),
+            y: Math.max(0, y),
+            w: Math.min(1, w),
+            h: Math.min(1, h),
+            area: w * h,
+          });
+        }
+      }
+    }
+    return regions;
+  } catch (e) {
+    console.warn("[extract-photos] region detect failed:", (e as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Pick billboard and map crop rects from detected regions.
+ * Billboard = largest region in top/left half. Map = a smaller region in
+ * bottom/right region distinct from the billboard. Returns null if either
+ * can't be confidently picked.
+ */
+function pickCrops(
+  regions: Array<{ x: number; y: number; w: number; h: number; area: number }>,
+): { billboard: { x: number; y: number; w: number; h: number } | null; map: { x: number; y: number; w: number; h: number } | null } {
+  if (regions.length === 0) return { billboard: null, map: null };
+  const sorted = [...regions].sort((a, b) => b.area - a.area);
+  const billboard = sorted[0];
+  // Map candidate: any other region distinct from billboard, prefer one in
+  // right or bottom half, smaller than billboard.
+  let map: typeof billboard | null = null;
+  for (const r of sorted.slice(1)) {
+    if (r === billboard) continue;
+    if (r.area > billboard.area * 0.95) continue; // too similar in size
+    const inRightOrBottom = r.x + r.w / 2 > 0.5 || r.y + r.h / 2 > 0.5;
+    if (inRightOrBottom) { map = r; break; }
+  }
+  if (!map && sorted.length > 1) map = sorted[1];
+  const strip = (r: { x: number; y: number; w: number; h: number } | null) =>
+    r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null;
+  return { billboard: strip(billboard), map: strip(map) };
+}
+
 async function cropPng(
   fullPng: Uint8Array,
   crop: { x: number; y: number; w: number; h: number },
@@ -73,10 +195,10 @@ async function cropPng(
   pageH: number,
 ): Promise<Uint8Array> {
   const img = await createImageBitmap(new Blob([fullPng], { type: "image/png" }));
-  const sx = Math.round(pageW * crop.x);
-  const sy = Math.round(pageH * crop.y);
-  const sw = Math.round(pageW * crop.w);
-  const sh = Math.round(pageH * crop.h);
+  const sx = Math.max(0, Math.round(pageW * crop.x));
+  const sy = Math.max(0, Math.round(pageH * crop.y));
+  const sw = Math.max(1, Math.round(pageW * crop.w));
+  const sh = Math.max(1, Math.round(pageH * crop.h));
   const canvas = new OffscreenCanvas(sw, sh);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
@@ -84,13 +206,35 @@ async function cropPng(
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-function extractUnitNumber(text: string): string | null {
+function extractUnitNumber(text: string, validUnits: string[]): string | null {
   if (!text) return null;
-  const m = text.match(UNIT_HEADER_RE);
-  return m ? m[1] : null;
+  // Build normalized lookup of valid unit numbers.
+  const normToOriginal = new Map<string, string>();
+  for (const u of validUnits) {
+    normToOriginal.set(normalizeUnitToken(u), u);
+  }
+  // Collect all candidate tokens from the page text.
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  let m: RegExpExecArray | null;
+  UNIT_TOKEN_RE.lastIndex = 0;
+  while ((m = UNIT_TOKEN_RE.exec(text)) !== null) {
+    const norm = normalizeUnitToken(m[1]);
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    candidates.push(norm);
+  }
+  // Prefer longer matches first so "TM-CH-003" beats "003".
+  candidates.sort((a, b) => b.length - a.length);
+  for (const c of candidates) {
+    const hit = normToOriginal.get(c);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // ---------- main handler ----------
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -178,6 +322,8 @@ Deno.serve(async (req) => {
     const unitByNumber = new Map<string, UnitRow>(
       (units as UnitRow[]).map((u) => [String(u.unit_number).trim(), u]),
     );
+    const validUnitNumbers = (units as UnitRow[]).map((u) => String(u.unit_number));
+
 
     // Look up all vendor files for the campaign and filter to PDFs by extension.
     const { data: vendorFiles, error: fErr } = await supabase
@@ -193,7 +339,9 @@ Deno.serve(async (req) => {
       throw new Error("No PDF files uploaded for this campaign. Please upload a Photo Sheets PDF first.");
     }
 
+    let isFirstPdf = true;
     for (const f of pdfFiles) {
+
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
         .download(f.storage_path);
@@ -222,8 +370,9 @@ Deno.serve(async (req) => {
 
         const page = await doc.getPage(i + 1);
 
-        // Page 1 → campaign overview map. Render entire page, save at campaign level.
-        if (i === 0) {
+        // Page 1 of the FIRST PDF only → campaign overview map. Subsequent
+        // vendor PDFs treat page 1 like any other unit page.
+        if (i === 0 && isFirstPdf) {
           try {
             const { png: overviewPng } = await renderPageToPng(page);
             if (overviewPng) {
@@ -254,15 +403,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Pages 2..N → one billboard each.
+        // All other pages → one billboard each.
         const pageText = await getPageText(page);
-        const unitNumber = extractUnitNumber(pageText);
+        const unitNumber = extractUnitNumber(pageText, validUnitNumbers);
         if (!unitNumber) {
-          console.warn(`[extract-photos] page ${i + 1} has no unit-header pattern, skipping`);
+          console.warn(`[extract-photos] page ${i + 1} has no matching unit number, skipping`);
           summary.pages_unmatched++;
           try { page.cleanup?.(); } catch { /* ignore */ }
           continue;
         }
+
         const unit = unitByNumber.get(unitNumber);
         if (!unit) {
           console.warn(
@@ -286,11 +436,22 @@ Deno.serve(async (req) => {
           console.warn(`[extract-photos] page render failed for ${unitNumber}:`, (e as Error).message);
         }
 
+        // Detect image regions; fall back to fixed ratios if detection fails.
+        let billboardCrop = CROP_BILLBOARD;
+        let mapCrop = CROP_MAP;
+        if (fullPng) {
+          const regions = await detectImageRegions(page, pageW, pageH);
+          const picked = pickCrops(regions);
+          if (picked.billboard) billboardCrop = picked.billboard;
+          if (picked.map) mapCrop = picked.map;
+        }
+
         const updates: Record<string, string> = {};
 
         if (fullPng && !unit.billboard_photo_url) {
           try {
-            const png = await cropPng(fullPng, CROP_BILLBOARD, pageW, pageH);
+            const png = await cropPng(fullPng, billboardCrop, pageW, pageH);
+
             const path = `${campaignId}/${unit.id}.png`;
             const up = await supabase.storage
               .from("photos")
@@ -317,7 +478,7 @@ Deno.serve(async (req) => {
 
         if (fullPng && !unit.inset_map_url) {
           try {
-            const png = await cropPng(fullPng, CROP_MAP, pageW, pageH);
+            const png = await cropPng(fullPng, mapCrop, pageW, pageH);
             const path = `${campaignId}/${unit.id}-map.png`;
             const up = await supabase.storage
               .from("minimaps")
@@ -353,7 +514,9 @@ Deno.serve(async (req) => {
       }
 
       try { doc.destroy?.(); } catch { /* ignore */ }
+      isFirstPdf = false;
     }
+
 
     if (jobId) {
       await supabase
