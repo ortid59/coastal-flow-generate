@@ -18,6 +18,15 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Strip leading '#' and surrounding whitespace, uppercase for comparison.
+function normalizeUnitToken(s: string): string {
+  return String(s ?? "").replace(/^#/, "").trim().toUpperCase();
+}
+
+// Broad unit-number token pattern, see extract-photos for the format list.
+const UNIT_TOKEN_RE = /#?\b([A-Z]{0,4}-?[A-Z]{0,4}-?\d{2,6}[A-Z]?)\b/gi;
+
+
 /**
  * Extract structured fields like Geopath ID, Media Type, Facing, City, Zip
  * from a page's flat text. Returns only fields that were confidently found.
