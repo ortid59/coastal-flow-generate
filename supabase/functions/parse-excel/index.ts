@@ -58,6 +58,37 @@ const COLUMN_MAP: Record<string, string> = {
   "CPM": "cpm",
 };
 
+// Type B — CCO "Client Grid"
+const COLUMN_MAP_B: Record<string, string> = {
+  "Panel ID": "unit_number",
+  "Market": "market",
+  "Media Type": "format",
+  "Display Size (h x w)": "size",
+  "Description": "location_description",
+  "Facing": "facing",
+  "Geopath ID": "geopath_id",
+  "City": "city",
+};
+// CCO fallback: "Flight Name" holds city when "Market" is missing/blank.
+const CCO_MARKET_FALLBACK_HEADER = "Flight Name";
+
+// Type C — OFM "Location List"
+const COLUMN_MAP_C: Record<string, string> = {
+  "Inventory #": "unit_number",
+  "Market": "market",
+  "Media": "format",
+  "Copy Size": "size",
+  "Location Description": "location_description",
+  "Facing": "facing",
+  "IMP 18+ Weekly": "weekly_impressions",
+  "IMP 18+ 4 Week": "four_week_impressions",
+  "Start Date": "start_date",
+  "End Date": "end_date",
+  "Latitude": "latitude",
+  "Longitude": "longitude",
+  "Geopath Spot ID": "geopath_id",
+};
+
 const NUMERIC_FIELDS = new Set([
   "unit_count", "latitude", "longitude", "weekly_impressions",
   "four_week_impressions", "sov_pct", "current_advertisers",
@@ -71,20 +102,33 @@ const TEXT_FIELDS_NULLABLE_NUMERIC = new Set(["spot_length", "loop_length"]);
 // Recommended detection: green family (D9EAD3 is the spec; allow close variants)
 const GREEN_HEXES = new Set(["D9EAD3", "C6EFCE", "B6D7A8", "93C47D"]);
 
+// Normalize: strip surrounding whitespace, collapse internal whitespace
+// (including embedded newlines), lowercase. Handles non-breaking spaces.
 const norm = (s: string) =>
   s.replace(/\s+/g, " ").replace(/\u00a0/g, " ").trim().toLowerCase();
 
-function buildHeaderIndex(row: any[]): Record<string, number> {
+function buildHeaderIndexFrom(row: any[], map: Record<string, string>): Record<string, number> {
   const lookup: Record<string, string> = {};
-  for (const k of Object.keys(COLUMN_MAP)) lookup[norm(k)] = COLUMN_MAP[k];
+  for (const k of Object.keys(map)) lookup[norm(k)] = map[k];
   const out: Record<string, number> = {};
   row.forEach((cell, idx) => {
     if (cell == null) return;
     const field = lookup[norm(String(cell))];
-    if (field) out[field] = idx;
+    if (field && out[field] == null) out[field] = idx;
   });
   return out;
 }
+
+function buildHeaderIndex(row: any[]): Record<string, number> {
+  return buildHeaderIndexFrom(row, COLUMN_MAP);
+}
+
+function rowHasHeaders(row: any[], required: string[]): boolean {
+  if (!row) return false;
+  const cells = new Set(row.filter((c) => c != null).map((c) => norm(String(c))));
+  return required.every((h) => cells.has(norm(h)));
+}
+
 
 function toNumber(v: any): number | null {
   if (v == null || v === "") return null;
@@ -416,29 +460,78 @@ Deno.serve(async (req) => {
       const styleFillMap = await buildStyleFillMap(buf);
       const wb = XLSX.read(buf, { type: "array", cellStyles: true, cellDates: false });
 
-      // Pick the first sheet with a header row that maps to our schema
+      // Detect the workbook format:
+      //   Type A — standard "RFP Template" (≥8 standard headers in rows 0-4)
+      //   Type B — CCO: header row contains "Panel ID" + "Display Size (h x w)"
+      //   Type C — OFM: sheet named "Location List" OR header row (rows 0-11)
+      //                  with "Inventory #" + "Location Description"
       let chosen: XLSX.WorkSheet | null = null;
       let headerRow = 0;
       let headerIdx: Record<string, number> = {};
+      let formatKind: "A" | "B" | "C" = "A";
+      let flightNameCol: number | null = null; // CCO market fallback
 
+      // Pass 1: Type A (existing behavior).
       for (const sn of wb.SheetNames) {
         const ws = wb.Sheets[sn];
         const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
         for (let r = 0; r < Math.min(grid.length, 5); r++) {
           const idx = buildHeaderIndex(grid[r]);
           if (Object.keys(idx).length >= 8) {
-            chosen = ws;
-            headerRow = r;
-            headerIdx = idx;
+            chosen = ws; headerRow = r; headerIdx = idx; formatKind = "A";
             break;
           }
         }
         if (chosen) break;
       }
+
+      // Pass 2: Type B (CCO) — scan rows 0-11 for "Panel ID" + "Display Size (h x w)".
+      if (!chosen) {
+        for (const sn of wb.SheetNames) {
+          const ws = wb.Sheets[sn];
+          const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
+          for (let r = 0; r < Math.min(grid.length, 12); r++) {
+            if (rowHasHeaders(grid[r], ["Panel ID", "Display Size (h x w)"])) {
+              chosen = ws; headerRow = r; formatKind = "B";
+              headerIdx = buildHeaderIndexFrom(grid[r], COLUMN_MAP_B);
+              // Find Flight Name column for market fallback.
+              grid[r].forEach((cell, idx) => {
+                if (cell != null && norm(String(cell)) === norm(CCO_MARKET_FALLBACK_HEADER)) {
+                  flightNameCol = idx;
+                }
+              });
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+      }
+
+      // Pass 3: Type C (OFM) — sheet named "Location List", or header row 0-11
+      // with "Inventory #" + "Location Description".
+      if (!chosen) {
+        const ofmSheet = wb.SheetNames.find((sn) => norm(sn) === "location list");
+        const candidateSheets = ofmSheet ? [ofmSheet] : wb.SheetNames;
+        for (const sn of candidateSheets) {
+          const ws = wb.Sheets[sn];
+          const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
+          for (let r = 0; r < Math.min(grid.length, 12); r++) {
+            if (rowHasHeaders(grid[r], ["Inventory #", "Location Description"])) {
+              chosen = ws; headerRow = r; formatKind = "C";
+              headerIdx = buildHeaderIndexFrom(grid[r], COLUMN_MAP_C);
+              break;
+            }
+          }
+          if (chosen) break;
+        }
+      }
+
       if (!chosen) {
         console.warn(`[parse-excel] No usable sheet in ${f.original_name}`);
         continue;
       }
+      console.info(`[parse-excel] ${f.original_name}: detected format ${formatKind}, header row ${headerRow}, mapped fields:`, Object.keys(headerIdx));
+
 
       const grid = XLSX.utils.sheet_to_json<any[]>(chosen, { header: 1, raw: true, defval: null });
       const rows = grid.slice(headerRow + 1);
@@ -505,9 +598,17 @@ Deno.serve(async (req) => {
           }
         }
 
+        // CCO fallback: when "Market" is missing/blank, use "Flight Name"
+        // (which holds the city, e.g. Chicago / Los Angeles).
+        if (formatKind === "B" && (!row.market || String(row.market).trim() === "") && flightNameCol != null) {
+          const fn = r[flightNameCol];
+          if (fn != null && String(fn).trim() !== "") row.market = String(fn).trim();
+        }
+
         if (row.location_description) {
           row.insight_bullets = splitLocationBullets(row.location_description);
         }
+
 
         // Fallback total_cost calculation from negotiated rate or internal rate
         const tc = toNumber(row.total_cost);
