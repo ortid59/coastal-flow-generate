@@ -436,11 +436,22 @@ Deno.serve(async (req) => {
           console.warn(`[extract-photos] page render failed for ${unitNumber}:`, (e as Error).message);
         }
 
+        // Detect image regions; fall back to fixed ratios if detection fails.
+        let billboardCrop = CROP_BILLBOARD;
+        let mapCrop = CROP_MAP;
+        if (fullPng) {
+          const regions = await detectImageRegions(page, pageW, pageH);
+          const picked = pickCrops(regions);
+          if (picked.billboard) billboardCrop = picked.billboard;
+          if (picked.map) mapCrop = picked.map;
+        }
+
         const updates: Record<string, string> = {};
 
         if (fullPng && !unit.billboard_photo_url) {
           try {
-            const png = await cropPng(fullPng, CROP_BILLBOARD, pageW, pageH);
+            const png = await cropPng(fullPng, billboardCrop, pageW, pageH);
+
             const path = `${campaignId}/${unit.id}.png`;
             const up = await supabase.storage
               .from("photos")
