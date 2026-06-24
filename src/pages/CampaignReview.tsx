@@ -719,6 +719,7 @@ export default function CampaignReview() {
       };
 
       for (const file of pdfFiles) {
+       try {
         const profile = resolveVendorProfile(file.vendor);
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractPhotos] vendor "${file.vendor}" is manual-only — skipping auto extraction`);
@@ -756,8 +757,9 @@ export default function CampaignReview() {
             let seenFirstPhotoPage = false;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
-              const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+              let page: any = null;
               try {
+                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
                 if (pageNum <= skipCover) continue;
@@ -767,18 +769,24 @@ export default function CampaignReview() {
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
-                // Advance past units that already have a photo.
-                let unit: any = vendorUnits[assignIdx++];
-                while (unit && unit.billboard_photo_url && assignIdx < vendorUnits.length) {
-                  unit = vendorUnits[assignIdx++];
-                }
-                if (!unit || unit.billboard_photo_url) break;
+                // Peek the next unit needing a photo — do NOT consume the slot
+                // until the page is successfully processed, so a bad page doesn't
+                // shift all subsequent assignments.
+                let peek = assignIdx;
+                while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
+                if (peek >= vendorUnits.length) break;
+                const unit = vendorUnits[peek];
 
                 const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
                 if (photoSaved) totalPhotos++;
                 if (mapSaved) totalMaps++;
+                // Commit the slot only after a successful run.
+                assignIdx = peek + 1;
+              } catch (pageErr: any) {
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping, retrying same unit next page:`, pageErr?.message ?? pageErr);
+                continue;
               } finally {
-                page.cleanup?.();
+                page?.cleanup?.();
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
             }
@@ -789,8 +797,9 @@ export default function CampaignReview() {
           const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
-            const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+            let page: any = null;
             try {
+              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
               pagesChecked++;
               setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
               const textContent = await withTimeout(page.getTextContent(), `Reading page ${pageNum} text`);
@@ -872,8 +881,11 @@ export default function CampaignReview() {
               if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
                 detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
               }
+            } catch (pageErr: any) {
+              console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              continue;
             } finally {
-              page.cleanup?.();
+              page?.cleanup?.();
               setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             }
           }
@@ -899,6 +911,10 @@ export default function CampaignReview() {
             console.warn('[extractPhotos] save vendor profile failed:', profErr.message);
           }
         }
+       } catch (pdfErr: any) {
+         console.error(`[extractPhotos] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         continue;
+       }
       }
 
 
