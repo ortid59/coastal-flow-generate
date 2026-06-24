@@ -322,6 +322,8 @@ Deno.serve(async (req) => {
     const unitByNumber = new Map<string, UnitRow>(
       (units as UnitRow[]).map((u) => [String(u.unit_number).trim(), u]),
     );
+    const validUnitNumbers = (units as UnitRow[]).map((u) => String(u.unit_number));
+
 
     // Look up all vendor files for the campaign and filter to PDFs by extension.
     const { data: vendorFiles, error: fErr } = await supabase
