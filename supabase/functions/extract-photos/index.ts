@@ -478,7 +478,7 @@ Deno.serve(async (req) => {
 
         if (fullPng && !unit.inset_map_url) {
           try {
-            const png = await cropPng(fullPng, CROP_MAP, pageW, pageH);
+            const png = await cropPng(fullPng, mapCrop, pageW, pageH);
             const path = `${campaignId}/${unit.id}-map.png`;
             const up = await supabase.storage
               .from("minimaps")
