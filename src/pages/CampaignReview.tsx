@@ -401,6 +401,7 @@ export default function CampaignReview() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [collapsedVendors, setCollapsedVendors] = useState<Set<string>>(new Set());
   const [vendorCropProfiles, setVendorCropProfiles] = useState<Record<string, VendorCropProfile>>({});
+  const [vendorFiles, setVendorFiles] = useState<Array<{ id: string; original_name: string | null; vendor: string | null; kind: string | null }>>([]);
   const detectedVendorCropsRef = useRef<Record<string, { photo: CropBox; map: CropBox | null }>>({});
 
   const groupedUnits = useMemo(() => {
