@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       throw new Error("No PDF files uploaded for this campaign. Please upload a Photo Sheets PDF first.");
     }
 
-    let isFirstPdf = true;
+    let overviewSaved = false;
     for (const f of pdfFiles) {
 
       const { data: blob, error: dlErr } = await supabase.storage
@@ -370,45 +370,46 @@ Deno.serve(async (req) => {
 
         const page = await doc.getPage(i + 1);
 
-        // Page 1 of the FIRST PDF only → campaign overview map. Subsequent
-        // vendor PDFs treat page 1 like any other unit page.
-        if (i === 0 && isFirstPdf) {
-          try {
-            const { png: overviewPng } = await renderPageToPng(page);
-            if (overviewPng) {
-              const path = `${campaignId}/overview-map.png`;
-              const up = await supabase.storage
-                .from("minimaps")
-                .upload(path, overviewPng, { contentType: "image/png", upsert: true });
-              if (up.error) {
-                console.warn("[extract-photos] overview upload failed:", up.error.message);
-              } else {
-                const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
-                const url = `${pub.publicUrl}?v=${Date.now()}`;
-                const { error: cErr } = await supabase
-                  .from("campaigns")
-                  .update({ vendor_overview_map_url: url })
-                  .eq("id", campaignId);
-                if (cErr) {
-                  console.warn("[extract-photos] campaign update failed:", cErr.message);
-                } else {
-                  summary.overview_pages++;
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("[extract-photos] overview render failed:", (e as Error).message);
-          }
-          try { page.cleanup?.(); } catch { /* ignore */ }
-          continue;
-        }
-
-        // All other pages → one billboard each.
+        // Try to match this page to a unit first. If it matches, treat as a
+        // unit headsheet. If it does NOT match and we haven't yet saved a
+        // campaign overview map, treat this page as the overview. Otherwise
+        // skip with a warning.
         const pageText = await getPageText(page);
         const unitNumber = extractUnitNumber(pageText, validUnitNumbers);
+
         if (!unitNumber) {
-          console.warn(`[extract-photos] page ${i + 1} has no matching unit number, skipping`);
-          summary.pages_unmatched++;
+          if (!overviewSaved) {
+            try {
+              const { png: overviewPng } = await renderPageToPng(page);
+              if (overviewPng) {
+                const path = `${campaignId}/overview-map.png`;
+                const up = await supabase.storage
+                  .from("minimaps")
+                  .upload(path, overviewPng, { contentType: "image/png", upsert: true });
+                if (up.error) {
+                  console.warn("[extract-photos] overview upload failed:", up.error.message);
+                } else {
+                  const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
+                  const url = `${pub.publicUrl}?v=${Date.now()}`;
+                  const { error: cErr } = await supabase
+                    .from("campaigns")
+                    .update({ vendor_overview_map_url: url })
+                    .eq("id", campaignId);
+                  if (cErr) {
+                    console.warn("[extract-photos] campaign update failed:", cErr.message);
+                  } else {
+                    summary.overview_pages++;
+                    overviewSaved = true;
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("[extract-photos] overview render failed:", (e as Error).message);
+            }
+          } else {
+            console.warn(`[extract-photos] page ${i + 1} of ${f.original_name} has no matching unit number, skipping`);
+            summary.pages_unmatched++;
+          }
           try { page.cleanup?.(); } catch { /* ignore */ }
           continue;
         }
