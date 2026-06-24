@@ -598,9 +598,17 @@ Deno.serve(async (req) => {
           }
         }
 
+        // CCO fallback: when "Market" is missing/blank, use "Flight Name"
+        // (which holds the city, e.g. Chicago / Los Angeles).
+        if (formatKind === "B" && (!row.market || String(row.market).trim() === "") && flightNameCol != null) {
+          const fn = r[flightNameCol];
+          if (fn != null && String(fn).trim() !== "") row.market = String(fn).trim();
+        }
+
         if (row.location_description) {
           row.insight_bullets = splitLocationBullets(row.location_description);
         }
+
 
         // Fallback total_cost calculation from negotiated rate or internal rate
         const tc = toNumber(row.total_cost);
