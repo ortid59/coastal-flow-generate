@@ -279,7 +279,10 @@ Deno.serve(async (req) => {
           const items = tc.items as Array<{ str: string; transform?: number[] }>;
           const flatText = items.map((it) => it.str).join(" ");
 
-          // Match a unit number on this page (prefer longest)
+          // Match a unit number on this page. Try the legacy exact-string
+          // match first (handles 6-digit Clear Channel IDs cleanly), then
+          // fall back to scanning broad tokens (#3001, TM-CH-003, 10A, ...)
+          // and resolving them against normalized real unit numbers.
           const sorted = [...unitNumbers].sort((a, b) => b.length - a.length);
           let match: string | null = null;
           for (const u of sorted) {
@@ -289,7 +292,25 @@ Deno.serve(async (req) => {
               break;
             }
           }
+          if (!match) {
+            const seen = new Set<string>();
+            const candidates: string[] = [];
+            let mm: RegExpExecArray | null;
+            UNIT_TOKEN_RE.lastIndex = 0;
+            while ((mm = UNIT_TOKEN_RE.exec(flatText)) !== null) {
+              const norm = normalizeUnitToken(mm[1]);
+              if (!norm || seen.has(norm)) continue;
+              seen.add(norm);
+              candidates.push(norm);
+            }
+            candidates.sort((a, b) => b.length - a.length);
+            for (const c of candidates) {
+              const hit = normToOriginal.get(c);
+              if (hit) { match = hit; break; }
+            }
+          }
           if (!match) continue;
+
 
           const para = extractLongestParagraph(items);
           if (para) {
