@@ -568,18 +568,21 @@ function PrintableQuote({
         )}
       </div>
 
-      {/* Photos row */}
+      {/* Photos row — collapse to single column when no map exists */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: unit.inset_map_url ? "1fr 1fr" : "1fr",
           gap: 10,
           marginBottom: 12,
         }}
       >
         <PhotoBox label="Location photo" src={unit.billboard_photo_url} />
-        <PhotoBox label="Location map" src={unit.inset_map_url} />
+        {unit.inset_map_url && (
+          <PhotoBox label="Location map" src={unit.inset_map_url} />
+        )}
       </div>
+
 
       {/* Highlights */}
       {unit.highlights && (
