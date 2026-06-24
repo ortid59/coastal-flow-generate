@@ -626,28 +626,114 @@ export default function CampaignReview() {
       let totalPhotos = 0;
       let totalMaps = 0;
       let pagesChecked = 0;
-      let overviewSaved = false;
+
+      // Crop modes from the vendor profile registry, resolved to crop boxes.
+      const cropBoxForMode = (mode: VendorCropMode | undefined): CropBox => {
+        switch (mode) {
+          case "single_left":     return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          case "full_bleed":      return { x: 0.0,  y: 0.15, w: 1.0,  h: 0.73 };
+          case "single_midband":  return { x: 0.0,  y: 0.18, w: 1.0,  h: 0.55 };
+          case "photo_plus_map":  return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          default:                return billboardCropFallback;
+        }
+      };
+
+      // Render a page + run uploadCrop helper closure. Returns counts.
+      const processUnitPage = async (
+        page: any,
+        pageNum: number,
+        unit: any,
+        photoCrop: CropBox,
+        mapCrop: CropBox | null,
+      ): Promise<{ photoSaved: boolean; mapSaved: boolean }> => {
+        if (!unit?.unit_number) return { photoSaved: false, mapSaved: false };
+        if (unit.billboard_photo_url && (!mapCrop || unit.inset_map_url)) {
+          return { photoSaved: false, mapSaved: false };
+        }
+        const unitNumber = String(unit.unit_number);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        const ctx = canvas.getContext('2d')!;
+        await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, `Rendering page ${pageNum}`);
+        const W = canvas.width;
+        const H = canvas.height;
+
+        const uploadCrop = async (
+          crop: CropBox,
+          storageBucket: string,
+          storagePath: string,
+          dbField: string,
+        ): Promise<boolean> => {
+          const cropCanvas = document.createElement('canvas');
+          cropCanvas.width = Math.max(1, Math.round(W * crop.w));
+          cropCanvas.height = Math.max(1, Math.round(H * crop.h));
+          const cropCtx = cropCanvas.getContext('2d')!;
+          cropCtx.drawImage(
+            canvas,
+            Math.round(W * crop.x),
+            Math.round(H * crop.y),
+            Math.round(W * crop.w),
+            Math.round(H * crop.h),
+            0, 0, cropCanvas.width, cropCanvas.height,
+          );
+          const imageBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
+            cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
+          ), `Exporting ${unitNumber} ${dbField}`);
+          const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
+          const { error: upErr } = await supabase.storage
+            .from(storageBucket).upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
+          if (upErr) { console.warn(`Upload failed for ${unitNumber} (${dbField}):`, upErr.message); return false; }
+          let url: string;
+          if (storageBucket === 'photos') {
+            const { data: signed, error: signErr } = await supabase.storage
+              .from('photos').createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+            if (signErr || !signed) { console.warn(`Sign URL failed:`, signErr?.message); return false; }
+            url = signed.signedUrl;
+          } else {
+            const { data: pubData } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
+            url = `${pubData.publicUrl}?v=${Date.now()}`;
+          }
+          const { error: updateErr } = await supabase
+            .from('units').update({ [dbField]: url } as any).eq('id', unit.id);
+          if (updateErr) { console.warn(`DB update failed:`, updateErr.message); return false; }
+          (unit as any)[dbField] = url;
+          return true;
+        };
+
+        let photoSaved = false;
+        let mapSaved = false;
+        if (!unit.billboard_photo_url) {
+          photoSaved = await uploadCrop(photoCrop, 'photos', `${id}/${unit.id}.png`, 'billboard_photo_url');
+        }
+        if (mapCrop && !unit.inset_map_url) {
+          mapSaved = await uploadCrop(mapCrop, 'minimaps', `${id}/${unit.id}-map.png`, 'inset_map_url');
+        }
+        return { photoSaved, mapSaved };
+      };
 
       for (const file of pdfFiles) {
-        if (!unitsNeedingPhotos.some((u) => {
-          const fileVendor = normalizeVendor(file.vendor);
-          const unitVendor = normalizeVendor(u.vendor);
-          return !fileVendor || !unitVendor || unitVendor === fileVendor || unitVendor.includes(fileVendor) || fileVendor.includes(unitVendor);
-        })) {
+        const profile = resolveVendorProfile(file.vendor);
+        if (profile?.matchStrategy === "manual") {
+          console.info(`[extractPhotos] vendor "${file.vendor}" is manual-only — skipping auto extraction`);
           continue;
         }
-        const vendorKey = normalizeVendor(file.vendor);
+
+        const fileVendor = normalizeVendor(file.vendor);
+        const vendorUnits = unitsNeedingPhotos.filter((u) => {
+          const uv = normalizeVendor(u.vendor);
+          if (!fileVendor || !uv) return true;
+          return uv === fileVendor || uv.includes(fileVendor) || fileVendor.includes(uv);
+        });
+        if (!vendorUnits.length) continue;
+
+        const vendorKey = fileVendor;
         const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from('uploads')
-          .download(file.storage_path);
-        if (dlErr || !blob) {
-          console.warn('PDF download failed:', dlErr?.message);
-          continue;
-        }
-
+        const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
+        if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await withTimeout(
           pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise,
@@ -656,98 +742,105 @@ export default function CampaignReview() {
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
 
         try {
+          // ------- Strategy: order (sequential page→unit assignment) -------
+          if (profile?.matchStrategy === "order") {
+            const skipCover = profile.skipCoverPages ?? 0;
+            const photoCrop = cropBoxForMode(profile.crop);
+            const mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+            let assignIdx = 0;
+            let seenFirstPhotoPage = false;
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              if (assignIdx >= vendorUnits.length) break;
+              const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+              try {
+                pagesChecked++;
+                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+                if (pageNum <= skipCover) continue;
+                if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
+                  const regions = await detectImageRegions(page);
+                  const hasContentImage = regions.some((r) => r.area >= 0.05);
+                  if (!hasContentImage) continue;
+                  seenFirstPhotoPage = true;
+                }
+                const unit = vendorUnits[assignIdx++];
+                while (unit?.billboard_photo_url && assignIdx < vendorUnits.length) {
+                  // already done, advance
+                }
+                if (!unit) break;
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
+                if (photoSaved) totalPhotos++;
+                if (mapSaved) totalMaps++;
+              } finally {
+                page.cleanup?.();
+                setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
+              }
+            }
+            continue;
+          }
+
+          // ------- Strategy: per-page text matching (unit_number / address / auto) -------
+          const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            if (!unitsNeedingPhotos.some((u) => !u.billboard_photo_url)) break;
+            if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
             const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
             try {
               pagesChecked++;
               setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
               const textContent = await withTimeout(page.getTextContent(), `Reading page ${pageNum} text`);
-              const text = textContent.items.map((item: any) => item.str).join(' ');
+              const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+              const text = items.map((item: any) => item.str).join(' ');
 
-              const matchedPageUnit = findUnitForPage(text, unitsNeedingPhotos, file.vendor);
+              let matchedUnit: any = null;
 
-              if (!matchedPageUnit) {
-                // No unit on this page. If we haven't saved a campaign overview
-                // map yet, treat this page as the overview. Otherwise skip.
-                if (!overviewSaved) {
-                  try {
-                    const ovViewport = page.getViewport({ scale: 1.5 });
-                    const ovCanvas = document.createElement('canvas');
-                    ovCanvas.width = Math.round(ovViewport.width);
-                    ovCanvas.height = Math.round(ovViewport.height);
-                    const ovCtx = ovCanvas.getContext('2d')!;
-                    await withTimeout(page.render({ canvasContext: ovCtx, viewport: ovViewport }).promise, `Rendering overview map`);
-                    const overviewCrop = { x: 0.0, y: 0.15, w: 1.0, h: 0.85 };
-                    const cropCanvas = document.createElement('canvas');
-                    const cx = Math.round(ovCanvas.width * overviewCrop.x);
-                    const cy = Math.round(ovCanvas.height * overviewCrop.y);
-                    const cw = Math.round(ovCanvas.width * overviewCrop.w);
-                    const ch = Math.round(ovCanvas.height * overviewCrop.h);
-                    cropCanvas.width = cw;
-                    cropCanvas.height = ch;
-                    const cropCtx = cropCanvas.getContext('2d')!;
-                    cropCtx.drawImage(ovCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
-                    const ovBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
-                      cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Overview image export failed')), 'image/png')
-                    ), 'Exporting overview map');
-                    const ovBytes = new Uint8Array(await ovBlob.arrayBuffer());
-                    const ovPath = `${id}/overview-map.png`;
-                    const { error: ovUpErr } = await supabase.storage
-                      .from('minimaps')
-                      .upload(ovPath, ovBytes, { contentType: 'image/png', upsert: true });
-                    if (!ovUpErr) {
-                      const { data: ovPub } = supabase.storage.from('minimaps').getPublicUrl(ovPath);
-                      const ovUrl = `${ovPub.publicUrl}?v=${Date.now()}`;
-                      await supabase
-                        .from('campaigns')
-                        .update({ vendor_overview_map_url: ovUrl })
-                        .eq('id', id);
-                      overviewSaved = true;
-                    }
-                  } catch (e) {
-                    console.warn('[extractPhotos] overview map failed:', e);
-                  }
-                } else {
-                  console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name}: no unit matched, skipping`);
+              if (profile?.matchStrategy === "unit_number" && unitRegex) {
+                unitRegex.lastIndex = 0;
+                const matches = Array.from(text.matchAll(unitRegex));
+                for (const m of matches) {
+                  const tok = normalizeUnitToken(m[1] ?? m[0]);
+                  if (!tok) continue;
+                  const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                  if (found) { matchedUnit = found; break; }
                 }
+              } else if (profile?.matchStrategy === "address") {
+                // Largest text line (by length) as proxy for the address line.
+                const lines = items
+                  .map((it) => (it.str ?? "").trim())
+                  .filter(Boolean)
+                  .sort((a, b) => b.length - a.length)
+                  .slice(0, 6);
+                for (const line of lines) {
+                  const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                  if (found) { matchedUnit = found; break; }
+                }
+              } else {
+                // No profile or auto-detect fallback — keep prior generic matcher.
+                matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
+              }
+
+              if (!matchedUnit) {
+                console.info(`[extractPhotos] page ${pageNum} of ${file.original_name}: no unit matched, skipping`);
                 continue;
               }
 
-              const unit = matchedPageUnit;
-              const unitNumber = unit?.unit_number ? String(unit.unit_number) : null;
-              if (!unit || !unitNumber) continue;
-              if (unit.billboard_photo_url && unit.inset_map_url) continue;
-
-              const viewport = page.getViewport({ scale: 2.0 });
-              const canvas = document.createElement('canvas');
-              canvas.width = Math.round(viewport.width);
-              canvas.height = Math.round(viewport.height);
-              const ctx = canvas.getContext('2d')!;
-              await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, `Rendering page ${pageNum}`);
-
-              const W = canvas.width;
-              const H = canvas.height;
-
-              // Decide crops: profile > detection > fallback.
+              // Decide crops based on profile, saved profile, or auto-detection.
               let photoCrop: CropBox = billboardCropFallback;
-              let mapCrop: CropBox | null = mapCropFallback;
+              let mapCrop: CropBox | null = null;
               let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
-              if (existingProfile && existingProfile.photo_x != null) {
-                photoCrop = {
-                  x: existingProfile.photo_x!,
-                  y: existingProfile.photo_y!,
-                  w: existingProfile.photo_w!,
-                  h: existingProfile.photo_h!,
-                };
+              if (profile?.crop) {
+                photoCrop = cropBoxForMode(profile.crop);
+                mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+                // For single_left / single_midband, try real region detection too.
+                if (profile.crop === "single_left" || profile.crop === "single_midband") {
+                  const regions = await detectImageRegions(page);
+                  const picked = pickContentCrops(regions);
+                  if (picked.photo) photoCrop = picked.photo;
+                }
+                detectedSource = 'profile';
+              } else if (existingProfile && existingProfile.photo_x != null) {
+                photoCrop = { x: existingProfile.photo_x!, y: existingProfile.photo_y!, w: existingProfile.photo_w!, h: existingProfile.photo_h! };
                 mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
-                  ? {
-                      x: existingProfile.map_x!,
-                      y: existingProfile.map_y!,
-                      w: existingProfile.map_w!,
-                      h: existingProfile.map_h!,
-                    }
+                  ? { x: existingProfile.map_x!, y: existingProfile.map_y!, w: existingProfile.map_w!, h: existingProfile.map_h! }
                   : null;
                 detectedSource = 'profile';
               } else {
@@ -757,93 +850,19 @@ export default function CampaignReview() {
                   photoCrop = picked.photo;
                   mapCrop = picked.map;
                   detectedSource = 'detection';
-                }
-              }
-
-              const uploadCrop = async (
-                crop: CropBox,
-                storageBucket: string,
-                storagePath: string,
-                dbField: string,
-                extraFields: Record<string, any> = {},
-              ): Promise<boolean> => {
-                const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = Math.max(1, Math.round(W * crop.w));
-                cropCanvas.height = Math.max(1, Math.round(H * crop.h));
-                const cropCtx = cropCanvas.getContext('2d')!;
-                cropCtx.drawImage(
-                  canvas,
-                  Math.round(W * crop.x),
-                  Math.round(H * crop.y),
-                  Math.round(W * crop.w),
-                  Math.round(H * crop.h),
-                  0, 0,
-                  cropCanvas.width,
-                  cropCanvas.height,
-                );
-                const imageBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
-                  cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
-                ), `Exporting ${unitNumber} ${dbField}`);
-                const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
-                const { error: upErr } = await supabase.storage
-                  .from(storageBucket)
-                  .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
-                if (upErr) {
-                  console.warn(`Upload failed for ${unitNumber} (${dbField}):`, upErr.message);
-                  return false;
-                }
-
-                let url: string;
-                if (storageBucket === 'photos') {
-                  const { data: signed, error: signErr } = await supabase.storage
-                    .from('photos')
-                    .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
-                  if (signErr || !signed) {
-                    console.warn(`Sign URL failed for ${storagePath}:`, signErr?.message);
-                    return false;
-                  }
-                  url = signed.signedUrl;
                 } else {
-                  const { data: pubData } = supabase.storage.from(storageBucket).getPublicUrl(storagePath);
-                  url = `${pubData.publicUrl}?v=${Date.now()}`;
+                  mapCrop = mapCropFallback;
                 }
-
-                const { error: updateErr } = await supabase
-                  .from('units')
-                  .update({ [dbField]: url, ...extraFields } as any)
-                  .eq('id', unit.id);
-                if (updateErr) {
-                  console.warn(`DB update failed for ${unitNumber} (${dbField}):`, updateErr.message);
-                  return false;
-                } else {
-                  (unit as any)[dbField] = url;
-                  return true;
-                }
-              };
-
-              let savedAny = false;
-              if (!unit.billboard_photo_url) {
-                const ok = await uploadCrop(
-                  photoCrop,
-                  'photos',
-                  `${id}/${unit.id}.png`,
-                  'billboard_photo_url',
-                );
-                if (ok) { totalPhotos++; savedAny = true; }
-              }
-              if (mapCrop && !unit.inset_map_url) {
-                const okMap = await uploadCrop(
-                  mapCrop,
-                  'minimaps',
-                  `${id}/${unit.id}-map.png`,
-                  'inset_map_url',
-                );
-                if (okMap) { totalMaps++; savedAny = true; }
               }
 
-              // Remember crops detected this run so the "Save crop as default"
-              // button and auto-save can persist them as the vendor's profile.
-              if (savedAny && vendorKey && detectedSource === 'detection') {
+              // Hard guard: profiles with hasMap:false must NEVER produce a map.
+              if (profile && profile.hasMap === false) mapCrop = null;
+
+              const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
+              if (photoSaved) totalPhotos++;
+              if (mapSaved) totalMaps++;
+
+              if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
                 detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
               }
             } finally {
@@ -855,9 +874,8 @@ export default function CampaignReview() {
           pdf.destroy?.();
         }
 
-        // After processing this vendor's PDF, auto-persist the detected profile
-        // (only if we don't already have one and we successfully detected crops).
-        if (vendorKey && !existingProfile && detectedVendorCropsRef.current[vendorKey]) {
+        // Auto-persist detected vendor crop if none saved yet (auto-detect path only).
+        if (vendorKey && !existingProfile && !profile && detectedVendorCropsRef.current[vendorKey]) {
           const det = detectedVendorCropsRef.current[vendorKey];
           const row = {
             vendor: file.vendor!,
@@ -866,8 +884,7 @@ export default function CampaignReview() {
             map_x: det.map?.x ?? null, map_y: det.map?.y ?? null, map_w: det.map?.w ?? null, map_h: det.map?.h ?? null,
           };
           const { error: profErr } = await supabase
-            .from('vendor_crop_profiles')
-            .upsert(row, { onConflict: 'vendor' });
+            .from('vendor_crop_profiles').upsert(row, { onConflict: 'vendor' });
           if (!profErr) {
             profileByVendor.set(vendorKey, row as VendorCropProfile);
             setVendorCropProfiles((prev) => ({ ...prev, [vendorKey]: row as VendorCropProfile }));
@@ -876,6 +893,7 @@ export default function CampaignReview() {
           }
         }
       }
+
 
 
 
