@@ -159,6 +159,52 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   return null;
 };
 
+// Pick the best vendor identifier for a PDF: prefer file.vendor when it
+// resolves to a known VENDOR_PROFILES key; otherwise fall back to the most
+// common units.vendor among the supplied pool (which parse-excel set from
+// the canonical "Vendor" column).
+function resolveEffectiveVendor<T extends { vendor?: string | null }>(
+  fileVendor: string | null | undefined,
+  unitsPool: T[],
+): { vendor: string | null; profile: VendorProfile | null } {
+  const fromFile = resolveVendorProfile(fileVendor);
+  if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
+
+  const counts = new Map<string, number>();
+  for (const u of unitsPool) {
+    const v = (u.vendor ?? "").trim();
+    if (!v) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  let bestVendor: string | null = null;
+  let bestProfile: VendorProfile | null = null;
+  let bestCount = -1;
+  for (const [v, c] of counts) {
+    const p = resolveVendorProfile(v);
+    if (p && c > bestCount) { bestVendor = v; bestProfile = p; bestCount = c; }
+  }
+  if (bestProfile) return { vendor: bestVendor, profile: bestProfile };
+  // Still nothing — return the file's vendor string (may be null) and null profile.
+  return { vendor: fileVendor ?? null, profile: null };
+}
+
+// Filter unitsPool to those matching effectiveVendor (bidirectional substring
+// on normalized strings). Falls back to the full pool when the filter empties
+// — a single-PDF campaign should never be skipped over a vendor-string mismatch.
+function filterUnitsForVendor<T extends { vendor?: string | null }>(
+  unitsPool: T[],
+  effectiveVendor: string | null | undefined,
+): T[] {
+  const target = normalizeVendor(effectiveVendor);
+  if (!target) return unitsPool;
+  const filtered = unitsPool.filter((u) => {
+    const uv = normalizeVendor(u.vendor);
+    if (!uv) return true;
+    return uv === target || uv.includes(target) || target.includes(uv);
+  });
+  return filtered.length ? filtered : unitsPool;
+}
+
 const normalizeUnitToken = (s: string | null | undefined) =>
   String(s ?? "")
     .replace(/^#+/, "")
