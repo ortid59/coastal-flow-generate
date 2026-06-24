@@ -339,7 +339,9 @@ Deno.serve(async (req) => {
       throw new Error("No PDF files uploaded for this campaign. Please upload a Photo Sheets PDF first.");
     }
 
+    let isFirstPdf = true;
     for (const f of pdfFiles) {
+
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
         .download(f.storage_path);
