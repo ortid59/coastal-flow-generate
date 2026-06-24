@@ -1306,9 +1306,9 @@ export default function CampaignReview() {
                                   )}
                                   <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Photo</span>
                                 </div>
-                                {/* Map photo */}
-                                <div className="flex flex-col items-center gap-0.5">
-                                  {u.inset_map_url ? (
+                                {/* Map photo — only shown when one exists */}
+                                {u.inset_map_url && (
+                                  <div className="flex flex-col items-center gap-0.5">
                                     <div className="relative h-10 w-14 overflow-hidden rounded border border-border bg-muted">
                                       <img
                                         src={u.inset_map_url}
@@ -1317,16 +1317,9 @@ export default function CampaignReview() {
                                         loading="lazy"
                                       />
                                     </div>
-                                  ) : (
-                                    <div
-                                      className="flex h-10 w-14 items-center justify-center rounded border border-dashed border-border bg-muted/40 text-muted-foreground"
-                                      title="No map"
-                                    >
-                                      <MapPin className="h-3 w-3" />
-                                    </div>
-                                  )}
-                                  <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Map</span>
-                                </div>
+                                    <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Map</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex flex-wrap gap-1">
                                 {id && (
