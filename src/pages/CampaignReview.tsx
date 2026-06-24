@@ -1384,6 +1384,18 @@ export default function CampaignReview() {
                                     onUploaded={load}
                                   />
                                 )}
+                                {u.vendor && detectedVendorCropsRef.current[normalizeVendor(u.vendor)] && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 px-2 text-[10px]"
+                                    onClick={(e) => { e.stopPropagation(); saveVendorCropDefault(u.vendor); }}
+                                    title={`Save the detected crop layout as the default for ${u.vendor}`}
+                                  >
+                                    Save crop as default for {u.vendor}
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </td>
