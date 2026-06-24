@@ -409,9 +409,11 @@ export default function CampaignReview() {
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
-      const unitsNeedingPhotos = units.filter((u) => !u.billboard_photo_url || !u.inset_map_url);
+      // A unit "needs" extraction if it lacks a billboard photo. Map is optional
+      // (some vendors don't include one); we still try to extract it when present.
+      const unitsNeedingPhotos = units.filter((u) => !u.billboard_photo_url);
       if (!unitsNeedingPhotos.length) {
-        if (!silent) toast({ title: 'Photos already extracted', description: `${units.length} units already have photos and maps.` });
+        if (!silent) toast({ title: 'Photos already extracted', description: `${units.length} units already have photos.` });
         return;
       }
 
@@ -429,13 +431,94 @@ export default function CampaignReview() {
         throw new Error('No PDF file found for this campaign. Upload the Photo Sheets PDF first.');
       }
 
+      // Load existing vendor crop profiles
+      const { data: profileRows } = await supabase.from('vendor_crop_profiles').select('*');
+      const profileByVendor = new Map<string, VendorCropProfile>();
+      for (const p of (profileRows ?? []) as VendorCropProfile[]) {
+        const key = normalizeVendor(p.vendor);
+        if (key) profileByVendor.set(key, p);
+      }
+
+      // Fallback (Stone Climbing / Clear Channel layout)
+      const billboardCropFallback: CropBox = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
+      const mapCropFallback: CropBox       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
+
+      // Detect image regions on a PDF page via the operator list. Coordinates
+      // are returned in 0..1 page-relative space with y measured from the top.
+      const detectImageRegions = async (page: any): Promise<Array<CropBox & { area: number }>> => {
+        try {
+          const view: number[] = page.view ?? [0, 0, 612, 792];
+          const pdfW = Math.max(1, view[2] - view[0]);
+          const pdfH = Math.max(1, view[3] - view[1]);
+          const ops = await page.getOperatorList();
+          const OPS: any = (pdfjs as any).OPS;
+          const stack: number[][] = [];
+          let ctm: number[] = [1, 0, 0, 1, 0, 0];
+          const mul = (a: number[], b: number[]) => [
+            a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
+            a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+            a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
+          ];
+          const regions: Array<CropBox & { area: number }> = [];
+          for (let i = 0; i < ops.fnArray.length; i++) {
+            const fn = ops.fnArray[i];
+            const args = ops.argsArray[i];
+            if (fn === OPS.save) stack.push(ctm.slice());
+            else if (fn === OPS.restore) ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+            else if (fn === OPS.transform) ctm = mul(ctm, args);
+            else if (
+              fn === OPS.paintImageXObject ||
+              fn === OPS.paintJpegXObject ||
+              fn === OPS.paintInlineImageXObject ||
+              fn === OPS.paintImageXObjectRepeat
+            ) {
+              const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([x, y]) => [
+                ctm[0] * x + ctm[2] * y + ctm[4],
+                ctm[1] * x + ctm[3] * y + ctm[5],
+              ]);
+              const xs = corners.map((c) => c[0]);
+              const ys = corners.map((c) => c[1]);
+              const minX = Math.min(...xs), maxX = Math.max(...xs);
+              const minY = Math.min(...ys), maxY = Math.max(...ys);
+              const x = Math.max(0, Math.min(1, minX / pdfW));
+              const w = Math.max(0, Math.min(1, (maxX - minX) / pdfW));
+              const yTop = Math.max(0, Math.min(1, 1 - maxY / pdfH));
+              const h = Math.max(0, Math.min(1, (maxY - minY) / pdfH));
+              if (w > 0 && h > 0) regions.push({ x, y: yTop, w, h, area: w * h });
+            }
+          }
+          return regions;
+        } catch (e) {
+          console.warn('[extractPhotos] detectImageRegions failed:', e);
+          return [];
+        }
+      };
+
+      const pickContentCrops = (regions: Array<CropBox & { area: number }>): { photo: CropBox | null; map: CropBox | null } => {
+        const content = regions
+          .filter((r) => {
+            if (r.area < 0.05) return false; // tiny: logos/icons
+            const fullWidth = r.w > 0.8;
+            if (fullWidth && r.y < 0.25) return false; // header strip
+            if (fullWidth && r.y + r.h > 0.80) return false; // footer strip
+            return true;
+          })
+          .sort((a, b) => b.area - a.area);
+        if (content.length === 0) return { photo: null, map: null };
+        if (content.length === 1) return { photo: content[0], map: null };
+        const photo = content[0];
+        const map = content.slice(1).find((r) => {
+          const dx = Math.abs((r.x + r.w / 2) - (photo.x + photo.w / 2));
+          const dy = Math.abs((r.y + r.h / 2) - (photo.y + photo.h / 2));
+          return dx > 0.15 || dy > 0.15;
+        }) ?? null;
+        return { photo, map };
+      };
+
       let totalPhotos = 0;
       let totalMaps = 0;
       let pagesChecked = 0;
-
-       // Static crop coordinates measured from Clear Channel PDF layout
-       const billboardCrop = { x: 0.042, y: 0.329, w: 0.506, h: 0.441 };
-       const mapCrop       = { x: 0.579, y: 0.169, w: 0.379, h: 0.352 };
+      let overviewSaved = false;
 
       for (const file of pdfFiles) {
         if (!unitsNeedingPhotos.some((u) => {
@@ -445,6 +528,9 @@ export default function CampaignReview() {
         })) {
           continue;
         }
+        const vendorKey = normalizeVendor(file.vendor);
+        const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
+
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage
           .from('uploads')
@@ -463,7 +549,7 @@ export default function CampaignReview() {
 
         try {
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            if (!unitsNeedingPhotos.some((u) => !u.billboard_photo_url || !u.inset_map_url)) break;
+            if (!unitsNeedingPhotos.some((u) => !u.billboard_photo_url)) break;
             const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
             try {
               pagesChecked++;
@@ -473,51 +559,57 @@ export default function CampaignReview() {
 
               const matchedPageUnit = findUnitForPage(text, unitsNeedingPhotos, file.vendor);
 
-              if (pageNum === 1 && !matchedPageUnit) {
-                // Page 1 = campaign overview map with all locations pinned
-                try {
-                  const ovViewport = page.getViewport({ scale: 1.5 });
-                  const ovCanvas = document.createElement('canvas');
-                  ovCanvas.width = Math.round(ovViewport.width);
-                  ovCanvas.height = Math.round(ovViewport.height);
-                  const ovCtx = ovCanvas.getContext('2d')!;
-                  await withTimeout(page.render({ canvasContext: ovCtx, viewport: ovViewport }).promise, `Rendering overview map`);
-                  // Crop out the vendor header bar (top ~15% of the page)
-                  const overviewCrop = { x: 0.0, y: 0.15, w: 1.0, h: 0.85 };
-                  const cropCanvas = document.createElement('canvas');
-                  const cx = Math.round(ovCanvas.width * overviewCrop.x);
-                  const cy = Math.round(ovCanvas.height * overviewCrop.y);
-                  const cw = Math.round(ovCanvas.width * overviewCrop.w);
-                  const ch = Math.round(ovCanvas.height * overviewCrop.h);
-                  cropCanvas.width = cw;
-                  cropCanvas.height = ch;
-                  const cropCtx = cropCanvas.getContext('2d')!;
-                  cropCtx.drawImage(ovCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
-                  const ovBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
-                    cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Overview image export failed')), 'image/png')
-                  ), 'Exporting overview map');
-                  const ovBytes = new Uint8Array(await ovBlob.arrayBuffer());
-                  const ovPath = `${id}/overview-map.png`;
-                  const { error: ovUpErr } = await supabase.storage
-                    .from('minimaps')
-                    .upload(ovPath, ovBytes, { contentType: 'image/png', upsert: true });
-                  if (!ovUpErr) {
-                    const { data: ovPub } = supabase.storage.from('minimaps').getPublicUrl(ovPath);
-                    const ovUrl = `${ovPub.publicUrl}?v=${Date.now()}`;
-                    await supabase
-                      .from('campaigns')
-                      .update({ vendor_overview_map_url: ovUrl })
-                      .eq('id', id);
+              if (!matchedPageUnit) {
+                // No unit on this page. If we haven't saved a campaign overview
+                // map yet, treat this page as the overview. Otherwise skip.
+                if (!overviewSaved) {
+                  try {
+                    const ovViewport = page.getViewport({ scale: 1.5 });
+                    const ovCanvas = document.createElement('canvas');
+                    ovCanvas.width = Math.round(ovViewport.width);
+                    ovCanvas.height = Math.round(ovViewport.height);
+                    const ovCtx = ovCanvas.getContext('2d')!;
+                    await withTimeout(page.render({ canvasContext: ovCtx, viewport: ovViewport }).promise, `Rendering overview map`);
+                    const overviewCrop = { x: 0.0, y: 0.15, w: 1.0, h: 0.85 };
+                    const cropCanvas = document.createElement('canvas');
+                    const cx = Math.round(ovCanvas.width * overviewCrop.x);
+                    const cy = Math.round(ovCanvas.height * overviewCrop.y);
+                    const cw = Math.round(ovCanvas.width * overviewCrop.w);
+                    const ch = Math.round(ovCanvas.height * overviewCrop.h);
+                    cropCanvas.width = cw;
+                    cropCanvas.height = ch;
+                    const cropCtx = cropCanvas.getContext('2d')!;
+                    cropCtx.drawImage(ovCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
+                    const ovBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
+                      cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Overview image export failed')), 'image/png')
+                    ), 'Exporting overview map');
+                    const ovBytes = new Uint8Array(await ovBlob.arrayBuffer());
+                    const ovPath = `${id}/overview-map.png`;
+                    const { error: ovUpErr } = await supabase.storage
+                      .from('minimaps')
+                      .upload(ovPath, ovBytes, { contentType: 'image/png', upsert: true });
+                    if (!ovUpErr) {
+                      const { data: ovPub } = supabase.storage.from('minimaps').getPublicUrl(ovPath);
+                      const ovUrl = `${ovPub.publicUrl}?v=${Date.now()}`;
+                      await supabase
+                        .from('campaigns')
+                        .update({ vendor_overview_map_url: ovUrl })
+                        .eq('id', id);
+                      overviewSaved = true;
+                    }
+                  } catch (e) {
+                    console.warn('[extractPhotos] overview map failed:', e);
                   }
-                } catch (e) {
-                  console.warn('[extractPhotos] overview map failed:', e);
+                } else {
+                  console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name}: no unit matched, skipping`);
                 }
                 continue;
               }
 
               const unit = matchedPageUnit;
               const unitNumber = unit?.unit_number ? String(unit.unit_number) : null;
-              if (!unit || !unitNumber || (unit.billboard_photo_url && unit.inset_map_url)) continue;
+              if (!unit || !unitNumber) continue;
+              if (unit.billboard_photo_url && unit.inset_map_url) continue;
 
               const viewport = page.getViewport({ scale: 2.0 });
               const canvas = document.createElement('canvas');
@@ -529,15 +621,47 @@ export default function CampaignReview() {
               const W = canvas.width;
               const H = canvas.height;
 
+              // Decide crops: profile > detection > fallback.
+              let photoCrop: CropBox = billboardCropFallback;
+              let mapCrop: CropBox | null = mapCropFallback;
+              let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
+
+              if (existingProfile && existingProfile.photo_x != null) {
+                photoCrop = {
+                  x: existingProfile.photo_x!,
+                  y: existingProfile.photo_y!,
+                  w: existingProfile.photo_w!,
+                  h: existingProfile.photo_h!,
+                };
+                mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
+                  ? {
+                      x: existingProfile.map_x!,
+                      y: existingProfile.map_y!,
+                      w: existingProfile.map_w!,
+                      h: existingProfile.map_h!,
+                    }
+                  : null;
+                detectedSource = 'profile';
+              } else {
+                const regions = await detectImageRegions(page);
+                const picked = pickContentCrops(regions);
+                if (picked.photo) {
+                  photoCrop = picked.photo;
+                  mapCrop = picked.map;
+                  detectedSource = 'detection';
+                }
+              }
+
               const uploadCrop = async (
-                crop: { x: number; y: number; w: number; h: number },
+                crop: CropBox,
                 storageBucket: string,
                 storagePath: string,
                 dbField: string,
+                extraFields: Record<string, any> = {},
               ): Promise<boolean> => {
                 const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = Math.round(W * crop.w);
-                cropCanvas.height = Math.round(H * crop.h);
+                cropCanvas.width = Math.max(1, Math.round(W * crop.w));
+                cropCanvas.height = Math.max(1, Math.round(H * crop.h));
                 const cropCtx = cropCanvas.getContext('2d')!;
                 cropCtx.drawImage(
                   canvas,
@@ -578,7 +702,7 @@ export default function CampaignReview() {
 
                 const { error: updateErr } = await supabase
                   .from('units')
-                  .update({ [dbField]: url } as any)
+                  .update({ [dbField]: url, ...extraFields } as any)
                   .eq('id', unit.id);
                 if (updateErr) {
                   console.warn(`DB update failed for ${unitNumber} (${dbField}):`, updateErr.message);
@@ -589,23 +713,30 @@ export default function CampaignReview() {
                 }
               };
 
+              let savedAny = false;
               if (!unit.billboard_photo_url) {
                 const ok = await uploadCrop(
-                  billboardCrop,
+                  photoCrop,
                   'photos',
                   `${id}/${unit.id}.png`,
                   'billboard_photo_url',
                 );
-                if (ok) totalPhotos++;
+                if (ok) { totalPhotos++; savedAny = true; }
               }
-              if (!unit.inset_map_url) {
+              if (mapCrop && !unit.inset_map_url) {
                 const okMap = await uploadCrop(
                   mapCrop,
                   'minimaps',
                   `${id}/${unit.id}-map.png`,
                   'inset_map_url',
                 );
-                if (okMap) totalMaps++;
+                if (okMap) { totalMaps++; savedAny = true; }
+              }
+
+              // Remember crops detected this run so the "Save crop as default"
+              // button and auto-save can persist them as the vendor's profile.
+              if (savedAny && vendorKey && detectedSource === 'detection') {
+                detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
               }
             } finally {
               page.cleanup?.();
@@ -615,7 +746,30 @@ export default function CampaignReview() {
         } finally {
           pdf.destroy?.();
         }
+
+        // After processing this vendor's PDF, auto-persist the detected profile
+        // (only if we don't already have one and we successfully detected crops).
+        if (vendorKey && !existingProfile && detectedVendorCropsRef.current[vendorKey]) {
+          const det = detectedVendorCropsRef.current[vendorKey];
+          const row = {
+            vendor: file.vendor!,
+            has_inset_map: !!det.map,
+            photo_x: det.photo.x, photo_y: det.photo.y, photo_w: det.photo.w, photo_h: det.photo.h,
+            map_x: det.map?.x ?? null, map_y: det.map?.y ?? null, map_w: det.map?.w ?? null, map_h: det.map?.h ?? null,
+          };
+          const { error: profErr } = await supabase
+            .from('vendor_crop_profiles')
+            .upsert(row, { onConflict: 'vendor' });
+          if (!profErr) {
+            profileByVendor.set(vendorKey, row as VendorCropProfile);
+            setVendorCropProfiles((prev) => ({ ...prev, [vendorKey]: row as VendorCropProfile }));
+          } else {
+            console.warn('[extractPhotos] save vendor profile failed:', profErr.message);
+          }
+        }
       }
+
+
 
       if (!silent || totalPhotos > 0 || totalMaps > 0) {
         toast({
