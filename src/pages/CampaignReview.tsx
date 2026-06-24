@@ -159,6 +159,52 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   return null;
 };
 
+// Pick the best vendor identifier for a PDF: prefer file.vendor when it
+// resolves to a known VENDOR_PROFILES key; otherwise fall back to the most
+// common units.vendor among the supplied pool (which parse-excel set from
+// the canonical "Vendor" column).
+function resolveEffectiveVendor<T extends { vendor?: string | null }>(
+  fileVendor: string | null | undefined,
+  unitsPool: T[],
+): { vendor: string | null; profile: VendorProfile | null } {
+  const fromFile = resolveVendorProfile(fileVendor);
+  if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
+
+  const counts = new Map<string, number>();
+  for (const u of unitsPool) {
+    const v = (u.vendor ?? "").trim();
+    if (!v) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  let bestVendor: string | null = null;
+  let bestProfile: VendorProfile | null = null;
+  let bestCount = -1;
+  for (const [v, c] of counts) {
+    const p = resolveVendorProfile(v);
+    if (p && c > bestCount) { bestVendor = v; bestProfile = p; bestCount = c; }
+  }
+  if (bestProfile) return { vendor: bestVendor, profile: bestProfile };
+  // Still nothing — return the file's vendor string (may be null) and null profile.
+  return { vendor: fileVendor ?? null, profile: null };
+}
+
+// Filter unitsPool to those matching effectiveVendor (bidirectional substring
+// on normalized strings). Falls back to the full pool when the filter empties
+// — a single-PDF campaign should never be skipped over a vendor-string mismatch.
+function filterUnitsForVendor<T extends { vendor?: string | null }>(
+  unitsPool: T[],
+  effectiveVendor: string | null | undefined,
+): T[] {
+  const target = normalizeVendor(effectiveVendor);
+  if (!target) return unitsPool;
+  const filtered = unitsPool.filter((u) => {
+    const uv = normalizeVendor(u.vendor);
+    if (!uv) return true;
+    return uv === target || uv.includes(target) || target.includes(uv);
+  });
+  return filtered.length ? filtered : unitsPool;
+}
+
 const normalizeUnitToken = (s: string | null | undefined) =>
   String(s ?? "")
     .replace(/^#+/, "")
@@ -355,6 +401,7 @@ export default function CampaignReview() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [collapsedVendors, setCollapsedVendors] = useState<Set<string>>(new Set());
   const [vendorCropProfiles, setVendorCropProfiles] = useState<Record<string, VendorCropProfile>>({});
+  const [vendorFiles, setVendorFiles] = useState<Array<{ id: string; original_name: string | null; vendor: string | null; kind: string | null }>>([]);
   const detectedVendorCropsRef = useRef<Record<string, { photo: CropBox; map: CropBox | null }>>({});
 
   const groupedUnits = useMemo(() => {
@@ -366,6 +413,34 @@ export default function CampaignReview() {
     }
     return Array.from(map.entries()).map(([vendor, list]) => ({ vendor, units: list }));
   }, [units]);
+
+  // Markets that have units but lack any PDF (headsheet) covering them.
+  // Heuristic: try to detect a market token in the PDF's original filename.
+  // If no PDF filename mentions the market (case-insensitive), warn.
+  const uncoveredMarkets = useMemo(() => {
+    const pdfs = vendorFiles.filter((f) => f.original_name?.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) return [];
+    const marketUnitCounts = new Map<string, number>();
+    for (const u of units) {
+      const m = (u.market ?? "").trim();
+      if (!m) continue;
+      if (u.billboard_photo_url) continue;
+      marketUnitCounts.set(m, (marketUnitCounts.get(m) ?? 0) + 1);
+    }
+    const out: Array<{ market: string; count: number }> = [];
+    for (const [market, count] of marketUnitCounts) {
+      const tokens = market
+        .split(/[\s,]+/)
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t)); // skip "IL", "CA"
+      const covered = pdfs.some((f) => {
+        const name = (f.original_name ?? "").toLowerCase();
+        return tokens.some((t) => name.includes(t));
+      });
+      if (!covered) out.push({ market, count });
+    }
+    return out;
+  }, [vendorFiles, units]);
 
   const toggleVendorCollapse = (vendor: string) => {
     setCollapsedVendors((prev) => {
@@ -420,6 +495,19 @@ export default function CampaignReview() {
       setVendorCropProfiles(map);
     })();
   }, []);
+
+  // Load vendor files so we can warn about markets with no PDF coverage.
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('vendor_files')
+        .select('id, original_name, vendor, kind')
+        .eq('campaign_id', id);
+      setVendorFiles((data ?? []) as any);
+    })();
+  }, [id, extracting]);
+
 
   // Poll while parsing
   useEffect(() => {
@@ -720,22 +808,21 @@ export default function CampaignReview() {
 
       for (const file of pdfFiles) {
        try {
-        const profile = resolveVendorProfile(file.vendor);
+        const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
         if (profile?.matchStrategy === "manual") {
-          console.info(`[extractPhotos] vendor "${file.vendor}" is manual-only — skipping auto extraction`);
+          console.info(`[extractPhotos] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping auto extraction`);
           continue;
         }
+        if (effectiveVendor && effectiveVendor !== file.vendor) {
+          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+        }
 
-        const fileVendor = normalizeVendor(file.vendor);
-        const vendorUnits = unitsNeedingPhotos.filter((u) => {
-          const uv = normalizeVendor(u.vendor);
-          if (!fileVendor || !uv) return true;
-          return uv === fileVendor || uv.includes(fileVendor) || fileVendor.includes(uv);
-        });
+        const vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
         if (!vendorUnits.length) continue;
 
-        const vendorKey = fileVendor;
+        const vendorKey = normalizeVendor(effectiveVendor);
         const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
+
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
@@ -976,19 +1063,18 @@ export default function CampaignReview() {
 
       for (const file of pdfFiles) {
        try {
-        const profile = resolveVendorProfile(file.vendor);
+        const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, units);
         if (profile?.matchStrategy === "manual") {
-          console.info(`[extractHighlights] vendor "${file.vendor}" is manual-only — skipping`);
+          console.info(`[extractHighlights] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping`);
           continue;
         }
+        if (effectiveVendor && effectiveVendor !== file.vendor) {
+          console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+        }
 
-        const fileVendor = normalizeVendor(file.vendor);
-        const vendorUnits = units.filter((u) => {
-          const uv = normalizeVendor(u.vendor);
-          if (!fileVendor || !uv) return true;
-          return uv === fileVendor || uv.includes(fileVendor) || fileVendor.includes(uv);
-        });
+        const vendorUnits = filterUnitsForVendor(units, effectiveVendor);
         if (!vendorUnits.length) continue;
+
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
@@ -1302,7 +1388,25 @@ export default function CampaignReview() {
         </div>
       ) : (
         <>
+          {uncoveredMarkets.length > 0 && (
+            <div className="mb-6 flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  Some markets have no PDF headsheet uploaded
+                </p>
+                <p className="text-muted-foreground">
+                  Photos can't be extracted automatically for{" "}
+                  {uncoveredMarkets
+                    .map((m) => `${m.market} (${m.count} unit${m.count === 1 ? "" : "s"})`)
+                    .join(", ")}
+                  . Upload the matching headsheet PDF via Re-upload, or add photos manually.
+                </p>
+              </div>
+            </div>
+          )}
           <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+
             <Stat label="Units in proposal" value={`${stats.included} / ${stats.total}`} />
             <Stat label="Recommended" value={String(stats.recs)} />
             <Stat label="Photos matched" value={`${stats.photos} / ${stats.included}`} />

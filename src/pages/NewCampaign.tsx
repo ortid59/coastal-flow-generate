@@ -195,13 +195,48 @@ export default function NewCampaign() {
       await supabase.from("campaigns").update({ status: "parsing" }).eq("id", campaignId);
       supabase.functions
         .invoke("parse-excel", { body: { campaign_id: campaignId } })
-        .then(({ error }) => {
+        .then(async ({ error }) => {
           if (error) {
             console.error("parse-excel invoke error", error);
             supabase.from("campaigns").update({ status: "error" }).eq("id", campaignId);
             return;
           }
+          // Best-effort: if a vendor_files.vendor string doesn't match a known
+          // VENDOR_PROFILES key, rewrite it to the campaign's dominant
+          // units.vendor so the client-side photo extraction can resolve a
+          // profile reliably.
+          try {
+            const KNOWN_VENDOR_KEYS = ["alchemy", "adkom", "tasty", "cco", "lamar", "be seen", "ofm", "new tradition"];
+            const matchesKnown = (v?: string | null) => {
+              const s = (v ?? "").toLowerCase();
+              return !!s && KNOWN_VENDOR_KEYS.some((k) => s.includes(k));
+            };
+            const [{ data: vfRows }, { data: uRows }] = await Promise.all([
+              supabase.from("vendor_files").select("id, vendor").eq("campaign_id", campaignId),
+              supabase.from("units").select("vendor").eq("campaign_id", campaignId),
+            ]);
+            const counts = new Map<string, number>();
+            for (const u of uRows ?? []) {
+              const v = (u.vendor ?? "").trim();
+              if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+            }
+            let dominant: string | null = null;
+            let best = -1;
+            for (const [v, c] of counts) {
+              if (matchesKnown(v) && c > best) { dominant = v; best = c; }
+            }
+            if (dominant) {
+              for (const f of vfRows ?? []) {
+                if (!matchesKnown(f.vendor) && f.vendor !== dominant) {
+                  await supabase.from("vendor_files").update({ vendor: dominant }).eq("id", f.id);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("post-parse vendor normalization failed", e);
+          }
         });
+
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
       console.error(err);
