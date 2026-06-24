@@ -766,22 +766,21 @@ export default function CampaignReview() {
 
       for (const file of pdfFiles) {
        try {
-        const profile = resolveVendorProfile(file.vendor);
+        const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
         if (profile?.matchStrategy === "manual") {
-          console.info(`[extractPhotos] vendor "${file.vendor}" is manual-only — skipping auto extraction`);
+          console.info(`[extractPhotos] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping auto extraction`);
           continue;
         }
+        if (effectiveVendor && effectiveVendor !== file.vendor) {
+          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+        }
 
-        const fileVendor = normalizeVendor(file.vendor);
-        const vendorUnits = unitsNeedingPhotos.filter((u) => {
-          const uv = normalizeVendor(u.vendor);
-          if (!fileVendor || !uv) return true;
-          return uv === fileVendor || uv.includes(fileVendor) || fileVendor.includes(uv);
-        });
+        const vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
         if (!vendorUnits.length) continue;
 
-        const vendorKey = fileVendor;
+        const vendorKey = normalizeVendor(effectiveVendor);
         const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
+
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
         const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
