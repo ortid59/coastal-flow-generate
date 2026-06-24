@@ -468,6 +468,19 @@ export default function CampaignReview() {
     })();
   }, []);
 
+  // Load vendor files so we can warn about markets with no PDF coverage.
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('vendor_files')
+        .select('id, original_name, vendor, kind')
+        .eq('campaign_id', id);
+      setVendorFiles((data ?? []) as any);
+    })();
+  }, [id, extracting]);
+
+
   // Poll while parsing
   useEffect(() => {
     if (!campaign) return;
