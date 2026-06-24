@@ -514,7 +514,9 @@ Deno.serve(async (req) => {
       }
 
       try { doc.destroy?.(); } catch { /* ignore */ }
+      isFirstPdf = false;
     }
+
 
     if (jobId) {
       await supabase
