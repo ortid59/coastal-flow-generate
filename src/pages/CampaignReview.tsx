@@ -123,6 +123,64 @@ const normalizeMatchText = (value: string | null | undefined) =>
 const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
+// ---------- Vendor profile registry ----------
+type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual";
+type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map";
+type VendorProfile = {
+  matchStrategy: VendorMatchStrategy;
+  unitRegex?: string;
+  crop?: VendorCropMode;
+  hasMap?: boolean;
+  mapBox?: CropBox;
+  pagesPerUnit?: number;
+  skipCoverPages?: number;
+  skipUntilFirstPhotoPage?: boolean;
+};
+
+const VENDOR_PROFILES: Record<string, VendorProfile> = {
+  "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false },
+  "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
+  "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
+  "CCO":           { matchStrategy: "order",      crop: "single_midband", hasMap: false, skipUntilFirstPhotoPage: true },
+  "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2 },
+  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false },
+  "OFM":           { matchStrategy: "manual" },
+  "New Tradition": { matchStrategy: "manual" },
+};
+
+const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile | null => {
+  if (!vendor) return null;
+  const norm = normalizeVendor(vendor);
+  if (!norm) return null;
+  for (const [name, profile] of Object.entries(VENDOR_PROFILES)) {
+    const key = normalizeVendor(name);
+    if (key === norm || norm.includes(key) || key.includes(norm)) return profile;
+  }
+  return null;
+};
+
+const normalizeUnitToken = (s: string | null | undefined) =>
+  String(s ?? "")
+    .replace(/^#+/, "")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .trim();
+
+const fuzzyAddressMatch = (pageLine: string, locationDescription: string | null | undefined): boolean => {
+  if (!locationDescription) return false;
+  const clean = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const a = clean(pageLine);
+  const b = clean(locationDescription);
+  if (!a || !b) return false;
+  // Use first significant chunk of the address (street number + name)
+  const streetMatch = b.match(/\b\d{2,6}\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,4}/);
+  const needle = streetMatch?.[0] ?? b.split(/\s+/).slice(0, 4).join(" ");
+  return needle.length >= 6 && a.includes(needle);
+};
+
+
 const escapeRe = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const hasBoundedToken = (text: string, token: string) => {
