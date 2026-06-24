@@ -762,11 +762,13 @@ export default function CampaignReview() {
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
-                const unit = vendorUnits[assignIdx++];
-                while (unit?.billboard_photo_url && assignIdx < vendorUnits.length) {
-                  // already done, advance
+                // Advance past units that already have a photo.
+                let unit: any = vendorUnits[assignIdx++];
+                while (unit && unit.billboard_photo_url && assignIdx < vendorUnits.length) {
+                  unit = vendorUnits[assignIdx++];
                 }
-                if (!unit) break;
+                if (!unit || unit.billboard_photo_url) break;
+
                 const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
                 if (photoSaved) totalPhotos++;
                 if (mapSaved) totalMaps++;
