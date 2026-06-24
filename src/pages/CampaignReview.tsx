@@ -432,27 +432,32 @@ export default function CampaignReview() {
 
   // Auto-run photo extraction once parsing finishes (covers initial campaign
   // creation flow, where NewCampaign navigates here while status === "parsing").
-  const [autoExtracted, setAutoExtracted] = useState(false);
-  const previousStatusRef = useRef<string | null>(null);
+  // Resumable auto-extract: a "currently running" guard plus a pass-count cap
+  // so partial failures get a second/third pass instead of being latched out forever.
+  const autoRunningRef = useRef(false);
+  const autoPassCountRef = useRef(0);
+  const MAX_AUTO_PASSES = 3;
   useEffect(() => {
-    const previousStatus = previousStatusRef.current;
-    previousStatusRef.current = campaign?.status ?? null;
-    if (!campaign || autoExtracted) return;
+    if (!campaign) return;
     if (campaign.status === "parsing") return;
     if (units.length === 0) return;
+    if (autoRunningRef.current) return;
+    if (autoPassCountRef.current >= MAX_AUTO_PASSES) return;
     const needsPhotos = units.some((u) => !u.billboard_photo_url);
     const needsHighlights = units.some((u) => !u.highlights);
     if (!needsPhotos && !needsHighlights) return;
-    // Run on initial load (previousStatus === null) and after parsing→ready transition.
-    if (previousStatus === "parsing" || previousStatus === null) {
-      setAutoExtracted(true);
-      (async () => {
+    autoRunningRef.current = true;
+    autoPassCountRef.current += 1;
+    (async () => {
+      try {
         if (needsPhotos) await extractPhotos({ silent: true });
         if (needsHighlights) await extractHighlights({ silent: true });
-      })();
-    }
+      } finally {
+        autoRunningRef.current = false;
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign?.status, units.length, autoExtracted]);
+  }, [campaign?.status, units]);
 
 
   // Persist the most recently detected crop for a vendor as the saved default,
@@ -651,7 +656,7 @@ export default function CampaignReview() {
           return { photoSaved: false, mapSaved: false };
         }
         const unitNumber = String(unit.unit_number);
-        const viewport = page.getViewport({ scale: 2.0 });
+        const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
@@ -714,6 +719,7 @@ export default function CampaignReview() {
       };
 
       for (const file of pdfFiles) {
+       try {
         const profile = resolveVendorProfile(file.vendor);
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractPhotos] vendor "${file.vendor}" is manual-only — skipping auto extraction`);
@@ -751,8 +757,9 @@ export default function CampaignReview() {
             let seenFirstPhotoPage = false;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
-              const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+              let page: any = null;
               try {
+                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
                 if (pageNum <= skipCover) continue;
@@ -762,18 +769,24 @@ export default function CampaignReview() {
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
-                // Advance past units that already have a photo.
-                let unit: any = vendorUnits[assignIdx++];
-                while (unit && unit.billboard_photo_url && assignIdx < vendorUnits.length) {
-                  unit = vendorUnits[assignIdx++];
-                }
-                if (!unit || unit.billboard_photo_url) break;
+                // Peek the next unit needing a photo — do NOT consume the slot
+                // until the page is successfully processed, so a bad page doesn't
+                // shift all subsequent assignments.
+                let peek = assignIdx;
+                while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
+                if (peek >= vendorUnits.length) break;
+                const unit = vendorUnits[peek];
 
                 const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
                 if (photoSaved) totalPhotos++;
                 if (mapSaved) totalMaps++;
+                // Commit the slot only after a successful run.
+                assignIdx = peek + 1;
+              } catch (pageErr: any) {
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping, retrying same unit next page:`, pageErr?.message ?? pageErr);
+                continue;
               } finally {
-                page.cleanup?.();
+                page?.cleanup?.();
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
             }
@@ -784,11 +797,12 @@ export default function CampaignReview() {
           const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
-            const page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+            let page: any = null;
             try {
+              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
               pagesChecked++;
               setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-              const textContent = await withTimeout(page.getTextContent(), `Reading page ${pageNum} text`);
+              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
               const items = textContent.items as Array<{ str: string; transform?: number[] }>;
               const text = items.map((item: any) => item.str).join(' ');
 
@@ -867,8 +881,11 @@ export default function CampaignReview() {
               if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
                 detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
               }
+            } catch (pageErr: any) {
+              console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              continue;
             } finally {
-              page.cleanup?.();
+              page?.cleanup?.();
               setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             }
           }
@@ -894,6 +911,10 @@ export default function CampaignReview() {
             console.warn('[extractPhotos] save vendor profile failed:', profErr.message);
           }
         }
+       } catch (pdfErr: any) {
+         console.error(`[extractPhotos] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         continue;
+       }
       }
 
 
@@ -954,6 +975,7 @@ export default function CampaignReview() {
       let pagesProcessed = 0;
 
       for (const file of pdfFiles) {
+       try {
         const profile = resolveVendorProfile(file.vendor);
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractHighlights] vendor "${file.vendor}" is manual-only — skipping`);
@@ -973,62 +995,81 @@ export default function CampaignReview() {
         if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
 
         const arrayBuffer = await blob.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        const pdf = await withTimeout(
+          pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise,
+          `Opening ${file.original_name ?? 'PDF'}`,
+        );
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
 
-        const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-        let orderIdx = 0;
-        let seenFirstPhotoPage = false;
-        const skipCover = profile?.skipCoverPages ?? 0;
+        try {
+          const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
+          let orderIdx = 0;
+          let seenFirstPhotoPage = false;
+          const skipCover = profile?.skipCoverPages ?? 0;
 
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          try {
-            pagesProcessed++;
-            setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-            const textContent = await page.getTextContent();
-            const items = textContent.items as Array<{ str: string; transform?: number[] }>;
-            const text = items.map((item) => item.str).join(' ');
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            let page: any = null;
+            let consumedOrderSlot = false;
+            try {
+              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+              pagesProcessed++;
+              setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
+              const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+              const text = items.map((item) => item.str).join(' ');
 
-            let unit: any = null;
-            if (profile?.matchStrategy === "unit_number" && unitRegex) {
-              unitRegex.lastIndex = 0;
-              for (const m of text.matchAll(unitRegex)) {
-                const tok = normalizeUnitToken(m[1] ?? m[0]);
-                const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
-                if (found) { unit = found; break; }
-              }
-            } else if (profile?.matchStrategy === "address") {
-              const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
-                .sort((a, b) => b.length - a.length).slice(0, 6);
-              for (const line of lines) {
-                const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
-                if (found) { unit = found; break; }
-              }
-            } else if (profile?.matchStrategy === "order") {
-              if (pageNum <= skipCover) { /* cover */ }
-              else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                // Without rendering, approximate: treat first text-light page as first photo page.
-                if (items.length < 40) seenFirstPhotoPage = true;
+              let unit: any = null;
+              if (profile?.matchStrategy === "unit_number" && unitRegex) {
+                unitRegex.lastIndex = 0;
+                for (const m of text.matchAll(unitRegex)) {
+                  const tok = normalizeUnitToken(m[1] ?? m[0]);
+                  const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                  if (found) { unit = found; break; }
+                }
+              } else if (profile?.matchStrategy === "address") {
+                const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
+                  .sort((a, b) => b.length - a.length).slice(0, 6);
+                for (const line of lines) {
+                  const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                  if (found) { unit = found; break; }
+                }
+              } else if (profile?.matchStrategy === "order") {
+                if (pageNum <= skipCover) { /* cover */ }
+                else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
+                  // Without rendering, approximate: treat first text-light page as first photo page.
+                  if (items.length < 40) seenFirstPhotoPage = true;
+                } else {
+                  unit = vendorUnits[orderIdx] ?? null;
+                  if (unit) { orderIdx++; consumedOrderSlot = true; }
+                }
               } else {
-                unit = vendorUnits[orderIdx++] ?? null;
+                unit = findUnitForPage(text, vendorUnits, file.vendor);
               }
-            } else {
-              unit = findUnitForPage(text, vendorUnits, file.vendor);
-            }
 
-            const paragraph = unit ? extractHighlightText(items) : "";
-            if (unit && paragraph) {
-              const existing = collected.get(unit.id) ?? [];
-              existing.push(paragraph);
-              collected.set(unit.id, existing);
+              const paragraph = unit ? extractHighlightText(items) : "";
+              if (unit && paragraph) {
+                const existing = collected.get(unit.id) ?? [];
+                existing.push(paragraph);
+                collected.set(unit.id, existing);
+              }
+            } catch (pageErr: any) {
+              console.warn(`[extractHighlights] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              // For the order strategy, do NOT consume a unit slot on failure —
+              // give the same unit another chance on the next page.
+              if (consumedOrderSlot) orderIdx--;
+              continue;
+            } finally {
+              page?.cleanup?.();
+              setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             }
-          } finally {
-            page.cleanup();
-            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
           }
+        } finally {
+          pdf.destroy?.();
         }
-        pdf.destroy?.();
+       } catch (pdfErr: any) {
+         console.error(`[extractHighlights] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         continue;
+       }
       }
 
 
