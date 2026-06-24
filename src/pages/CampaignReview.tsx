@@ -802,7 +802,7 @@ export default function CampaignReview() {
               page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
               pagesChecked++;
               setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-              const textContent = await withTimeout(page.getTextContent(), `Reading page ${pageNum} text`);
+              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
               const items = textContent.items as Array<{ str: string; transform?: number[] }>;
               const text = items.map((item: any) => item.str).join(' ');
 
