@@ -367,7 +367,7 @@ export default function CampaignReview() {
     if (!campaign || autoExtracted) return;
     if (previousStatus !== "parsing" || campaign.status === "parsing") return;
     if (units.length === 0) return;
-    const needsPhotos = units.some((u) => !u.billboard_photo_url || !u.inset_map_url);
+    const needsPhotos = units.some((u) => !u.billboard_photo_url);
     const needsHighlights = units.some((u) => !u.highlights);
     if (!needsPhotos && !needsHighlights) return;
     setAutoExtracted(true);
