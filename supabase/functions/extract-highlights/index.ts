@@ -214,6 +214,12 @@ Deno.serve(async (req) => {
     }
     const unitNumbers = units.map((u) => u.unit_number);
     const unitIdByNumber = new Map(units.map((u) => [u.unit_number, u.id]));
+    // Normalized unit_number -> original unit_number, for case-insensitive
+    // matching across vendor formats (#3001, 25001, TM-CH-003, 10A, ...).
+    const normToOriginal = new Map<string, string>(
+      units.map((u) => [normalizeUnitToken(u.unit_number), u.unit_number]),
+    );
+
 
     // Find the photosheets PDF for this campaign (kind='photosheets' OR
     // a single PDF whose name contains 'photosheet' or 'maps').
