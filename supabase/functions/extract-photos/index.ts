@@ -370,8 +370,9 @@ Deno.serve(async (req) => {
 
         const page = await doc.getPage(i + 1);
 
-        // Page 1 → campaign overview map. Render entire page, save at campaign level.
-        if (i === 0) {
+        // Page 1 of the FIRST PDF only → campaign overview map. Subsequent
+        // vendor PDFs treat page 1 like any other unit page.
+        if (i === 0 && isFirstPdf) {
           try {
             const { png: overviewPng } = await renderPageToPng(page);
             if (overviewPng) {
@@ -402,15 +403,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Pages 2..N → one billboard each.
+        // All other pages → one billboard each.
         const pageText = await getPageText(page);
-        const unitNumber = extractUnitNumber(pageText);
+        const unitNumber = extractUnitNumber(pageText, validUnitNumbers);
         if (!unitNumber) {
-          console.warn(`[extract-photos] page ${i + 1} has no unit-header pattern, skipping`);
+          console.warn(`[extract-photos] page ${i + 1} has no matching unit number, skipping`);
           summary.pages_unmatched++;
           try { page.cleanup?.(); } catch { /* ignore */ }
           continue;
         }
+
         const unit = unitByNumber.get(unitNumber);
         if (!unit) {
           console.warn(
