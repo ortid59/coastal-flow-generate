@@ -1388,7 +1388,25 @@ export default function CampaignReview() {
         </div>
       ) : (
         <>
+          {uncoveredMarkets.length > 0 && (
+            <div className="mb-6 flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  Some markets have no PDF headsheet uploaded
+                </p>
+                <p className="text-muted-foreground">
+                  Photos can't be extracted automatically for{" "}
+                  {uncoveredMarkets
+                    .map((m) => `${m.market} (${m.count} unit${m.count === 1 ? "" : "s"})`)
+                    .join(", ")}
+                  . Upload the matching headsheet PDF via Re-upload, or add photos manually.
+                </p>
+              </div>
+            </div>
+          )}
           <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+
             <Stat label="Units in proposal" value={`${stats.included} / ${stats.total}`} />
             <Stat label="Recommended" value={String(stats.recs)} />
             <Stat label="Photos matched" value={`${stats.photos} / ${stats.included}`} />
