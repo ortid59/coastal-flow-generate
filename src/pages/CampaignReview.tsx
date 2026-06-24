@@ -952,18 +952,32 @@ export default function CampaignReview() {
       let pagesProcessed = 0;
 
       for (const file of pdfFiles) {
-        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from('uploads')
-          .download(file.storage_path);
-        if (dlErr || !blob) {
-          console.warn('PDF download failed:', dlErr?.message);
+        const profile = resolveVendorProfile(file.vendor);
+        if (profile?.matchStrategy === "manual") {
+          console.info(`[extractHighlights] vendor "${file.vendor}" is manual-only — skipping`);
           continue;
         }
+
+        const fileVendor = normalizeVendor(file.vendor);
+        const vendorUnits = units.filter((u) => {
+          const uv = normalizeVendor(u.vendor);
+          if (!fileVendor || !uv) return true;
+          return uv === fileVendor || uv.includes(fileVendor) || fileVendor.includes(uv);
+        });
+        if (!vendorUnits.length) continue;
+
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
+        const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
+        if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
 
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
+
+        const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
+        let orderIdx = 0;
+        let seenFirstPhotoPage = false;
+        const skipCover = profile?.skipCoverPages ?? 0;
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
@@ -973,7 +987,34 @@ export default function CampaignReview() {
             const textContent = await page.getTextContent();
             const items = textContent.items as Array<{ str: string; transform?: number[] }>;
             const text = items.map((item) => item.str).join(' ');
-            const unit = findUnitForPage(text, units, file.vendor);
+
+            let unit: any = null;
+            if (profile?.matchStrategy === "unit_number" && unitRegex) {
+              unitRegex.lastIndex = 0;
+              for (const m of text.matchAll(unitRegex)) {
+                const tok = normalizeUnitToken(m[1] ?? m[0]);
+                const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                if (found) { unit = found; break; }
+              }
+            } else if (profile?.matchStrategy === "address") {
+              const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
+                .sort((a, b) => b.length - a.length).slice(0, 6);
+              for (const line of lines) {
+                const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                if (found) { unit = found; break; }
+              }
+            } else if (profile?.matchStrategy === "order") {
+              if (pageNum <= skipCover) { /* cover */ }
+              else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
+                // Without rendering, approximate: treat first text-light page as first photo page.
+                if (items.length < 40) seenFirstPhotoPage = true;
+              } else {
+                unit = vendorUnits[orderIdx++] ?? null;
+              }
+            } else {
+              unit = findUnitForPage(text, vendorUnits, file.vendor);
+            }
+
             const paragraph = unit ? extractHighlightText(items) : "";
             if (unit && paragraph) {
               const existing = collected.get(unit.id) ?? [];
@@ -987,6 +1028,7 @@ export default function CampaignReview() {
         }
         pdf.destroy?.();
       }
+
 
       let unitsWithHighlights = 0;
       for (const [unitId, paragraphs] of collected) {
