@@ -975,6 +975,7 @@ export default function CampaignReview() {
       let pagesProcessed = 0;
 
       for (const file of pdfFiles) {
+       try {
         const profile = resolveVendorProfile(file.vendor);
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractHighlights] vendor "${file.vendor}" is manual-only — skipping`);
@@ -994,62 +995,81 @@ export default function CampaignReview() {
         if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
 
         const arrayBuffer = await blob.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise;
+        const pdf = await withTimeout(
+          pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise,
+          `Opening ${file.original_name ?? 'PDF'}`,
+        );
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
 
-        const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-        let orderIdx = 0;
-        let seenFirstPhotoPage = false;
-        const skipCover = profile?.skipCoverPages ?? 0;
+        try {
+          const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
+          let orderIdx = 0;
+          let seenFirstPhotoPage = false;
+          const skipCover = profile?.skipCoverPages ?? 0;
 
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          try {
-            pagesProcessed++;
-            setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-            const textContent = await page.getTextContent();
-            const items = textContent.items as Array<{ str: string; transform?: number[] }>;
-            const text = items.map((item) => item.str).join(' ');
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            let page: any = null;
+            let consumedOrderSlot = false;
+            try {
+              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+              pagesProcessed++;
+              setExtractProgress((p) => ({ ...p, label: `Highlights page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
+              const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+              const text = items.map((item) => item.str).join(' ');
 
-            let unit: any = null;
-            if (profile?.matchStrategy === "unit_number" && unitRegex) {
-              unitRegex.lastIndex = 0;
-              for (const m of text.matchAll(unitRegex)) {
-                const tok = normalizeUnitToken(m[1] ?? m[0]);
-                const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
-                if (found) { unit = found; break; }
-              }
-            } else if (profile?.matchStrategy === "address") {
-              const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
-                .sort((a, b) => b.length - a.length).slice(0, 6);
-              for (const line of lines) {
-                const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
-                if (found) { unit = found; break; }
-              }
-            } else if (profile?.matchStrategy === "order") {
-              if (pageNum <= skipCover) { /* cover */ }
-              else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                // Without rendering, approximate: treat first text-light page as first photo page.
-                if (items.length < 40) seenFirstPhotoPage = true;
+              let unit: any = null;
+              if (profile?.matchStrategy === "unit_number" && unitRegex) {
+                unitRegex.lastIndex = 0;
+                for (const m of text.matchAll(unitRegex)) {
+                  const tok = normalizeUnitToken(m[1] ?? m[0]);
+                  const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                  if (found) { unit = found; break; }
+                }
+              } else if (profile?.matchStrategy === "address") {
+                const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
+                  .sort((a, b) => b.length - a.length).slice(0, 6);
+                for (const line of lines) {
+                  const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                  if (found) { unit = found; break; }
+                }
+              } else if (profile?.matchStrategy === "order") {
+                if (pageNum <= skipCover) { /* cover */ }
+                else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
+                  // Without rendering, approximate: treat first text-light page as first photo page.
+                  if (items.length < 40) seenFirstPhotoPage = true;
+                } else {
+                  unit = vendorUnits[orderIdx] ?? null;
+                  if (unit) { orderIdx++; consumedOrderSlot = true; }
+                }
               } else {
-                unit = vendorUnits[orderIdx++] ?? null;
+                unit = findUnitForPage(text, vendorUnits, file.vendor);
               }
-            } else {
-              unit = findUnitForPage(text, vendorUnits, file.vendor);
-            }
 
-            const paragraph = unit ? extractHighlightText(items) : "";
-            if (unit && paragraph) {
-              const existing = collected.get(unit.id) ?? [];
-              existing.push(paragraph);
-              collected.set(unit.id, existing);
+              const paragraph = unit ? extractHighlightText(items) : "";
+              if (unit && paragraph) {
+                const existing = collected.get(unit.id) ?? [];
+                existing.push(paragraph);
+                collected.set(unit.id, existing);
+              }
+            } catch (pageErr: any) {
+              console.warn(`[extractHighlights] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              // For the order strategy, do NOT consume a unit slot on failure —
+              // give the same unit another chance on the next page.
+              if (consumedOrderSlot) orderIdx--;
+              continue;
+            } finally {
+              page?.cleanup?.();
+              setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
             }
-          } finally {
-            page.cleanup();
-            setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
           }
+        } finally {
+          pdf.destroy?.();
         }
-        pdf.destroy?.();
+       } catch (pdfErr: any) {
+         console.error(`[extractHighlights] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         continue;
+       }
       }
 
 
