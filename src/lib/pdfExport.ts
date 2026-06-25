@@ -129,6 +129,13 @@ function assertCompletePdf(buffer: ArrayBuffer) {
   }
 }
 
+function assertUsablePdfBlob(blob: Blob) {
+  console.log("PDF size:", blob.size);
+  if (blob.size < 1000) {
+    throw new Error("PDF generation failed, please try again.");
+  }
+}
+
 /** Render multiple nodes — one per page (with internal pagination if too tall). */
 export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
   if (nodes.length === 0) return;
@@ -145,6 +152,7 @@ export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
   const buffer = pdf.output("arraybuffer");
   assertCompletePdf(buffer);
   const blob = new Blob([buffer], { type: "application/pdf" });
+  assertUsablePdfBlob(blob);
   downloadBlob(blob, filename);
 }
 
