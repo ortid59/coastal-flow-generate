@@ -368,7 +368,7 @@ export default function ProposalPrint() {
                 const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
                 const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
                 const totalImpressions = tierUnits.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-                const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0;
+                const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0);
                 const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0), 0);
                 const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 8 };
                 const labelStyle: React.CSSProperties = { color: Q_GREY };
@@ -631,7 +631,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} />
           )}
-          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} bold />
+          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} bold />
         </DetailBlock>
       </div>
 
