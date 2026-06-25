@@ -30,7 +30,16 @@ const COLUMN_MAP: Record<string, string> = {
   "Facing": "facing",
   "LHR/RHR": "read_direction",
   "Weekly A18+ Impressions": "weekly_impressions",
+  "Weekly/4-Week A18+ Impressions": "weekly_impressions",
+  "Weekly / 4-Week A18+ Impressions": "weekly_impressions",
   "4 Week A18+ Impressions": "four_week_impressions",
+  "4-Week A18+ Impressions": "four_week_impressions",
+  "4 Week Impressions": "four_week_impressions",
+  "4-Week Impressions": "four_week_impressions",
+  "Four Week Impressions": "four_week_impressions",
+  "Four-Week Impressions": "four_week_impressions",
+  "A18+ 4 Week Impressions": "four_week_impressions",
+  "A18+ Impressions (4 Week)": "four_week_impressions",
   "Spot Length": "spot_length",
   "Loop Length": "loop_length",
   "SOV%": "sov_pct",
@@ -612,6 +621,18 @@ Deno.serve(async (req) => {
           } else {
             row[field] = typeof raw === "string" ? raw.trim() : raw;
           }
+        }
+
+        // Diagnostic: log raw values from the source columns so we can confirm
+        // headers were matched correctly (impressions / rate mapping issues).
+        if (i < 3 || row.four_week_impressions == null) {
+          const fwIdx = headerIdx["four_week_impressions"];
+          const negIdx = headerIdx["negotiated_rate_4wk"];
+          console.info(
+            `[parse-excel] ${f.original_name} row ${sheetRow} unit=${trimmedUnit}`,
+            `four_week_impressions(col=${fwIdx})=`, fwIdx != null ? r[fwIdx] : "<no col>",
+            `negotiated_rate_4wk(col=${negIdx})=`, negIdx != null ? r[negIdx] : "<no col>"
+          );
         }
 
         // CCO fallback: when "Market" is missing/blank, use "Flight Name"
