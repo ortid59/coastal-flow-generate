@@ -132,7 +132,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setText(initial ?? "");
+                  setText(displayed);
                   setEditing(false);
                 }}
                 disabled={saving}
