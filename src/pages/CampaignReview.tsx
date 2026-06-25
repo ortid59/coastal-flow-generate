@@ -822,7 +822,11 @@ export default function CampaignReview() {
           console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
         }
 
-        const vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
+        let vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
+        if (!vendorUnits.length) {
+          console.info(`[extractPhotos] ${file.original_name}: vendor filter empty — falling back to all unitsNeedingPhotos`);
+          vendorUnits = unitsNeedingPhotos;
+        }
         if (!vendorUnits.length) continue;
 
         const vendorKey = normalizeVendor(effectiveVendor);
