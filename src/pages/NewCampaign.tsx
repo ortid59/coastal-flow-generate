@@ -23,8 +23,8 @@ import { Link } from "react-router-dom";
 type Vendor = {
   id: string;
   vendor_name: string;
-  excel_file: File | null;
-  photo_pdf: File | null;
+  excel_files: File[];
+  photo_pdfs: File[];
 };
 
 const MAX_VENDORS = 25;
@@ -34,8 +34,8 @@ const MAX_PDF_BYTES = 500 * 1024 * 1024; // 500 MB
 const newVendor = (): Vendor => ({
   id: crypto.randomUUID(),
   vendor_name: "",
-  excel_file: null,
-  photo_pdf: null,
+  excel_files: [],
+  photo_pdfs: [],
 });
 
 export default function NewCampaign() {
