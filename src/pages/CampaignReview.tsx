@@ -1179,11 +1179,12 @@ export default function CampaignReview() {
 
       let unitsWithHighlights = 0;
       for (const [unitId, paragraphs] of collected) {
-        const merged = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
-        if (!merged) continue;
+        const rawHighlightText = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+        const finalHighlight = cleanHighlight(rawHighlightText);
+        if (!finalHighlight || finalHighlight.length <= 20) continue;
         const { error: updateErr } = await supabase
           .from('units')
-          .update({ highlights: merged })
+          .update({ highlights: finalHighlight })
           .eq('id', unitId);
         if (updateErr) throw updateErr;
         unitsWithHighlights++;
