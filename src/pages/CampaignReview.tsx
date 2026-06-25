@@ -159,17 +159,15 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   return null;
 };
 
-// Pick the best vendor identifier for a PDF: prefer file.vendor when it
-// resolves to a known VENDOR_PROFILES key; otherwise fall back to the most
-// common units.vendor among the supplied pool (which parse-excel set from
-// the canonical "Vendor" column).
+// Pick the best vendor identifier for a PDF. We PREFER the dominant
+// units.vendor (the canonical value parse-excel reads from the Excel
+// "Vendor" column) because vendor_files.vendor is user-typed and often
+// doesn't match a VENDOR_PROFILES key. Only fall back to file.vendor if
+// no units.vendor resolves to a known profile.
 function resolveEffectiveVendor<T extends { vendor?: string | null }>(
   fileVendor: string | null | undefined,
   unitsPool: T[],
 ): { vendor: string | null; profile: VendorProfile | null } {
-  const fromFile = resolveVendorProfile(fileVendor);
-  if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
-
   const counts = new Map<string, number>();
   for (const u of unitsPool) {
     const v = (u.vendor ?? "").trim();
@@ -184,8 +182,15 @@ function resolveEffectiveVendor<T extends { vendor?: string | null }>(
     if (p && c > bestCount) { bestVendor = v; bestProfile = p; bestCount = c; }
   }
   if (bestProfile) return { vendor: bestVendor, profile: bestProfile };
-  // Still nothing — return the file's vendor string (may be null) and null profile.
-  return { vendor: fileVendor ?? null, profile: null };
+
+  // No units.vendor resolved — try the file vendor as a last resort.
+  const fromFile = resolveVendorProfile(fileVendor);
+  if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
+
+  // Still nothing — return the dominant units.vendor (if any) or file vendor,
+  // with no profile. Caller will use generic fallback matching.
+  const dominantAny = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return { vendor: dominantAny ?? fileVendor ?? null, profile: null };
 }
 
 // Filter unitsPool to those matching effectiveVendor (bidirectional substring
