@@ -68,6 +68,8 @@ const COLUMN_MAP_B: Record<string, string> = {
   "Facing": "facing",
   "Geopath ID": "geopath_id",
   "City": "city",
+  "Notes": "notes",
+  "Comments": "notes",
 };
 // CCO fallback: "Flight Name" holds city when "Market" is missing/blank.
 const CCO_MARKET_FALLBACK_HEADER = "Flight Name";
@@ -87,7 +89,21 @@ const COLUMN_MAP_C: Record<string, string> = {
   "Latitude": "latitude",
   "Longitude": "longitude",
   "Geopath Spot ID": "geopath_id",
+  "Notes": "notes",
+  "Comments": "notes",
+  "Description": "notes",
 };
+
+// Notes-as-highlights heuristic: real sentence prose, not a short code.
+function notesLooksLikeProse(s: any): boolean {
+  if (s == null) return false;
+  const t = String(s).replace(/\s+/g, " ").trim();
+  if (t.length <= 40) return false;
+  if (!/\s/.test(t)) return false;
+  if (!/[.!?]/.test(t)) return false;
+  return true;
+}
+
 
 const NUMERIC_FIELDS = new Set([
   "unit_count", "latitude", "longitude", "weekly_impressions",
