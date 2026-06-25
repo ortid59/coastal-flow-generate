@@ -475,63 +475,81 @@ function VendorCard({
 
         <div className="space-y-1.5">
           <Label className="text-xs flex items-center gap-1.5">
-            <FileSpreadsheet className="h-3 w-3" /> Vendor Excel (.xlsx) *
+            <FileSpreadsheet className="h-3 w-3" /> Vendor Excel(s) (.xlsx)
           </Label>
           <input
             ref={xlsxRef}
             type="file"
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            multiple
             className="hidden"
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              if (!f) return;
-              if (!/\.xlsx$/i.test(f.name)) {
-                toastFn({ title: "Excel must be .xlsx", variant: "destructive" });
-                return;
+              const picked = Array.from(e.target.files ?? []);
+              const accepted: File[] = [];
+              for (const f of picked) {
+                if (!/\.xlsx$/i.test(f.name)) {
+                  toastFn({ title: `${f.name}: must be .xlsx`, variant: "destructive" });
+                  continue;
+                }
+                if (f.size > MAX_EXCEL_BYTES) {
+                  toastFn({ title: `${f.name} too large`, description: "Max 50 MB.", variant: "destructive" });
+                  continue;
+                }
+                accepted.push(f);
               }
-              if (f.size > MAX_EXCEL_BYTES) {
-                toastFn({ title: `${f.name} too large`, description: "Max 50 MB.", variant: "destructive" });
-                return;
+              if (accepted.length) {
+                onChange({ excel_files: [...vendor.excel_files, ...accepted] });
               }
-              onChange({ excel_file: f });
+              if (xlsxRef.current) xlsxRef.current.value = "";
             }}
           />
-          <FilePickerRow
-            file={vendor.excel_file}
+          <MultiFilePicker
+            files={vendor.excel_files}
             onPick={() => xlsxRef.current?.click()}
-            onClear={() => onChange({ excel_file: null })}
-            placeholder="Choose .xlsx"
+            onRemove={(idx) =>
+              onChange({ excel_files: vendor.excel_files.filter((_, i) => i !== idx) })
+            }
+            placeholder="Add .xlsx files"
           />
         </div>
 
         <div className="space-y-1.5">
           <Label className="text-xs flex items-center gap-1.5">
-            <FileText className="h-3 w-3" /> Photo Sheet PDF
+            <FileText className="h-3 w-3" /> Photo Sheet PDF(s)
           </Label>
           <input
             ref={pdfRef}
             type="file"
             accept=".pdf,application/pdf"
+            multiple
             className="hidden"
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              if (!f) return;
-              if (!/\.pdf$/i.test(f.name)) {
-                toastFn({ title: "Photo sheet must be PDF", variant: "destructive" });
-                return;
+              const picked = Array.from(e.target.files ?? []);
+              const accepted: File[] = [];
+              for (const f of picked) {
+                if (!/\.pdf$/i.test(f.name)) {
+                  toastFn({ title: `${f.name}: must be PDF`, variant: "destructive" });
+                  continue;
+                }
+                if (f.size > MAX_PDF_BYTES) {
+                  toastFn({ title: `${f.name} too large`, description: "Max 500 MB.", variant: "destructive" });
+                  continue;
+                }
+                accepted.push(f);
               }
-              if (f.size > MAX_PDF_BYTES) {
-                toastFn({ title: `${f.name} too large`, description: "Max 500 MB.", variant: "destructive" });
-                return;
+              if (accepted.length) {
+                onChange({ photo_pdfs: [...vendor.photo_pdfs, ...accepted] });
               }
-              onChange({ photo_pdf: f });
+              if (pdfRef.current) pdfRef.current.value = "";
             }}
           />
-          <FilePickerRow
-            file={vendor.photo_pdf}
+          <MultiFilePicker
+            files={vendor.photo_pdfs}
             onPick={() => pdfRef.current?.click()}
-            onClear={() => onChange({ photo_pdf: null })}
-            placeholder="Choose PDF (optional)"
+            onRemove={(idx) =>
+              onChange({ photo_pdfs: vendor.photo_pdfs.filter((_, i) => i !== idx) })
+            }
+            placeholder="Add PDF files (optional)"
           />
         </div>
       </div>
@@ -539,31 +557,50 @@ function VendorCard({
   );
 }
 
-function FilePickerRow({
-  file,
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function MultiFilePicker({
+  files,
   onPick,
-  onClear,
+  onRemove,
   placeholder,
 }: {
-  file: File | null;
+  files: File[];
   onPick: () => void;
-  onClear: () => void;
+  onRemove: (idx: number) => void;
   placeholder: string;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <Button type="button" variant="outline" size="sm" onClick={onPick} className="h-9 shrink-0">
-        <Upload className="h-3.5 w-3.5" /> {file ? "Replace" : "Choose"}
+    <div className="space-y-1.5">
+      <Button type="button" variant="outline" size="sm" onClick={onPick} className="h-9">
+        <Upload className="h-3.5 w-3.5" /> {files.length ? "Add another" : "Choose"}
       </Button>
-      {file ? (
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="truncate">{file.name}</span>
-          <button type="button" onClick={onClear} className="shrink-0 text-muted-foreground hover:text-destructive">
-            <X className="h-3 w-3" />
-          </button>
-        </span>
+      {files.length === 0 ? (
+        <p className="truncate text-xs text-muted-foreground">{placeholder}</p>
       ) : (
-        <span className="truncate text-xs text-muted-foreground">{placeholder}</span>
+        <ul className="space-y-1">
+          {files.map((f, i) => (
+            <li
+              key={`${f.name}-${i}`}
+              className="flex items-center gap-2 rounded border bg-background/60 px-2 py-1 text-xs"
+            >
+              <span className="truncate flex-1" title={f.name}>{f.name}</span>
+              <span className="shrink-0 text-muted-foreground">{formatBytes(f.size)}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label={`Remove ${f.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
