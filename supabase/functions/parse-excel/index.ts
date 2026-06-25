@@ -637,8 +637,16 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Notes → highlights (when prose). Real sentence text only — skip
+        // short codes / blank cells. Don't overwrite an existing highlights
+        // value (e.g. from a prior PDF extraction).
+        if (!row.highlights && notesLooksLikeProse(row.notes)) {
+          row.highlights = String(row.notes).replace(/\s+/g, " ").trim();
+        }
+
         inserts.push(row);
       }
+
 
       if (inserts.length > 0) {
         // Dedupe by unit_number within this file — Postgres ON CONFLICT cannot
