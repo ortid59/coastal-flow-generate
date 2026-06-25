@@ -9,6 +9,7 @@ import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 
 import heatherPhoto from "@/assets/team-heather.jpg";
 import viaPhoto from "@/assets/team-via.webp";
