@@ -110,11 +110,23 @@ function downloadBlob(blob: Blob, filename: string) {
   a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
-  // Defer revoke so the browser has time to start the download.
+  // Defer revoke generously. On Windows/Acrobat, revoking too soon can race
+  // the browser's disk write and leave a PDF that looks "in use" or truncated.
   setTimeout(() => {
-    document.body.removeChild(a);
+    if (a.parentNode) document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, 1000);
+  }, 60_000);
+}
+
+function assertCompletePdf(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const head = String.fromCharCode(...bytes.slice(0, 5));
+  const tailStart = Math.max(0, bytes.length - 1024);
+  const tail = String.fromCharCode(...bytes.slice(tailStart));
+
+  if (head !== "%PDF-" || !tail.includes("%%EOF")) {
+    throw new Error("PDF export did not finish writing. Please try again.");
+  }
 }
 
 /** Render multiple nodes — one per page (with internal pagination if too tall). */
@@ -127,10 +139,12 @@ export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
     addCanvasPaginated(pdf, canvas, isFirst);
     isFirst = false;
   }
-  // Build the full PDF as a Blob and only then trigger the download — this
-  // guarantees the EOF marker has been written before the browser receives
-  // the file (fixes the "corrupt / can't open" bug).
-  const blob = pdf.output("blob");
+  // Build all bytes first, verify the EOF marker exists, then create the Blob.
+  // This prevents downloading a partially-written PDF that Acrobat reports as
+  // corrupt or "already open / in use".
+  const buffer = pdf.output("arraybuffer");
+  assertCompletePdf(buffer);
+  const blob = new Blob([buffer], { type: "application/pdf" });
   downloadBlob(blob, filename);
 }
 
