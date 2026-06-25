@@ -29,6 +29,7 @@ import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
 import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
 
 import { HighlightsCell } from "@/components/HighlightsCell";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 import { LogoReplace } from "@/components/LogoReplace";
 import { Progress } from "@/components/ui/progress";
 import { parseShortAddress } from "@/lib/shortAddress";
@@ -1178,11 +1179,12 @@ export default function CampaignReview() {
 
       let unitsWithHighlights = 0;
       for (const [unitId, paragraphs] of collected) {
-        const merged = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
-        if (!merged) continue;
+        const rawHighlightText = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+        const finalHighlight = cleanHighlight(rawHighlightText);
+        if (!finalHighlight || finalHighlight.length <= 20) continue;
         const { error: updateErr } = await supabase
           .from('units')
-          .update({ highlights: merged })
+          .update({ highlights: finalHighlight })
           .eq('id', unitId);
         if (updateErr) throw updateErr;
         unitsWithHighlights++;

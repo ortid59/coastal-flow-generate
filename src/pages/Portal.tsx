@@ -28,6 +28,7 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
@@ -1048,9 +1049,9 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
             <div className="mt-3 font-mono text-sm text-muted-foreground">
               #{unit.unit_number}
             </div>
-            {unit.highlights && (
+            {cleanHighlight(unit.highlights) && (
               <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
-                {unit.highlights}
+                {cleanHighlight(unit.highlights)}
               </p>
             )}
 
@@ -1347,7 +1348,7 @@ function PrintableQuote({
 
 
       {/* Highlights */}
-      {unit.highlights && (
+      {cleanHighlight(unit.highlights) && (
         <div
           style={{
             background: SOFT,
@@ -1359,7 +1360,7 @@ function PrintableQuote({
             color: "#1F2937",
           }}
         >
-          {unit.highlights}
+          {cleanHighlight(unit.highlights)}
         </div>
       )}
 

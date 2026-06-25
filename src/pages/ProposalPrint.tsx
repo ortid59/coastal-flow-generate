@@ -9,6 +9,7 @@ import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 
 import heatherPhoto from "@/assets/team-heather.jpg";
 import viaPhoto from "@/assets/team-via.webp";
@@ -587,7 +588,7 @@ function PrintableQuote({
 
 
       {/* Highlights */}
-      {unit.highlights && (
+      {cleanHighlight(unit.highlights) && (
         <div
           style={{
             background: Q_SOFT,
@@ -599,7 +600,7 @@ function PrintableQuote({
             color: "#1F2937",
           }}
         >
-          {unit.highlights}
+          {cleanHighlight(unit.highlights)}
         </div>
       )}
 

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Pencil } from "lucide-react";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 
 type Props = {
   unitId: string;
@@ -27,16 +28,17 @@ type Props = {
  */
 export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) {
   const { toast } = useToast();
+  const displayed = cleanHighlight(initial ?? "");
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(initial ?? "");
+  const [text, setText] = useState(displayed);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const empty = !initial || !initial.trim();
+  const empty = !displayed || !displayed.trim();
 
   const save = async () => {
     setSaving(true);
-    const next = text.trim();
+    const next = cleanHighlight(text.trim());
     const { error } = await supabase
       .from("units")
       .update({ highlights: next || null })
@@ -58,7 +60,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
         setOpen(v);
         if (!v) {
           setEditing(false);
-          setText(initial ?? "");
+          setText(displayed);
         }
       }}
     >
@@ -93,7 +95,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
                 wordBreak: "break-word",
               }}
             >
-              {initial}
+              {displayed}
             </span>
           )}
         </button>
@@ -119,7 +121,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
             {empty ? (
               <span className="italic text-muted-foreground">No highlights yet.</span>
             ) : (
-              initial
+              displayed
             )}
           </div>
         )}
@@ -130,7 +132,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setText(initial ?? "");
+                  setText(displayed);
                   setEditing(false);
                 }}
                 disabled={saving}
