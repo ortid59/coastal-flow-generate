@@ -1190,8 +1190,8 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
 /* =================== Unit Details =================== */
 function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
   return (
-    <div className="grid gap-6 md:grid-cols-3">
-      <div className="md:col-span-2 rounded-2xl bg-card border border-border p-6 shadow-elev-sm">
+    <div className="grid gap-6">
+      <div className="rounded-2xl bg-card border border-border p-6 shadow-elev-sm">
         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
           Quote details
         </div>
@@ -1206,26 +1206,6 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
           <DetailStat icon={<Ruler className="h-4 w-4" />} label="Size" value={unit.size ?? "—"} />
           <DetailStat icon={<Sparkles className="h-4 w-4" />} label="Format" value={unit.format ?? "—"} />
         </div>
-      </div>
-
-      <div className="rounded-2xl bg-secondary border border-border border-t-[3px] border-t-[hsl(var(--accent-gold))] p-6 shadow-elev-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
-          Why we recommend
-        </div>
-        {unit.insight_bullets && unit.insight_bullets.length > 0 ? (
-          <ul className="mt-3 space-y-2.5 text-sm text-foreground">
-            {unit.insight_bullets.slice(0, 5).map((b, i) => (
-              <li key={i} className="flex gap-2">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-none text-[hsl(var(--accent-gold))]" />
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">
-            High-visibility placement in {unit.market ?? "key market"}.
-          </p>
-        )}
       </div>
     </div>
   );
