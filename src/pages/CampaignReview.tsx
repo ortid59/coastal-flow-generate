@@ -926,9 +926,10 @@ export default function CampaignReview() {
               }
 
               if (!matchedUnit) {
-                console.info(`[extractPhotos] page ${pageNum} of ${file.original_name}: no unit matched, skipping`);
+                console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
                 continue;
               }
+              console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
 
               // Decide crops based on profile, saved profile, or auto-detection.
               let photoCrop: CropBox = billboardCropFallback;
