@@ -28,12 +28,13 @@ type Props = {
  */
 export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) {
   const { toast } = useToast();
+  const displayed = cleanHighlight(initial ?? "");
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(initial ?? "");
+  const [text, setText] = useState(displayed);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const empty = !initial || !initial.trim();
+  const empty = !displayed || !displayed.trim();
 
   const save = async () => {
     setSaving(true);
