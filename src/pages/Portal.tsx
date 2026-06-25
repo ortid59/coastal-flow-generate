@@ -915,7 +915,7 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
         <div className="flex">
           {units.map((u, i) => (
             <div key={u.id} id={`unit-${u.id}`} className="min-w-0 flex-[0_0_100%] pr-4 scroll-mt-24">
-              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} activeTiers={activeTiers} />
+              <UnitCard unit={u} indexLabel={String(i + 1).padStart(2, "0")} activeTiers={activeTiers} marginMult={1 + ((campaign?.margin_pct ?? 0) / 100)} />
             </div>
           ))}
         </div>
@@ -949,7 +949,7 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
           >
-            <UnitDetails unit={current} />
+            <UnitDetails unit={current} marginMult={1 + ((campaign?.margin_pct ?? 0) / 100)} />
           </motion.div>
         </AnimatePresence>
       </div>
@@ -993,7 +993,7 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
 }
 
 /* =================== Unit Card (split layout per spec) =================== */
-function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: string; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[] }) {
+function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; indexLabel: string; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[]; marginMult: number }) {
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
       <div className="grid lg:grid-cols-[45%_55%]">
@@ -1074,7 +1074,7 @@ function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: s
           <div className="mt-8 space-y-5">
             <div>
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-                4-Week Rate: {fmtMoney(unit.total_cost)}
+                4-Week Rate: {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)}
               </div>
               <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
                 {unit.weekly_impressions != null && (
@@ -1188,7 +1188,7 @@ function UnitCard({ unit, indexLabel, activeTiers }: { unit: Unit; indexLabel: s
 }
 
 /* =================== Unit Details =================== */
-function UnitDetails({ unit }: { unit: Unit }) {
+function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
   return (
     <div className="grid gap-6 md:grid-cols-3">
       <div className="md:col-span-2 rounded-2xl bg-card border border-border p-6 shadow-elev-sm">
@@ -1197,7 +1197,7 @@ function UnitDetails({ unit }: { unit: Unit }) {
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
-          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Investment" value={fmtMoney(unit.total_cost)} />
+          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Rate" value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
             label="CPM"
@@ -1415,7 +1415,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
           )}
-          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} grey={GREY} bold />
+          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} grey={GREY} bold />
         </DetailBlock>
       </div>
 
