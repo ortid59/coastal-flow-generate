@@ -1050,12 +1050,19 @@ export default function CampaignReview() {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
-      const { data: units, error: uErr } = await supabase
+      const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description')
+        .select('id, unit_number, vendor, location_description, highlights')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
-      if (!units?.length) throw new Error('No units found. Parse the Excel file first.');
+      if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
+      // Don't overwrite existing highlights (e.g. Notes-derived from Excel).
+      const units = allUnits.filter((u: any) => !u.highlights || String(u.highlights).trim() === '');
+      if (!units.length) {
+        if (!silent) toast({ title: "Highlights already present", description: "All units already have highlights." });
+        return;
+      }
+
 
       const { data: vendorFiles, error: fErr } = await supabase
         .from('vendor_files')
