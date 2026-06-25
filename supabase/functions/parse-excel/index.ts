@@ -678,7 +678,8 @@ Deno.serve(async (req) => {
         // short codes / blank cells. Don't overwrite an existing highlights
         // value (e.g. from a prior PDF extraction).
         if (!row.highlights && notesLooksLikeProse(row.notes)) {
-          row.highlights = String(row.notes).replace(/\s+/g, " ").trim();
+          row.highlights = cleanHighlight(String(row.notes).replace(/\s+/g, " ").trim());
+          if (!row.highlights) delete row.highlights;
         }
 
         inserts.push(row);
