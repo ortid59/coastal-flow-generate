@@ -14,8 +14,35 @@ const LETTER_WIDTH_PT = 612; // 8.5 in
 const LETTER_HEIGHT_PT = 792; // 11 in
 const MARGIN_PT = 36; // 0.5 in
 
+/** Wait for any <img> inside a node to finish loading (or fail). */
+async function waitForImages(node: HTMLElement): Promise<void> {
+  const imgs = Array.from(node.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const done = () => {
+          img.removeEventListener("load", done);
+          img.removeEventListener("error", done);
+          resolve();
+        };
+        img.addEventListener("load", done);
+        img.addEventListener("error", done);
+      });
+    }),
+  );
+}
+
 async function nodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
-  // Wait two animation frames so any in-flight layout / lazy images settle.
+  // Wait for fonts + images + two animation frames so layout settles.
+  try {
+    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+      await (document as any).fonts.ready;
+    }
+  } catch {
+    /* ignore */
+  }
+  await waitForImages(node);
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   return html2canvas(node, {
@@ -37,14 +64,14 @@ function addCanvasPaginated(pdf: jsPDF, canvas: HTMLCanvasElement, isFirst: bool
   const pageW = LETTER_WIDTH_PT - MARGIN_PT * 2;
   const pageH = LETTER_HEIGHT_PT - MARGIN_PT * 2;
   const ratio = canvas.width / pageW;
-  const sliceHeightPx = pageH * ratio;
+  const sliceHeightPx = Math.max(1, Math.floor(pageH * ratio));
   let yOffsetPx = 0;
   let firstSlice = true;
 
   while (yOffsetPx < canvas.height) {
     const sliceCanvas = document.createElement("canvas");
     sliceCanvas.width = canvas.width;
-    sliceCanvas.height = Math.min(sliceHeightPx, canvas.height - yOffsetPx);
+    sliceCanvas.height = Math.max(1, Math.min(sliceHeightPx, canvas.height - yOffsetPx));
     const ctx = sliceCanvas.getContext("2d");
     if (!ctx) break;
     ctx.fillStyle = "#ffffff";
@@ -69,6 +96,27 @@ function addCanvasPaginated(pdf: jsPDF, canvas: HTMLCanvasElement, isFirst: bool
   }
 }
 
+/**
+ * Trigger a browser download for a Blob via an anchor element. This is more
+ * reliable than jsPDF's built-in `.save()` (which on some browsers / sandboxed
+ * iframes truncates the stream before the EOF marker is written, producing a
+ * corrupt file).
+ */
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  // Defer revoke so the browser has time to start the download.
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
 /** Render multiple nodes — one per page (with internal pagination if too tall). */
 export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
   if (nodes.length === 0) return;
@@ -79,7 +127,11 @@ export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
     addCanvasPaginated(pdf, canvas, isFirst);
     isFirst = false;
   }
-  pdf.save(filename);
+  // Build the full PDF as a Blob and only then trigger the download — this
+  // guarantees the EOF marker has been written before the browser receives
+  // the file (fixes the "corrupt / can't open" bug).
+  const blob = pdf.output("blob");
+  downloadBlob(blob, filename);
 }
 
 /** Render a single node into a PDF (paginated if it overflows Letter). */
