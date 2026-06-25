@@ -1415,7 +1415,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
           )}
-          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} grey={GREY} bold />
+          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} grey={GREY} bold />
         </DetailBlock>
       </div>
 
