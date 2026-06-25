@@ -34,6 +34,7 @@ type Campaign = {
   option_b_end: string | null;
   option_c_start: string | null;
   option_c_end: string | null;
+  margin_pct: number | null;
 };
 
 type Unit = {
@@ -118,7 +119,7 @@ export default function ProposalPrint() {
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -364,10 +365,11 @@ export default function ProposalPrint() {
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeTiers.length}, 1fr)`, gap: 20 }}>
               {activeTiers.map((tier) => {
                 const tierUnits = units.filter((u) => u.included !== false && u[tier.key]);
-                const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0), 0);
+                const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
+                const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
                 const totalImpressions = tierUnits.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
                 const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0);
-                const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * (u.four_week_periods ?? 0), 0);
+                const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0), 0);
                 const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 8 };
                 const labelStyle: React.CSSProperties = { color: Q_GREY };
                 const valStyle: React.CSSProperties = { color: Q_NAVY, fontWeight: 600 };
@@ -629,7 +631,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} />
           )}
-          <Row k="4-Week Total" v={fmtMoney(unit.total_cost)} bold />
+          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} bold />
         </DetailBlock>
       </div>
 
