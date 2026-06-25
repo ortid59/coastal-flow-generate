@@ -56,6 +56,7 @@ type Campaign = {
   option_b_end: string | null;
   option_c_start: string | null;
   option_c_end: string | null;
+  margin_pct: number | null;
 };
 
 type Unit = {
@@ -134,7 +135,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -430,11 +431,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <div className={`grid gap-4 ${activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
                   {activeTiers.map((tier) => {
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
-                    const fourWeekRate = tierUnits.reduce((sum, u) => sum + (u.negotiated_rate_4wk ?? 0), 0);
+                    const marginMult = 1 + ((campaign.margin_pct ?? 0) / 100);
+                    const fourWeekRate = tierUnits.reduce((sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
                     const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
                     const totalPeriods = tierUnits.reduce((sum, u) => sum + (u.four_week_periods ?? 0), 0);
                     const totalCampaignCost = tierUnits.reduce(
-                      (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * (u.four_week_periods ?? 0),
+                      (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
                       0,
                     );
                     const isSelected = selectedTier === tier.key;
