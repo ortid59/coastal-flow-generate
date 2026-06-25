@@ -588,7 +588,7 @@ function PrintableQuote({
 
 
       {/* Highlights */}
-      {unit.highlights && (
+      {cleanHighlight(unit.highlights) && (
         <div
           style={{
             background: Q_SOFT,
@@ -600,7 +600,7 @@ function PrintableQuote({
             color: "#1F2937",
           }}
         >
-          {unit.highlights}
+          {cleanHighlight(unit.highlights)}
         </div>
       )}
 
