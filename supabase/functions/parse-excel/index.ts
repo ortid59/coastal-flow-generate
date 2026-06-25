@@ -655,6 +655,24 @@ Deno.serve(async (req) => {
         for (const row of inserts) seen.set(row.unit_number, row);
         const deduped = Array.from(seen.values());
 
+        // Preserve existing highlights when the new row doesn't derive one
+        // from Notes — otherwise PostgREST bulk upsert would null them out
+        // for rows missing the key (column union across the batch).
+        const unitNums = deduped.map((r) => r.unit_number);
+        const { data: existingHl } = await supabase
+          .from("units")
+          .select("unit_number, highlights")
+          .eq("campaign_id", campaignId)
+          .in("unit_number", unitNums);
+        const hlByUnit = new Map<string, string | null>();
+        (existingHl ?? []).forEach((u: any) => hlByUnit.set(String(u.unit_number).trim(), u.highlights));
+        for (const row of deduped) {
+          if (!row.highlights) {
+            const prev = hlByUnit.get(row.unit_number);
+            if (prev) row.highlights = prev;
+          }
+        }
+
         // Upsert in batches of 200 — preserves photo URLs, map URLs, and any
         // admin edits because we match on (campaign_id, unit_number).
         for (let i = 0; i < deduped.length; i += 200) {
@@ -668,6 +686,7 @@ Deno.serve(async (req) => {
           if (insErr) throw insErr;
         }
       }
+
 
       // ---- Change 2: extract embedded vendor images from this workbook ----
       // We do this after upsert so unit ids exist. Per-board images go to
