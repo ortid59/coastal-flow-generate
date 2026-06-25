@@ -95,7 +95,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
                 wordBreak: "break-word",
               }}
             >
-              {initial}
+              {displayed}
             </span>
           )}
         </button>
