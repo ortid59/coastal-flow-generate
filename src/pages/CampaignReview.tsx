@@ -29,6 +29,7 @@ import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
 import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
 
 import { HighlightsCell } from "@/components/HighlightsCell";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 import { LogoReplace } from "@/components/LogoReplace";
 import { Progress } from "@/components/ui/progress";
 import { parseShortAddress } from "@/lib/shortAddress";
