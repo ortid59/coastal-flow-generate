@@ -121,7 +121,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
             {empty ? (
               <span className="italic text-muted-foreground">No highlights yet.</span>
             ) : (
-              initial
+              displayed
             )}
           </div>
         )}
