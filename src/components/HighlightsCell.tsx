@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Pencil } from "lucide-react";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 
 type Props = {
   unitId: string;
