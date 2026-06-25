@@ -38,7 +38,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
 
   const save = async () => {
     setSaving(true);
-    const next = text.trim();
+    const next = cleanHighlight(text.trim());
     const { error } = await supabase
       .from("units")
       .update({ highlights: next || null })
