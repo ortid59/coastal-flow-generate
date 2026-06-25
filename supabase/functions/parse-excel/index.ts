@@ -620,6 +620,7 @@ Deno.serve(async (req) => {
             row[field] = String(raw);
           } else {
             row[field] = typeof raw === "string" ? raw.trim() : raw;
+          }
         }
 
         // Diagnostic: log raw values from the source columns so we can confirm
@@ -632,7 +633,6 @@ Deno.serve(async (req) => {
             `four_week_impressions(col=${fwIdx})=`, fwIdx != null ? r[fwIdx] : "<no col>",
             `negotiated_rate_4wk(col=${negIdx})=`, negIdx != null ? r[negIdx] : "<no col>"
           );
-        }
         }
 
         // CCO fallback: when "Market" is missing/blank, use "Flight Name"
