@@ -28,6 +28,7 @@ import { Logo } from "@/components/Logo";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
+import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
