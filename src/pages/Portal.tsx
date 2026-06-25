@@ -1049,9 +1049,9 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
             <div className="mt-3 font-mono text-sm text-muted-foreground">
               #{unit.unit_number}
             </div>
-            {unit.highlights && (
+            {cleanHighlight(unit.highlights) && (
               <p className="mt-4 text-sm md:text-base text-foreground leading-relaxed">
-                {unit.highlights}
+                {cleanHighlight(unit.highlights)}
               </p>
             )}
 
