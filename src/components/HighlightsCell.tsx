@@ -60,7 +60,7 @@ export function HighlightsCell({ unitId, unitNumber, initial, onSaved }: Props) 
         setOpen(v);
         if (!v) {
           setEditing(false);
-          setText(initial ?? "");
+          setText(displayed);
         }
       }}
     >
