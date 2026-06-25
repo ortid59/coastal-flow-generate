@@ -83,7 +83,7 @@ export default function NewCampaign() {
     // Validate vendor cards
     const cleaned = vendors
       .map((v) => ({ ...v, vendor_name: v.vendor_name.trim() }))
-      .filter((v) => v.vendor_name || v.excel_file || v.photo_pdf);
+      .filter((v) => v.vendor_name || v.excel_files.length || v.photo_pdfs.length);
 
     if (cleaned.length === 0) {
       toast({ title: "Add at least one vendor", variant: "destructive" });
@@ -94,8 +94,8 @@ export default function NewCampaign() {
         toast({ title: "Vendor name is required", description: "Every vendor card needs a name.", variant: "destructive" });
         return;
       }
-      if (!v.excel_file) {
-        toast({ title: `${v.vendor_name}: Excel required`, description: "Each vendor needs a .xlsx file.", variant: "destructive" });
+      if (v.excel_files.length === 0 && v.photo_pdfs.length === 0) {
+        toast({ title: `${v.vendor_name}: add a file`, description: "Each vendor needs at least one Excel or PDF.", variant: "destructive" });
         return;
       }
     }
@@ -154,7 +154,7 @@ export default function NewCampaign() {
       }
 
       // Upload vendor files
-      const totalFiles = cleaned.reduce((n, v) => n + 1 + (v.photo_pdf ? 1 : 0), 0);
+      const totalFiles = cleaned.reduce((n, v) => n + v.excel_files.length + v.photo_pdfs.length, 0);
       let done = 0;
       const records: Array<{
         kind: "excel" | "photosheets";
@@ -164,22 +164,21 @@ export default function NewCampaign() {
       }> = [];
 
       for (const v of cleaned) {
-        // Excel
-        done += 1;
-        setProgress(`Uploading file ${done}/${totalFiles} — ${v.excel_file!.name}`);
-        const xPath = `${campaignId}/excel/${Date.now()}-${safeName(v.vendor_name)}-${safeName(v.excel_file!.name)}`;
-        const xUp = await supabase.storage.from("uploads").upload(xPath, v.excel_file!, { upsert: false });
-        if (xUp.error) throw xUp.error;
-        records.push({ kind: "excel", storage_path: xPath, original_name: v.excel_file!.name, vendor: v.vendor_name });
-
-        // Photo PDF
-        if (v.photo_pdf) {
+        for (const xf of v.excel_files) {
           done += 1;
-          setProgress(`Uploading file ${done}/${totalFiles} — ${v.photo_pdf.name}`);
-          const pPath = `${campaignId}/photosheets/${Date.now()}-${safeName(v.vendor_name)}-${safeName(v.photo_pdf.name)}`;
-          const pUp = await supabase.storage.from("uploads").upload(pPath, v.photo_pdf, { upsert: false });
+          setProgress(`Uploading file ${done}/${totalFiles} — ${xf.name}`);
+          const xPath = `${campaignId}/excel/${Date.now()}-${safeName(v.vendor_name)}-${safeName(xf.name)}`;
+          const xUp = await supabase.storage.from("uploads").upload(xPath, xf, { upsert: false });
+          if (xUp.error) throw xUp.error;
+          records.push({ kind: "excel", storage_path: xPath, original_name: xf.name, vendor: v.vendor_name });
+        }
+        for (const pf of v.photo_pdfs) {
+          done += 1;
+          setProgress(`Uploading file ${done}/${totalFiles} — ${pf.name}`);
+          const pPath = `${campaignId}/photosheets/${Date.now()}-${safeName(v.vendor_name)}-${safeName(pf.name)}`;
+          const pUp = await supabase.storage.from("uploads").upload(pPath, pf, { upsert: false });
           if (pUp.error) throw pUp.error;
-          records.push({ kind: "photosheets", storage_path: pPath, original_name: v.photo_pdf.name, vendor: v.vendor_name });
+          records.push({ kind: "photosheets", storage_path: pPath, original_name: pf.name, vendor: v.vendor_name });
         }
       }
 
