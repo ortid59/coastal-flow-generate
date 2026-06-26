@@ -995,6 +995,8 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
 
 /* =================== Unit Card (split layout per spec) =================== */
 function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; indexLabel: string; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[]; marginMult: number }) {
+  const { toast } = useToast();
+
   return (
     <article className="overflow-hidden rounded-xl bg-card border border-border/30 shadow-elev-sm">
       <div className="grid lg:grid-cols-[45%_55%]">
@@ -1018,7 +1020,18 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
               )}
               <button
                 type="button"
-                onClick={() => downloadSingleQuotePdf(unit.id, unit.unit_number)}
+                onClick={async () => {
+                  try {
+                    await downloadSingleQuotePdf(unit.id, unit.unit_number);
+                    toast({ title: "PDF downloaded" });
+                  } catch (e: any) {
+                    toast({
+                      title: "PDF export failed",
+                      description: e?.message ?? "PDF generation failed, please try again.",
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground transition hover:bg-secondary hover:text-foreground print:hidden"
                 title="Download this quote as PDF"
               >
