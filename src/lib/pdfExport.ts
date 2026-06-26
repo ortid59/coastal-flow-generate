@@ -13,6 +13,17 @@ import jsPDF from "jspdf";
 const LETTER_WIDTH_PT = 612; // 8.5 in
 const LETTER_HEIGHT_PT = 792; // 11 in
 const MARGIN_PT = 36; // 0.5 in
+const activePdfUrls = new Set<string>();
+let cleanupListenerInstalled = false;
+
+function installPdfUrlCleanup() {
+  if (cleanupListenerInstalled || typeof window === "undefined") return;
+  cleanupListenerInstalled = true;
+  window.addEventListener("pagehide", () => {
+    activePdfUrls.forEach((url) => URL.revokeObjectURL(url));
+    activePdfUrls.clear();
+  });
+}
 
 /** Wait for any <img> inside a node to finish loading (or fail). */
 async function waitForImages(node: HTMLElement): Promise<void> {
@@ -33,27 +44,61 @@ async function waitForImages(node: HTMLElement): Promise<void> {
   );
 }
 
+function createRenderableClone(node: HTMLElement): HTMLElement {
+  const clone = node.cloneNode(true) as HTMLElement;
+  const width = Math.max(node.scrollWidth, node.offsetWidth, 780);
+
+  Object.assign(clone.style, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    width: `${width}px`,
+    maxWidth: `${width}px`,
+    minWidth: `${width}px`,
+    height: "auto",
+    overflow: "visible",
+    background: "#ffffff",
+    transform: "translateY(-200vh)",
+    zIndex: "-1",
+    pointerEvents: "none",
+  });
+
+  clone.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    el.style.animation = "none";
+    el.style.transition = "none";
+  });
+
+  document.body.appendChild(clone);
+  return clone;
+}
+
 async function nodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
+  const renderNode = createRenderableClone(node);
   // Wait for fonts + images + two animation frames so layout settles.
   try {
-    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
-      await (document as any).fonts.ready;
+    try {
+      if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+        await (document as any).fonts.ready;
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
-  }
-  await waitForImages(node);
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await waitForImages(renderNode);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-  return html2canvas(node, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
-    windowWidth: node.scrollWidth,
-    windowHeight: node.scrollHeight,
-  });
+    return await html2canvas(renderNode, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15_000,
+      windowWidth: renderNode.scrollWidth,
+      windowHeight: renderNode.scrollHeight,
+    });
+  } finally {
+    renderNode.remove();
+  }
 }
 
 /**
@@ -103,22 +148,24 @@ function addCanvasPaginated(pdf: jsPDF, canvas: HTMLCanvasElement, isFirst: bool
  * corrupt file).
  */
 function downloadBlob(blob: Blob, filename: string) {
+  installPdfUrlCleanup();
   const url = URL.createObjectURL(blob);
+  activePdfUrls.add(url);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
-  // Defer revoke generously. On Windows/Acrobat, revoking too soon can race
-  // the browser's disk write and leave a PDF that looks "in use" or truncated.
+  // Remove only the temporary element. Keep the Blob URL alive until pagehide;
+  // revoking shortly after click can race browser downloads inside preview
+  // iframes and leave a truncated file on disk.
   setTimeout(() => {
     if (a.parentNode) document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 60_000);
+  }, 0);
 }
 
-function assertCompletePdf(buffer: ArrayBuffer) {
+function assertCompletePdfBuffer(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   const head = String.fromCharCode(...bytes.slice(0, 5));
   const tailStart = Math.max(0, bytes.length - 1024);
@@ -127,6 +174,12 @@ function assertCompletePdf(buffer: ArrayBuffer) {
   if (head !== "%PDF-" || !tail.includes("%%EOF")) {
     throw new Error("PDF export did not finish writing. Please try again.");
   }
+}
+
+async function assertCompletePdfBlob(blob: Blob) {
+  assertUsablePdfBlob(blob);
+  const buffer = await blob.arrayBuffer();
+  assertCompletePdfBuffer(buffer);
 }
 
 function assertUsablePdfBlob(blob: Blob) {
@@ -146,13 +199,11 @@ export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
     addCanvasPaginated(pdf, canvas, isFirst);
     isFirst = false;
   }
-  // Build all bytes first, verify the EOF marker exists, then create the Blob.
-  // This prevents downloading a partially-written PDF that Acrobat reports as
-  // corrupt or "already open / in use".
-  const buffer = pdf.output("arraybuffer");
-  assertCompletePdf(buffer);
-  const blob = new Blob([buffer], { type: "application/pdf" });
-  assertUsablePdfBlob(blob);
+  // Ask jsPDF for the final Blob directly. Do not save via jsPDF.save() and do
+  // not convert string output; both paths have produced truncated files in
+  // browser preview/download iframes.
+  const blob = pdf.output("blob") as Blob;
+  await assertCompletePdfBlob(blob);
   downloadBlob(blob, filename);
 }
 
