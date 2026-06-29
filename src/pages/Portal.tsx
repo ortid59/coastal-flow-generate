@@ -263,19 +263,22 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
             variant="outline"
             disabled={downloading || units.length === 0}
             onClick={async () => {
+              const targetWindow = window.top !== window.self ? window.open("", "_blank") : null;
               setDownloading(true);
               try {
                 const nodes = units
                   .map((u) => document.getElementById(`pdf-quote-${u.id}`))
                   .filter((n): n is HTMLElement => !!n);
                 if (!nodes.length) {
+                  if (targetWindow && !targetWindow.closed) targetWindow.close();
                   toast({ title: "No quotes to export", variant: "destructive" });
                   return;
                 }
                 const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
-                await exportNodesToPdf(nodes, filename);
+                await exportNodesToPdf(nodes, filename, targetWindow);
                 toast({ title: "PDF downloaded" });
               } catch (e: any) {
+                if (targetWindow && !targetWindow.closed) targetWindow.close();
                 toast({ title: "PDF export failed", description: e?.message ?? "Unknown error", variant: "destructive" });
               } finally {
                 setDownloading(false);
@@ -1021,10 +1024,12 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
               <button
                 type="button"
                 onClick={async () => {
+                  const targetWindow = window.top !== window.self ? window.open("", "_blank") : null;
                   try {
-                    await downloadSingleQuotePdf(unit.id, unit.unit_number);
+                    await downloadSingleQuotePdf(unit.id, unit.unit_number, targetWindow);
                     toast({ title: "PDF downloaded" });
                   } catch (e: any) {
+                    if (targetWindow && !targetWindow.closed) targetWindow.close();
                     toast({
                       title: "PDF export failed",
                       description: e?.message ?? "PDF generation failed, please try again.",
@@ -1253,13 +1258,14 @@ function DetailKV({ label, value }: { label: string; value: string }) {
 /**
  * Download a single quote as a PDF using the off-screen PrintableQuote node.
  */
-async function downloadSingleQuotePdf(unitId: string, unitNumber: string) {
+async function downloadSingleQuotePdf(unitId: string, unitNumber: string, targetWindow?: Window | null) {
   const node = document.getElementById(`pdf-quote-${unitId}`);
   if (!node) {
+    if (targetWindow && !targetWindow.closed) targetWindow.close();
     console.warn("No PDF node for unit", unitId);
     return;
   }
-  await exportNodeToPdf(node, `quote-${unitNumber || unitId}.pdf`);
+  await exportNodeToPdf(node, `quote-${unitNumber || unitId}.pdf`, targetWindow);
 }
 
 /* =================== Printable Quote (PDF layout) =================== */

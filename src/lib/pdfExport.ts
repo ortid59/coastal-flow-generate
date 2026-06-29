@@ -87,7 +87,7 @@ async function nodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     return await html2canvas(renderNode, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       allowTaint: false,
       backgroundColor: "#ffffff",
@@ -132,7 +132,7 @@ function addCanvasPaginated(pdf: jsPDF, canvas: HTMLCanvasElement, isFirst: bool
       canvas.width,
       sliceCanvas.height,
     );
-    const imgData = sliceCanvas.toDataURL("image/jpeg", 0.92);
+    const imgData = sliceCanvas.toDataURL("image/jpeg", 0.82);
     const renderedHeightPt = sliceCanvas.height / ratio;
     if (!isFirst || !firstSlice) pdf.addPage();
     pdf.addImage(imgData, "JPEG", MARGIN_PT, MARGIN_PT, pageW, renderedHeightPt);
@@ -147,10 +147,41 @@ function addCanvasPaginated(pdf: jsPDF, canvas: HTMLCanvasElement, isFirst: bool
  * iframes truncates the stream before the EOF marker is written, producing a
  * corrupt file).
  */
-function downloadBlob(blob: Blob, filename: string) {
+async function downloadBlob(blob: Blob, filename: string, targetWindow?: Window | null) {
+  const picker = (window as any).showSaveFilePicker;
+  if (typeof picker === "function") {
+    try {
+      const handle = await picker.call(window, {
+        suggestedName: filename,
+        types: [
+          {
+            description: "PDF document",
+            accept: { "application/pdf": [".pdf"] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      if (targetWindow && !targetWindow.closed) targetWindow.close();
+      return;
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        if (targetWindow && !targetWindow.closed) targetWindow.close();
+        return;
+      }
+    }
+  }
+
   installPdfUrlCleanup();
   const url = URL.createObjectURL(blob);
   activePdfUrls.add(url);
+
+  if (window.top !== window.self && targetWindow && !targetWindow.closed) {
+    targetWindow.location.href = url;
+    return;
+  }
+
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -190,24 +221,29 @@ function assertUsablePdfBlob(blob: Blob) {
 }
 
 /** Render multiple nodes — one per page (with internal pagination if too tall). */
-export async function exportNodesToPdf(nodes: HTMLElement[], filename: string) {
-  if (nodes.length === 0) return;
-  const pdf = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
-  let isFirst = true;
-  for (const n of nodes) {
-    const canvas = await nodeToCanvas(n);
-    addCanvasPaginated(pdf, canvas, isFirst);
-    isFirst = false;
+export async function exportNodesToPdf(nodes: HTMLElement[], filename: string, targetWindow?: Window | null) {
+  try {
+    if (nodes.length === 0) return;
+    const pdf = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
+    let isFirst = true;
+    for (const n of nodes) {
+      const canvas = await nodeToCanvas(n);
+      addCanvasPaginated(pdf, canvas, isFirst);
+      isFirst = false;
+    }
+    // Ask jsPDF for the final Blob directly. Do not save via jsPDF.save() and do
+    // not convert string output; both paths have produced truncated files in
+    // browser preview/download iframes.
+    const blob = pdf.output("blob") as Blob;
+    await assertCompletePdfBlob(blob);
+    await downloadBlob(blob, filename, targetWindow);
+  } catch (error) {
+    if (targetWindow && !targetWindow.closed) targetWindow.close();
+    throw error;
   }
-  // Ask jsPDF for the final Blob directly. Do not save via jsPDF.save() and do
-  // not convert string output; both paths have produced truncated files in
-  // browser preview/download iframes.
-  const blob = pdf.output("blob") as Blob;
-  await assertCompletePdfBlob(blob);
-  downloadBlob(blob, filename);
 }
 
 /** Render a single node into a PDF (paginated if it overflows Letter). */
-export async function exportNodeToPdf(node: HTMLElement, filename: string) {
-  return exportNodesToPdf([node], filename);
+export async function exportNodeToPdf(node: HTMLElement, filename: string, targetWindow?: Window | null) {
+  return exportNodesToPdf([node], filename, targetWindow);
 }
