@@ -244,6 +244,7 @@ export type Database = {
           rate_card_4wk: number | null
           read_direction: string | null
           recommended: boolean | null
+          row_index: number | null
           size: string | null
           sov_pct: number | null
           spot_length: string | null
@@ -293,6 +294,7 @@ export type Database = {
           rate_card_4wk?: number | null
           read_direction?: string | null
           recommended?: boolean | null
+          row_index?: number | null
           size?: string | null
           sov_pct?: number | null
           spot_length?: string | null
@@ -342,6 +344,7 @@ export type Database = {
           rate_card_4wk?: number | null
           read_direction?: string | null
           recommended?: boolean | null
+          row_index?: number | null
           size?: string | null
           sov_pct?: number | null
           spot_length?: string | null
