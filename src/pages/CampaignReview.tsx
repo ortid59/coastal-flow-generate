@@ -1151,13 +1151,14 @@ export default function CampaignReview() {
     const silent = !!opts?.silent;
     setExtractingHl(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing highlights…" });
+    const hlSummary: ExtractionFileSummary[] = [];
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
       const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, highlights')
+        .select('id, unit_number, vendor, location_description, highlights, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
