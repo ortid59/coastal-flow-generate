@@ -1542,6 +1542,51 @@ export default function CampaignReview() {
         </div>
       )}
 
+      {extractionSummary.length > 0 && !extracting && !extractingHl && (
+        <div className="surface-card mb-4 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Extraction summary</h4>
+            <button
+              type="button"
+              onClick={() => setExtractionSummary([])}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="space-y-1.5 text-xs">
+            {extractionSummary.map((s, i) => {
+              const ok = s.matched > 0 && !s.note;
+              const warn = s.note && s.strategy !== 'manual';
+              return (
+                <li
+                  key={`${s.kind}-${s.file}-${i}`}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                >
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      ok ? 'bg-emerald-500' : warn ? 'bg-amber-500' : 'bg-muted-foreground/50'
+                    }`}
+                  />
+                  <span className="font-medium">{s.file}</span>
+                  <span className="text-muted-foreground">
+                    · {s.kind} · vendor: {s.vendor ?? '—'} · strategy: {s.strategy}
+                    {s.total > 0 || s.matched > 0 ? ` · ${s.matched}/${s.total} matched` : ''}
+                  </span>
+                  {s.note && (
+                    <span className="w-full pl-4 text-amber-700 dark:text-amber-400">
+                      {s.note}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+
+
 
       {campaign?.status === "parsing" && units.length === 0 ? (
         <div className="surface-card flex flex-col items-center gap-3 p-12 text-center">
