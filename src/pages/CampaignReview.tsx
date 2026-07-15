@@ -1300,11 +1300,12 @@ export default function CampaignReview() {
               const paragraph = unit ? extractHighlightText(items) : "";
               if (unit && paragraph) {
                 const existing = collected.get(unit.id) ?? [];
+                if (existing.length === 0) matchedCount++;
                 existing.push(paragraph);
                 collected.set(unit.id, existing);
               }
             } catch (pageErr: any) {
-              console.warn(`[extractHighlights] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              console.warn(`[extractHighlights] page ${pageNum} of ${fileLabel} failed — skipping:`, pageErr?.message ?? pageErr);
               // For the order strategy, do NOT consume a unit slot on failure —
               // give the same unit another chance on the next page.
               if (consumedOrderSlot) orderIdx--;
@@ -1317,8 +1318,17 @@ export default function CampaignReview() {
         } finally {
           pdf.destroy?.();
         }
+        hlSummary.push({
+          file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+          strategy: strategyLabel, matched: matchedCount, total: vendorUnitCount,
+        });
        } catch (pdfErr: any) {
-         console.error(`[extractHighlights] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         console.error(`[extractHighlights] PDF "${fileLabel}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         hlSummary.push({
+           file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
+           strategy: 'error', matched: matchedCount, total: 0,
+           note: `Failed: ${pdfErr?.message ?? 'unknown error'}`,
+         });
          continue;
        }
       }
