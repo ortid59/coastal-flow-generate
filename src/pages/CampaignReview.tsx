@@ -1063,7 +1063,7 @@ export default function CampaignReview() {
               if (profile && profile.hasMap === false) mapCrop = null;
 
               const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
-              if (photoSaved) totalPhotos++;
+              if (photoSaved) { totalPhotos++; matchedCount++; }
               if (mapSaved) totalMaps++;
 
               if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
