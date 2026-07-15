@@ -429,6 +429,17 @@ export default function CampaignReview() {
     total: 0,
     label: "",
   });
+  // Per-PDF extraction summary shown after Extract photos / highlights runs.
+  type ExtractionFileSummary = {
+    file: string;
+    kind: "photos" | "highlights";
+    vendor: string | null;
+    strategy: string;
+    matched: number;
+    total: number;
+    note?: string;
+  };
+  const [extractionSummary, setExtractionSummary] = useState<ExtractionFileSummary[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
