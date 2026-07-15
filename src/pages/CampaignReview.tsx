@@ -1353,6 +1353,7 @@ export default function CampaignReview() {
           description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
         });
       }
+      setExtractionSummary((prev) => [...prev.filter((s) => s.kind !== 'highlights'), ...hlSummary]);
       await load();
     } catch (err: any) {
       console.error('[extractHighlights]', err);
