@@ -122,6 +122,13 @@ function cleanHighlight(text: any): string {
     .replace(/^#?\d{4,6}\s*(PANEL\s*)?/i, "")
     .replace(/^PANEL\s+/i, "")
     .trim();
+  // Mid-text unit stamps like "...Brazilian Day SITE # 18280 PANEL Spa..."
+  cleaned = cleaned.replace(/\s*SITE\s*#\s*\d{3,6}.*$/i, "").trim();
+  // " Panel <digits>..." / " Panel Dimension..." tails; lookbehind protects
+  // real words like "DePaul".
+  cleaned = cleaned.replace(/(?<![a-zA-Z])\s+Panel\s+\d.*$/i, "").trim();
+  cleaned = cleaned.replace(/(?<![a-zA-Z])\s+Panel\s+Dimension.*$/i, "").trim();
+  cleaned = cleaned.replace(/\s+Panel\.?\.?\.?$/i, "").trim();
   if (cleaned.length > 0) {
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
