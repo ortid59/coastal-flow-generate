@@ -1184,19 +1184,61 @@ export default function CampaignReview() {
       const collected = new Map<string, string[]>();
       let pagesProcessed = 0;
 
+      const singleVendorCampaignHl = isSingleVendorCampaign(allUnits);
+
       for (const file of pdfFiles) {
+       const fileLabel = file.original_name ?? 'PDF';
+       let matchedCount = 0;
        try {
         const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, units);
+        const strategyLabel = profile?.matchStrategy ?? 'unresolved';
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractHighlights] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping`);
+          hlSummary.push({
+            file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: 'manual', matched: 0, total: 0,
+            note: 'Manual placement needed — highlights not auto-extracted.',
+          });
+          continue;
+        }
+        if (!profile) {
+          console.warn(`[extractHighlights] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+          hlSummary.push({
+            file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
+            strategy: 'unresolved', matched: 0, total: 0,
+            note: 'Vendor could not be matched to a known profile — manual placement needed.',
+          });
           continue;
         }
         if (effectiveVendor && effectiveVendor !== file.vendor) {
-          console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+          console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
 
-        const vendorUnits = filterUnitsForVendor(units, effectiveVendor);
+        let vendorUnits = filterUnitsForVendor(units, effectiveVendor);
+        if (!vendorUnits.length) {
+          if (singleVendorCampaignHl) {
+            vendorUnits = units;
+          } else {
+            console.warn(`[extractHighlights] ${fileLabel}: vendor filter empty in multi-vendor campaign — skipping`);
+            hlSummary.push({
+              file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+              strategy: strategyLabel, matched: 0, total: 0,
+              note: 'No units match this vendor in a multi-vendor campaign — skipped.',
+            });
+            continue;
+          }
+        }
         if (!vendorUnits.length) continue;
+
+        // Order-strategy vendors follow Excel sheet order.
+        if (profile.matchStrategy === 'order') {
+          vendorUnits = [...vendorUnits].sort((a: any, b: any) => {
+            const ai = a.row_index == null ? Number.POSITIVE_INFINITY : a.row_index;
+            const bi = b.row_index == null ? Number.POSITIVE_INFINITY : b.row_index;
+            return ai - bi;
+          });
+        }
+        const vendorUnitCount = vendorUnits.length;
 
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
