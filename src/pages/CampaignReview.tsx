@@ -1099,8 +1099,21 @@ export default function CampaignReview() {
             console.warn('[extractPhotos] save vendor profile failed:', profErr.message);
           }
         }
+        photosSummary.push({
+          file: fileLabel,
+          kind: 'photos',
+          vendor: effectiveVendor ?? file.vendor ?? null,
+          strategy: strategyLabel,
+          matched: matchedCount,
+          total: vendorUnitCount,
+        });
        } catch (pdfErr: any) {
-         console.error(`[extractPhotos] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         console.error(`[extractPhotos] PDF "${fileLabel}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         photosSummary.push({
+           file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
+           strategy: 'error', matched: matchedCount, total: 0,
+           note: `Failed: ${pdfErr?.message ?? 'unknown error'}`,
+         });
          continue;
        }
       }
