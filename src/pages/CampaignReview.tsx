@@ -644,13 +644,14 @@ export default function CampaignReview() {
     const silent = !!opts?.silent;
     setExtracting(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
+    const photosSummary: ExtractionFileSummary[] = [];
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
       const { data: units, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url')
+        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
