@@ -965,7 +965,7 @@ export default function CampaignReview() {
                 const unit = vendorUnits[peek];
 
                 const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
-                if (photoSaved) totalPhotos++;
+                if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
                 // Commit the slot only after a successful run.
                 assignIdx = peek + 1;
