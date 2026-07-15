@@ -160,55 +160,82 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   return null;
 };
 
-// Pick the best vendor identifier for a PDF. We PREFER the dominant
-// units.vendor (the canonical value parse-excel reads from the Excel
-// "Vendor" column) because vendor_files.vendor is user-typed and often
-// doesn't match a VENDOR_PROFILES key. Only fall back to file.vendor if
-// no units.vendor resolves to a known profile.
+// Pick the vendor identifier + profile for a single PDF file. Resolution
+// order (per-file, never guess against the wrong vendor's units):
+//   1. file.vendor resolves to a known profile → use it.
+//   2. Fuzzy-match file.vendor against the campaign's DISTINCT units.vendor
+//      values (normalized bidirectional substring). If exactly one hits and
+//      resolves to a profile → use it.
+//   3. Campaign has exactly ONE distinct units.vendor → fall back to that
+//      dominant vendor (preserves single-vendor behaviour).
+//   4. Otherwise return no profile — caller must skip this file. NEVER assign
+//      Lamar photos to Alchemy units just because Alchemy is the biggest
+//      vendor in the campaign.
 function resolveEffectiveVendor<T extends { vendor?: string | null }>(
   fileVendor: string | null | undefined,
   unitsPool: T[],
 ): { vendor: string | null; profile: VendorProfile | null } {
-  const counts = new Map<string, number>();
-  for (const u of unitsPool) {
-    const v = (u.vendor ?? "").trim();
-    if (!v) continue;
-    counts.set(v, (counts.get(v) ?? 0) + 1);
-  }
-  let bestVendor: string | null = null;
-  let bestProfile: VendorProfile | null = null;
-  let bestCount = -1;
-  for (const [v, c] of counts) {
-    const p = resolveVendorProfile(v);
-    if (p && c > bestCount) { bestVendor = v; bestProfile = p; bestCount = c; }
-  }
-  if (bestProfile) return { vendor: bestVendor, profile: bestProfile };
-
-  // No units.vendor resolved — try the file vendor as a last resort.
+  // 1. Direct hit off the file's own vendor string.
   const fromFile = resolveVendorProfile(fileVendor);
   if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
 
-  // Still nothing — return the dominant units.vendor (if any) or file vendor,
-  // with no profile. Caller will use generic fallback matching.
-  const dominantAny = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  return { vendor: dominantAny ?? fileVendor ?? null, profile: null };
+  // Distinct units.vendor values in this campaign.
+  const distinctVendors = Array.from(
+    new Set(unitsPool.map((u) => (u.vendor ?? "").trim()).filter(Boolean)),
+  );
+
+  // 2. Fuzzy match file.vendor against the distinct units.vendor list.
+  const fileNorm = normalizeVendor(fileVendor);
+  if (fileNorm) {
+    const candidates = distinctVendors.filter((v) => {
+      const un = normalizeVendor(v);
+      if (!un) return false;
+      return un === fileNorm || un.includes(fileNorm) || fileNorm.includes(un);
+    });
+    if (candidates.length === 1) {
+      const p = resolveVendorProfile(candidates[0]);
+      if (p) return { vendor: candidates[0], profile: p };
+    }
+  }
+
+  // 3. Single-vendor campaign → safe to fall back to that dominant vendor.
+  if (distinctVendors.length === 1) {
+    const only = distinctVendors[0];
+    const p = resolveVendorProfile(only);
+    return { vendor: only, profile: p };
+  }
+
+  // 4. Multi-vendor and no confident match — do NOT guess.
+  return { vendor: fileVendor ?? null, profile: null };
 }
 
 // Filter unitsPool to those matching effectiveVendor (bidirectional substring
-// on normalized strings). Falls back to the full pool when the filter empties
-// — a single-PDF campaign should never be skipped over a vendor-string mismatch.
+// on normalized strings). Empty target → return the full pool. Otherwise
+// return only the matches; callers decide what to do with an empty result.
 function filterUnitsForVendor<T extends { vendor?: string | null }>(
   unitsPool: T[],
   effectiveVendor: string | null | undefined,
 ): T[] {
   const target = normalizeVendor(effectiveVendor);
   if (!target) return unitsPool;
-  const filtered = unitsPool.filter((u) => {
+  return unitsPool.filter((u) => {
     const uv = normalizeVendor(u.vendor);
     if (!uv) return true;
     return uv === target || uv.includes(target) || target.includes(uv);
   });
-  return filtered.length ? filtered : unitsPool;
+}
+
+// True when the campaign contains exactly one distinct units.vendor. Only in
+// that case is it safe to fall back to the full unit pool when the per-vendor
+// filter is empty.
+function isSingleVendorCampaign<T extends { vendor?: string | null }>(pool: T[]): boolean {
+  const distinct = new Set<string>();
+  for (const u of pool) {
+    const v = (u.vendor ?? "").trim();
+    if (v) distinct.add(v);
+    if (distinct.size > 1) return false;
+  }
+  return distinct.size === 1;
 }
 
 const normalizeUnitToken = (s: string | null | undefined) =>
@@ -402,6 +429,17 @@ export default function CampaignReview() {
     total: 0,
     label: "",
   });
+  // Per-PDF extraction summary shown after Extract photos / highlights runs.
+  type ExtractionFileSummary = {
+    file: string;
+    kind: "photos" | "highlights";
+    vendor: string | null;
+    strategy: string;
+    matched: number;
+    total: number;
+    note?: string;
+  };
+  const [extractionSummary, setExtractionSummary] = useState<ExtractionFileSummary[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -606,13 +644,14 @@ export default function CampaignReview() {
     const silent = !!opts?.silent;
     setExtracting(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
+    const photosSummary: ExtractionFileSummary[] = [];
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
       const { data: units, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url')
+        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
@@ -812,37 +851,88 @@ export default function CampaignReview() {
         return { photoSaved, mapSaved };
       };
 
+      const singleVendorCampaign = isSingleVendorCampaign(units);
+
       for (const file of pdfFiles) {
+       const fileLabel = file.original_name ?? 'PDF';
+       let matchedCount = 0;
        try {
         const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
+        const strategyLabel = profile?.matchStrategy ?? 'unresolved';
+
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractPhotos] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping auto extraction`);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: 'manual', matched: 0, total: 0,
+            note: 'Manual placement needed — upload photos per unit.',
+          });
+          continue;
+        }
+        if (!profile) {
+          console.warn(`[extractPhotos] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
+            strategy: 'unresolved', matched: 0, total: 0,
+            note: 'Vendor could not be matched to a known profile — manual placement needed.',
+          });
           continue;
         }
         if (effectiveVendor && effectiveVendor !== file.vendor) {
-          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
 
         let vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
         if (!vendorUnits.length) {
-          console.info(`[extractPhotos] ${file.original_name}: vendor filter empty — falling back to all unitsNeedingPhotos`);
-          vendorUnits = unitsNeedingPhotos;
+          if (singleVendorCampaign) {
+            console.info(`[extractPhotos] ${fileLabel}: vendor filter empty in single-vendor campaign — falling back to all unitsNeedingPhotos`);
+            vendorUnits = unitsNeedingPhotos;
+          } else {
+            console.warn(`[extractPhotos] ${fileLabel}: vendor filter empty in multi-vendor campaign — skipping to avoid cross-vendor photo assignment`);
+            photosSummary.push({
+              file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+              strategy: strategyLabel, matched: 0, total: 0,
+              note: 'No units match this vendor in a multi-vendor campaign — skipped.',
+            });
+            continue;
+          }
         }
         if (!vendorUnits.length) continue;
+
+        // Order-strategy vendors (CCO / Lamar / Be Seen) follow Excel sheet
+        // order. Sort by row_index ascending, nulls last, so page N maps to
+        // the Nth Excel row still needing a photo.
+        if (profile.matchStrategy === 'order') {
+          vendorUnits = [...vendorUnits].sort((a: any, b: any) => {
+            const ai = a.row_index == null ? Number.POSITIVE_INFINITY : a.row_index;
+            const bi = b.row_index == null ? Number.POSITIVE_INFINITY : b.row_index;
+            return ai - bi;
+          });
+        }
+
+        const vendorUnitCount = vendorUnits.length;
 
         const vendorKey = normalizeVendor(effectiveVendor);
         const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
 
 
-        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${fileLabel}…` }));
         const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
-        if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
+        if (dlErr || !blob) {
+          console.warn('PDF download failed:', dlErr?.message);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: strategyLabel, matched: 0, total: vendorUnitCount,
+            note: `Download failed: ${dlErr?.message ?? 'unknown error'}`,
+          });
+          continue;
+        }
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await withTimeout(
           pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise,
-          `Opening ${file.original_name ?? 'PDF'}`,
+          `Opening ${fileLabel}`,
         );
-        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${fileLabel}…` }));
 
         try {
           // ------- Strategy: order (sequential page→unit assignment) -------
@@ -858,7 +948,7 @@ export default function CampaignReview() {
               try {
                 page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
                 pagesChecked++;
-                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${fileLabel}` }));
                 if (pageNum <= skipCover) continue;
                 if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
                   const regions = await detectImageRegions(page);
@@ -875,7 +965,7 @@ export default function CampaignReview() {
                 const unit = vendorUnits[peek];
 
                 const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
-                if (photoSaved) totalPhotos++;
+                if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
                 // Commit the slot only after a successful run.
                 assignIdx = peek + 1;
@@ -973,7 +1063,7 @@ export default function CampaignReview() {
               if (profile && profile.hasMap === false) mapCrop = null;
 
               const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
-              if (photoSaved) totalPhotos++;
+              if (photoSaved) { totalPhotos++; matchedCount++; }
               if (mapSaved) totalMaps++;
 
               if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
@@ -1009,8 +1099,21 @@ export default function CampaignReview() {
             console.warn('[extractPhotos] save vendor profile failed:', profErr.message);
           }
         }
+        photosSummary.push({
+          file: fileLabel,
+          kind: 'photos',
+          vendor: effectiveVendor ?? file.vendor ?? null,
+          strategy: strategyLabel,
+          matched: matchedCount,
+          total: vendorUnitCount,
+        });
        } catch (pdfErr: any) {
-         console.error(`[extractPhotos] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         console.error(`[extractPhotos] PDF "${fileLabel}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         photosSummary.push({
+           file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
+           strategy: 'error', matched: matchedCount, total: 0,
+           note: `Failed: ${pdfErr?.message ?? 'unknown error'}`,
+         });
          continue;
        }
       }
@@ -1026,6 +1129,7 @@ export default function CampaignReview() {
             : `No new matches found after checking ${pagesChecked} pages.`,
         });
       }
+      setExtractionSummary((prev) => [...prev.filter((s) => s.kind !== 'photos'), ...photosSummary]);
       await load();
     } catch (err: any) {
       console.error('[extractPhotos]', err);
@@ -1047,13 +1151,14 @@ export default function CampaignReview() {
     const silent = !!opts?.silent;
     setExtractingHl(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing highlights…" });
+    const hlSummary: ExtractionFileSummary[] = [];
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
       const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, highlights')
+        .select('id, unit_number, vendor, location_description, highlights, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
@@ -1079,19 +1184,61 @@ export default function CampaignReview() {
       const collected = new Map<string, string[]>();
       let pagesProcessed = 0;
 
+      const singleVendorCampaignHl = isSingleVendorCampaign(allUnits);
+
       for (const file of pdfFiles) {
+       const fileLabel = file.original_name ?? 'PDF';
+       let matchedCount = 0;
        try {
         const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, units);
+        const strategyLabel = profile?.matchStrategy ?? 'unresolved';
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractHighlights] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping`);
+          hlSummary.push({
+            file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: 'manual', matched: 0, total: 0,
+            note: 'Manual placement needed — highlights not auto-extracted.',
+          });
+          continue;
+        }
+        if (!profile) {
+          console.warn(`[extractHighlights] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+          hlSummary.push({
+            file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
+            strategy: 'unresolved', matched: 0, total: 0,
+            note: 'Vendor could not be matched to a known profile — manual placement needed.',
+          });
           continue;
         }
         if (effectiveVendor && effectiveVendor !== file.vendor) {
-          console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+          console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
 
-        const vendorUnits = filterUnitsForVendor(units, effectiveVendor);
+        let vendorUnits = filterUnitsForVendor(units, effectiveVendor);
+        if (!vendorUnits.length) {
+          if (singleVendorCampaignHl) {
+            vendorUnits = units;
+          } else {
+            console.warn(`[extractHighlights] ${fileLabel}: vendor filter empty in multi-vendor campaign — skipping`);
+            hlSummary.push({
+              file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+              strategy: strategyLabel, matched: 0, total: 0,
+              note: 'No units match this vendor in a multi-vendor campaign — skipped.',
+            });
+            continue;
+          }
+        }
         if (!vendorUnits.length) continue;
+
+        // Order-strategy vendors follow Excel sheet order.
+        if (profile.matchStrategy === 'order') {
+          vendorUnits = [...vendorUnits].sort((a: any, b: any) => {
+            const ai = a.row_index == null ? Number.POSITIVE_INFINITY : a.row_index;
+            const bi = b.row_index == null ? Number.POSITIVE_INFINITY : b.row_index;
+            return ai - bi;
+          });
+        }
+        const vendorUnitCount = vendorUnits.length;
 
 
         setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
@@ -1153,11 +1300,12 @@ export default function CampaignReview() {
               const paragraph = unit ? extractHighlightText(items) : "";
               if (unit && paragraph) {
                 const existing = collected.get(unit.id) ?? [];
+                if (existing.length === 0) matchedCount++;
                 existing.push(paragraph);
                 collected.set(unit.id, existing);
               }
             } catch (pageErr: any) {
-              console.warn(`[extractHighlights] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+              console.warn(`[extractHighlights] page ${pageNum} of ${fileLabel} failed — skipping:`, pageErr?.message ?? pageErr);
               // For the order strategy, do NOT consume a unit slot on failure —
               // give the same unit another chance on the next page.
               if (consumedOrderSlot) orderIdx--;
@@ -1170,8 +1318,17 @@ export default function CampaignReview() {
         } finally {
           pdf.destroy?.();
         }
+        hlSummary.push({
+          file: fileLabel, kind: 'highlights', vendor: effectiveVendor ?? file.vendor ?? null,
+          strategy: strategyLabel, matched: matchedCount, total: vendorUnitCount,
+        });
        } catch (pdfErr: any) {
-         console.error(`[extractHighlights] PDF "${file.original_name}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         console.error(`[extractHighlights] PDF "${fileLabel}" failed — continuing with next vendor PDF:`, pdfErr?.message ?? pdfErr);
+         hlSummary.push({
+           file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
+           strategy: 'error', matched: matchedCount, total: 0,
+           note: `Failed: ${pdfErr?.message ?? 'unknown error'}`,
+         });
          continue;
        }
       }
@@ -1196,6 +1353,7 @@ export default function CampaignReview() {
           description: `${unitsWithHighlights} units · ${pagesProcessed} pages`,
         });
       }
+      setExtractionSummary((prev) => [...prev.filter((s) => s.kind !== 'highlights'), ...hlSummary]);
       await load();
     } catch (err: any) {
       console.error('[extractHighlights]', err);
@@ -1383,6 +1541,51 @@ export default function CampaignReview() {
           )}
         </div>
       )}
+
+      {extractionSummary.length > 0 && !extracting && !extractingHl && (
+        <div className="surface-card mb-4 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Extraction summary</h4>
+            <button
+              type="button"
+              onClick={() => setExtractionSummary([])}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="space-y-1.5 text-xs">
+            {extractionSummary.map((s, i) => {
+              const ok = s.matched > 0 && !s.note;
+              const warn = s.note && s.strategy !== 'manual';
+              return (
+                <li
+                  key={`${s.kind}-${s.file}-${i}`}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                >
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      ok ? 'bg-emerald-500' : warn ? 'bg-amber-500' : 'bg-muted-foreground/50'
+                    }`}
+                  />
+                  <span className="font-medium">{s.file}</span>
+                  <span className="text-muted-foreground">
+                    · {s.kind} · vendor: {s.vendor ?? '—'} · strategy: {s.strategy}
+                    {s.total > 0 || s.matched > 0 ? ` · ${s.matched}/${s.total} matched` : ''}
+                  </span>
+                  {s.note && (
+                    <span className="w-full pl-4 text-amber-700 dark:text-amber-400">
+                      {s.note}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+
 
 
       {campaign?.status === "parsing" && units.length === 0 ? (

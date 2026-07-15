@@ -1,0 +1,1 @@
+ALTER TABLE public.units ADD COLUMN IF NOT EXISTS row_index INTEGER;

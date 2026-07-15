@@ -122,6 +122,13 @@ function cleanHighlight(text: any): string {
     .replace(/^#?\d{4,6}\s*(PANEL\s*)?/i, "")
     .replace(/^PANEL\s+/i, "")
     .trim();
+  // Mid-text unit stamps like "...Brazilian Day SITE # 18280 PANEL Spa..."
+  cleaned = cleaned.replace(/\s*SITE\s*#\s*\d{3,6}.*$/i, "").trim();
+  // " Panel <digits>..." / " Panel Dimension..." tails; lookbehind protects
+  // real words like "DePaul".
+  cleaned = cleaned.replace(/(?<![a-zA-Z])\s+Panel\s+\d.*$/i, "").trim();
+  cleaned = cleaned.replace(/(?<![a-zA-Z])\s+Panel\s+Dimension.*$/i, "").trim();
+  cleaned = cleaned.replace(/\s+Panel\.?\.?\.?$/i, "").trim();
   if (cleaned.length > 0) {
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
@@ -622,6 +629,10 @@ Deno.serve(async (req) => {
           recommended,
           included: true,
           vendor: (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null,
+          // Position of this row within its sheet (0-based, in Excel order).
+          // Used by photo extraction for order-strategy vendors (CCO / Lamar /
+          // Be Seen) so page N of the deck maps to the Nth Excel row.
+          row_index: i,
         };
 
         for (const [field, idx] of Object.entries(headerIdx)) {
