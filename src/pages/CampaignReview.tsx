@@ -851,37 +851,88 @@ export default function CampaignReview() {
         return { photoSaved, mapSaved };
       };
 
+      const singleVendorCampaign = isSingleVendorCampaign(units);
+
       for (const file of pdfFiles) {
+       const fileLabel = file.original_name ?? 'PDF';
+       let matchedCount = 0;
        try {
         const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
+        const strategyLabel = profile?.matchStrategy ?? 'unresolved';
+
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractPhotos] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping auto extraction`);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: 'manual', matched: 0, total: 0,
+            note: 'Manual placement needed — upload photos per unit.',
+          });
+          continue;
+        }
+        if (!profile) {
+          console.warn(`[extractPhotos] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
+            strategy: 'unresolved', matched: 0, total: 0,
+            note: 'Vendor could not be matched to a known profile — manual placement needed.',
+          });
           continue;
         }
         if (effectiveVendor && effectiveVendor !== file.vendor) {
-          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve; using dominant units.vendor "${effectiveVendor}"`);
+          console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
 
         let vendorUnits = filterUnitsForVendor(unitsNeedingPhotos, effectiveVendor);
         if (!vendorUnits.length) {
-          console.info(`[extractPhotos] ${file.original_name}: vendor filter empty — falling back to all unitsNeedingPhotos`);
-          vendorUnits = unitsNeedingPhotos;
+          if (singleVendorCampaign) {
+            console.info(`[extractPhotos] ${fileLabel}: vendor filter empty in single-vendor campaign — falling back to all unitsNeedingPhotos`);
+            vendorUnits = unitsNeedingPhotos;
+          } else {
+            console.warn(`[extractPhotos] ${fileLabel}: vendor filter empty in multi-vendor campaign — skipping to avoid cross-vendor photo assignment`);
+            photosSummary.push({
+              file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+              strategy: strategyLabel, matched: 0, total: 0,
+              note: 'No units match this vendor in a multi-vendor campaign — skipped.',
+            });
+            continue;
+          }
         }
         if (!vendorUnits.length) continue;
+
+        // Order-strategy vendors (CCO / Lamar / Be Seen) follow Excel sheet
+        // order. Sort by row_index ascending, nulls last, so page N maps to
+        // the Nth Excel row still needing a photo.
+        if (profile.matchStrategy === 'order') {
+          vendorUnits = [...vendorUnits].sort((a: any, b: any) => {
+            const ai = a.row_index == null ? Number.POSITIVE_INFINITY : a.row_index;
+            const bi = b.row_index == null ? Number.POSITIVE_INFINITY : b.row_index;
+            return ai - bi;
+          });
+        }
+
+        const vendorUnitCount = vendorUnits.length;
 
         const vendorKey = normalizeVendor(effectiveVendor);
         const existingProfile = vendorKey ? profileByVendor.get(vendorKey) : undefined;
 
 
-        setExtractProgress((p) => ({ ...p, label: `Downloading ${file.original_name ?? 'PDF'}…` }));
+        setExtractProgress((p) => ({ ...p, label: `Downloading ${fileLabel}…` }));
         const { data: blob, error: dlErr } = await supabase.storage.from('uploads').download(file.storage_path);
-        if (dlErr || !blob) { console.warn('PDF download failed:', dlErr?.message); continue; }
+        if (dlErr || !blob) {
+          console.warn('PDF download failed:', dlErr?.message);
+          photosSummary.push({
+            file: fileLabel, kind: 'photos', vendor: effectiveVendor ?? file.vendor ?? null,
+            strategy: strategyLabel, matched: 0, total: vendorUnitCount,
+            note: `Download failed: ${dlErr?.message ?? 'unknown error'}`,
+          });
+          continue;
+        }
         const arrayBuffer = await blob.arrayBuffer();
         const pdf = await withTimeout(
           pdfjs.getDocument({ data: arrayBuffer, disableFontFace: true }).promise,
-          `Opening ${file.original_name ?? 'PDF'}`,
+          `Opening ${fileLabel}`,
         );
-        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${file.original_name ?? 'PDF'}…` }));
+        setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${fileLabel}…` }));
 
         try {
           // ------- Strategy: order (sequential page→unit assignment) -------
@@ -897,7 +948,7 @@ export default function CampaignReview() {
               try {
                 page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
                 pagesChecked++;
-                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${fileLabel}` }));
                 if (pageNum <= skipCover) continue;
                 if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
                   const regions = await detectImageRegions(page);
