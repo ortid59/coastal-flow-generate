@@ -1129,6 +1129,7 @@ export default function CampaignReview() {
             : `No new matches found after checking ${pagesChecked} pages.`,
         });
       }
+      setExtractionSummary((prev) => [...prev.filter((s) => s.kind !== 'photos'), ...photosSummary]);
       await load();
     } catch (err: any) {
       console.error('[extractPhotos]', err);
