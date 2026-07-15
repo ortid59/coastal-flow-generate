@@ -629,6 +629,10 @@ Deno.serve(async (req) => {
           recommended,
           included: true,
           vendor: (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null,
+          // Position of this row within its sheet (0-based, in Excel order).
+          // Used by photo extraction for order-strategy vendors (CCO / Lamar /
+          // Be Seen) so page N of the deck maps to the Nth Excel row.
+          row_index: i,
         };
 
         for (const [field, idx] of Object.entries(headerIdx)) {
