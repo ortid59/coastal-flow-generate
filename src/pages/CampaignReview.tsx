@@ -160,55 +160,82 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   return null;
 };
 
-// Pick the best vendor identifier for a PDF. We PREFER the dominant
-// units.vendor (the canonical value parse-excel reads from the Excel
-// "Vendor" column) because vendor_files.vendor is user-typed and often
-// doesn't match a VENDOR_PROFILES key. Only fall back to file.vendor if
-// no units.vendor resolves to a known profile.
+// Pick the vendor identifier + profile for a single PDF file. Resolution
+// order (per-file, never guess against the wrong vendor's units):
+//   1. file.vendor resolves to a known profile → use it.
+//   2. Fuzzy-match file.vendor against the campaign's DISTINCT units.vendor
+//      values (normalized bidirectional substring). If exactly one hits and
+//      resolves to a profile → use it.
+//   3. Campaign has exactly ONE distinct units.vendor → fall back to that
+//      dominant vendor (preserves single-vendor behaviour).
+//   4. Otherwise return no profile — caller must skip this file. NEVER assign
+//      Lamar photos to Alchemy units just because Alchemy is the biggest
+//      vendor in the campaign.
 function resolveEffectiveVendor<T extends { vendor?: string | null }>(
   fileVendor: string | null | undefined,
   unitsPool: T[],
 ): { vendor: string | null; profile: VendorProfile | null } {
-  const counts = new Map<string, number>();
-  for (const u of unitsPool) {
-    const v = (u.vendor ?? "").trim();
-    if (!v) continue;
-    counts.set(v, (counts.get(v) ?? 0) + 1);
-  }
-  let bestVendor: string | null = null;
-  let bestProfile: VendorProfile | null = null;
-  let bestCount = -1;
-  for (const [v, c] of counts) {
-    const p = resolveVendorProfile(v);
-    if (p && c > bestCount) { bestVendor = v; bestProfile = p; bestCount = c; }
-  }
-  if (bestProfile) return { vendor: bestVendor, profile: bestProfile };
-
-  // No units.vendor resolved — try the file vendor as a last resort.
+  // 1. Direct hit off the file's own vendor string.
   const fromFile = resolveVendorProfile(fileVendor);
   if (fromFile) return { vendor: fileVendor ?? null, profile: fromFile };
 
-  // Still nothing — return the dominant units.vendor (if any) or file vendor,
-  // with no profile. Caller will use generic fallback matching.
-  const dominantAny = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  return { vendor: dominantAny ?? fileVendor ?? null, profile: null };
+  // Distinct units.vendor values in this campaign.
+  const distinctVendors = Array.from(
+    new Set(unitsPool.map((u) => (u.vendor ?? "").trim()).filter(Boolean)),
+  );
+
+  // 2. Fuzzy match file.vendor against the distinct units.vendor list.
+  const fileNorm = normalizeVendor(fileVendor);
+  if (fileNorm) {
+    const candidates = distinctVendors.filter((v) => {
+      const un = normalizeVendor(v);
+      if (!un) return false;
+      return un === fileNorm || un.includes(fileNorm) || fileNorm.includes(un);
+    });
+    if (candidates.length === 1) {
+      const p = resolveVendorProfile(candidates[0]);
+      if (p) return { vendor: candidates[0], profile: p };
+    }
+  }
+
+  // 3. Single-vendor campaign → safe to fall back to that dominant vendor.
+  if (distinctVendors.length === 1) {
+    const only = distinctVendors[0];
+    const p = resolveVendorProfile(only);
+    return { vendor: only, profile: p };
+  }
+
+  // 4. Multi-vendor and no confident match — do NOT guess.
+  return { vendor: fileVendor ?? null, profile: null };
 }
 
 // Filter unitsPool to those matching effectiveVendor (bidirectional substring
-// on normalized strings). Falls back to the full pool when the filter empties
-// — a single-PDF campaign should never be skipped over a vendor-string mismatch.
+// on normalized strings). Empty target → return the full pool. Otherwise
+// return only the matches; callers decide what to do with an empty result.
 function filterUnitsForVendor<T extends { vendor?: string | null }>(
   unitsPool: T[],
   effectiveVendor: string | null | undefined,
 ): T[] {
   const target = normalizeVendor(effectiveVendor);
   if (!target) return unitsPool;
-  const filtered = unitsPool.filter((u) => {
+  return unitsPool.filter((u) => {
     const uv = normalizeVendor(u.vendor);
     if (!uv) return true;
     return uv === target || uv.includes(target) || target.includes(uv);
   });
-  return filtered.length ? filtered : unitsPool;
+}
+
+// True when the campaign contains exactly one distinct units.vendor. Only in
+// that case is it safe to fall back to the full unit pool when the per-vendor
+// filter is empty.
+function isSingleVendorCampaign<T extends { vendor?: string | null }>(pool: T[]): boolean {
+  const distinct = new Set<string>();
+  for (const u of pool) {
+    const v = (u.vendor ?? "").trim();
+    if (v) distinct.add(v);
+    if (distinct.size > 1) return false;
+  }
+  return distinct.size === 1;
 }
 
 const normalizeUnitToken = (s: string | null | undefined) =>
