@@ -1333,7 +1333,7 @@ export default function CampaignReview() {
                 unit = findUnitForPage(text, vendorUnits, file.vendor);
               }
 
-              const paragraph = unit ? extractHighlightText(items) : "";
+              const paragraph = unit ? extractHighlightText(items, text) : "";
               if (unit && paragraph) {
                 const existing = collected.get(unit.id) ?? [];
                 if (existing.length === 0) matchedCount++;
