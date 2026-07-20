@@ -1981,7 +1981,10 @@ export default function CampaignReview() {
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {fmtNum(u.four_week_impressions)}
                           </td>
-                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="4-week rate shown in the client Portal (negotiated × margin)">
+                            {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}
+                          </td>
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Total campaign cost from the Excel (all periods + production + install)">
                             {fmtMoney(u.total_cost)}
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
