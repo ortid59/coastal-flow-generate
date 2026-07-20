@@ -1308,7 +1308,9 @@ export default function CampaignReview() {
        const fileLabel = file.original_name ?? 'PDF';
        let matchedCount = 0;
        try {
-        const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, units);
+        const resolvedHl = resolveEffectiveVendor(file.vendor, units);
+        let effectiveVendor: string | null = resolvedHl.vendor;
+        let profile: VendorProfile | null = resolvedHl.profile;
         const strategyLabel = profile?.matchStrategy ?? 'unresolved';
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractHighlights] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping`);
@@ -1320,14 +1322,22 @@ export default function CampaignReview() {
           continue;
         }
         if (!profile) {
-          console.warn(`[extractHighlights] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
-          hlSummary.push({
-            file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
-            strategy: 'unresolved', matched: 0, total: 0,
-            note: 'Vendor could not be matched to a known profile — manual placement needed.',
-          });
-          continue;
+          if (singleVendorCampaignHl) {
+            const distinctVendors = Array.from(new Set(units.map((u: any) => (u.vendor ?? '').trim()).filter(Boolean)));
+            effectiveVendor = distinctVendors[0] ?? effectiveVendor ?? file.vendor ?? null;
+            profile = GENERIC_PROFILE;
+            console.info(`[extractHighlights] ${fileLabel}: no registered profile for "${file.vendor ?? ''}"; using generic fallback (vendor="${effectiveVendor}")`);
+          } else {
+            console.warn(`[extractHighlights] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+            hlSummary.push({
+              file: fileLabel, kind: 'highlights', vendor: file.vendor ?? null,
+              strategy: 'unresolved', matched: 0, total: 0,
+              note: 'Vendor could not be matched to a known profile — manual placement needed.',
+            });
+            continue;
+          }
         }
+
         if (effectiveVendor && effectiveVendor !== file.vendor) {
           console.info(`[extractHighlights] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
