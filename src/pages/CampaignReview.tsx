@@ -51,7 +51,9 @@ type Campaign = {
   option_b_end: string | null;
   option_c_start: string | null;
   option_c_end: string | null;
+  margin_pct: number | null;
 };
+
 
 type Unit = {
   id: string;
