@@ -65,6 +65,7 @@ type Unit = {
   highlights: string | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk: number | null;
   cpm: number | null;
   recommended: boolean | null;
   included: boolean | null;
