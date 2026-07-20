@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "sdk_version": "0.23.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://ncwoxgpmakrhejzbfqcr.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "coastal-maverick-mcp",
+      "version": "0.1.0",
+      "title": "Coastal Maverick Proposal Generator"
+    },
+    "tools": [
+      {
+        "name": "list_campaigns",
+        "title": "List campaigns",
+        "description": "List the signed-in user's proposal campaigns (id, name, client, status, markets, flight dates).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Max campaigns to return. Default 50."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_campaign",
+        "title": "Get campaign",
+        "description": "Get the full record for one of the signed-in user's campaigns, including flight and option dates, markets, and portal status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "campaign_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Campaign UUID (from list_campaigns)."
+            }
+          },
+          "required": [
+            "campaign_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_units",
+        "title": "List units for a campaign",
+        "description": "List billboard/media units for a campaign belonging to the signed-in user. Includes unit number, market, vendor, size, four-week rate and impressions, and highlights.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "campaign_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Campaign UUID."
+            },
+            "included_only": {
+              "type": "boolean",
+              "description": "If true, return only units marked included in the proposal."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Max units. Default 200."
+            }
+          },
+          "required": [
+            "campaign_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "campaign_summary",
+        "title": "Summarize a campaign",
+        "description": "Return aggregate metrics for a campaign: included unit count, market breakdown, vendor breakdown, total four-week impressions, and total campaign cost (with the campaign margin already applied).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "campaign_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Campaign UUID."
+            }
+          },
+          "required": [
+            "campaign_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

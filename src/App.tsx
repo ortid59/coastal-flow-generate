@@ -16,6 +16,7 @@ import PortalPreview from "./pages/PortalPreview";
 import Settings from "./pages/Settings";
 import PortalGate from "./pages/PortalGate";
 import ProposalPrint from "./pages/ProposalPrint";
+import OAuthConsent from "./pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <AppHeader />
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="/guide" element={<Suspense fallback={null}><GuidePage /></Suspense>} />
             {/* Public, password-gated proposal page */}
             <Route path="/p/:token" element={<PortalGate />} />
