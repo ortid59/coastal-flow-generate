@@ -269,6 +269,9 @@ export function EditCampaignDialog({ open, onOpenChange, campaignId, initial, on
             <p className="text-[11px] text-muted-foreground">
               The hero photo on the first section of the proposal. If empty, the first unit's billboard
               photo is used. Different from the client logo.
+              <br />
+              <strong>Best size: portrait 1200 × 1500 px (4:5).</strong> Landscape images will be
+              cropped to the center — upload a portrait crop for full coverage.
             </p>
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-28 items-center justify-center rounded-md border bg-secondary/40 overflow-hidden">
