@@ -126,6 +126,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   const [downloading, setDownloading] = useState(false);
   const [selectedTier, setSelectedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
   const [expandedTier, setExpandedTier] = useState<'tier_a' | 'tier_b' | 'tier_c' | null>(null);
+  const [heroIsLandscape, setHeroIsLandscape] = useState(false);
 
   // Top scroll-progress bar
   const { scrollYProgress } = useScroll();
