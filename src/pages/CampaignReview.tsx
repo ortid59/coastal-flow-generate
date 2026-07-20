@@ -139,13 +139,17 @@ type VendorProfile = {
   pagesPerUnit?: number;
   skipCoverPages?: number;
   skipUntilFirstPhotoPage?: boolean;
+  /** If a unit_number pass yields zero matches, retry the file with the
+   *  order strategy. Handles older vendor decks that omit unit IDs on
+   *  photo pages while newer "Maps Photosheets" prefix each page with the ID. */
+  orderFallback?: boolean;
 };
 
 const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false },
   "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
   "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
-  "CCO":           { matchStrategy: "order",      crop: "single_midband", hasMap: false, skipUntilFirstPhotoPage: true },
+  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "single_midband", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true },
   "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2 },
   "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false },
   "OFM":           { matchStrategy: "manual" },
