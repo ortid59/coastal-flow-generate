@@ -143,17 +143,30 @@ type VendorProfile = {
    *  order strategy. Handles older vendor decks that omit unit IDs on
    *  photo pages while newer "Maps Photosheets" prefix each page with the ID. */
   orderFallback?: boolean;
+  /** Alternate vendor spellings that should also resolve to this profile. */
+  aliases?: string[];
 };
 
 const VENDOR_PROFILES: Record<string, VendorProfile> = {
-  "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false },
+  "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false, aliases: ["Alchemy"] },
   "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
   "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
-  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true },
-  "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2 },
-  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false },
+  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true, aliases: ["Clear Channel Outdoor", "Clear Channel", "ClearChannel"] },
+  "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2, aliases: ["Lamar Advertising"] },
+  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, aliases: ["BeSeen", "Be Seen Media"] },
   "OFM":           { matchStrategy: "manual" },
-  "New Tradition": { matchStrategy: "manual" },
+  "New Tradition": { matchStrategy: "manual", aliases: ["New Tradition Media"] },
+};
+
+// Generic profile used ONLY when a single-vendor campaign has a file whose
+// vendor string doesn't resolve to a registered profile. Uses the generic
+// findUnitForPage matcher (falls through when unitRegex is absent), the
+// image-region crop mode, and labeled-highlight capture.
+const GENERIC_PROFILE: VendorProfile = {
+  matchStrategy: "unit_number",
+  crop: "image_regions",
+  hasMap: true,
+  orderFallback: true,
 };
 
 const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile | null => {
@@ -161,11 +174,16 @@ const resolveVendorProfile = (vendor: string | null | undefined): VendorProfile 
   const norm = normalizeVendor(vendor);
   if (!norm) return null;
   for (const [name, profile] of Object.entries(VENDOR_PROFILES)) {
-    const key = normalizeVendor(name);
-    if (key === norm || norm.includes(key) || key.includes(norm)) return profile;
+    const keys = [name, ...(profile.aliases ?? [])]
+      .map((n) => normalizeVendor(n))
+      .filter(Boolean) as string[];
+    for (const key of keys) {
+      if (key === norm || norm.includes(key) || key.includes(norm)) return profile;
+    }
   }
   return null;
 };
+
 
 // Pick the vendor identifier + profile for a single PDF file. Resolution
 // order (per-file, never guess against the wrong vendor's units):
