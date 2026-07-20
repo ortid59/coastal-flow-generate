@@ -503,13 +503,13 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
         .eq("id", id)
         .single(),
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
