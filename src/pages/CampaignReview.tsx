@@ -946,11 +946,11 @@ export default function CampaignReview() {
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${fileLabel}…` }));
 
         try {
-          // ------- Strategy: order (sequential page→unit assignment) -------
-          if (profile?.matchStrategy === "order") {
+          // ------- Order-strategy pass (sequential page→unit assignment) -------
+          const runOrderPass = async () => {
             const skipCover = profile.skipCoverPages ?? 0;
-            const photoCrop = cropBoxForMode(profile.crop);
-            const mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+            const photoCropOrd = cropBoxForMode(profile.crop);
+            const mapCropOrd = profile.hasMap && profile.mapBox ? profile.mapBox : null;
             let assignIdx = 0;
             let seenFirstPhotoPage = false;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -967,18 +967,14 @@ export default function CampaignReview() {
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
-                // Peek the next unit needing a photo — do NOT consume the slot
-                // until the page is successfully processed, so a bad page doesn't
-                // shift all subsequent assignments.
                 let peek = assignIdx;
                 while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
                 if (peek >= vendorUnits.length) break;
                 const unit = vendorUnits[peek];
 
-                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCropOrd, mapCropOrd);
                 if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
-                // Commit the slot only after a successful run.
                 assignIdx = peek + 1;
               } catch (pageErr: any) {
                 console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping, retrying same unit next page:`, pageErr?.message ?? pageErr);
@@ -988,104 +984,116 @@ export default function CampaignReview() {
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
             }
-            continue;
-          }
+          };
 
-          // ------- Strategy: per-page text matching (unit_number / address / auto) -------
-          const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
-            let page: any = null;
-            try {
-              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
-              pagesChecked++;
-              setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
-              const items = textContent.items as Array<{ str: string; transform?: number[] }>;
-              const text = items.map((item: any) => item.str).join(' ');
+          // ------- Text-match pass (unit_number / address / auto). Returns match count. -------
+          const runTextMatchPass = async (): Promise<number> => {
+            let matchesInPass = 0;
+            const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
+              let page: any = null;
+              try {
+                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                pagesChecked++;
+                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+                const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
+                const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+                const text = items.map((item: any) => item.str).join(' ');
 
-              let matchedUnit: any = null;
+                let matchedUnit: any = null;
 
-              if (profile?.matchStrategy === "unit_number" && unitRegex) {
-                unitRegex.lastIndex = 0;
-                const matches = Array.from(text.matchAll(unitRegex));
-                for (const m of matches) {
-                  const tok = normalizeUnitToken(m[1] ?? m[0]);
-                  if (!tok) continue;
-                  const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
-                  if (found) { matchedUnit = found; break; }
+                if (profile?.matchStrategy === "unit_number" && unitRegex) {
+                  unitRegex.lastIndex = 0;
+                  const matches = Array.from(text.matchAll(unitRegex));
+                  for (const m of matches) {
+                    const tok = normalizeUnitToken(m[1] ?? m[0]);
+                    if (!tok) continue;
+                    const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                    if (found) { matchedUnit = found; break; }
+                  }
+                } else if (profile?.matchStrategy === "address") {
+                  const lines = items
+                    .map((it) => (it.str ?? "").trim())
+                    .filter(Boolean)
+                    .sort((a, b) => b.length - a.length)
+                    .slice(0, 6);
+                  for (const line of lines) {
+                    const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                    if (found) { matchedUnit = found; break; }
+                  }
+                } else {
+                  matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
                 }
-              } else if (profile?.matchStrategy === "address") {
-                // Largest text line (by length) as proxy for the address line.
-                const lines = items
-                  .map((it) => (it.str ?? "").trim())
-                  .filter(Boolean)
-                  .sort((a, b) => b.length - a.length)
-                  .slice(0, 6);
-                for (const line of lines) {
-                  const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
-                  if (found) { matchedUnit = found; break; }
+
+                if (!matchedUnit) {
+                  console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
+                  continue;
                 }
-              } else {
-                // No profile or auto-detect fallback — keep prior generic matcher.
-                matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
-              }
+                console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
 
-              if (!matchedUnit) {
-                console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
-                continue;
-              }
-              console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
+                let photoCrop: CropBox = billboardCropFallback;
+                let mapCrop: CropBox | null = null;
+                let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
-              // Decide crops based on profile, saved profile, or auto-detection.
-              let photoCrop: CropBox = billboardCropFallback;
-              let mapCrop: CropBox | null = null;
-              let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
-
-              if (profile?.crop) {
-                photoCrop = cropBoxForMode(profile.crop);
-                mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
-                // For single_left / single_midband, try real region detection too.
-                if (profile.crop === "single_left" || profile.crop === "single_midband") {
+                if (profile?.crop) {
+                  photoCrop = cropBoxForMode(profile.crop);
+                  mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+                  if (profile.crop === "single_left" || profile.crop === "single_midband") {
+                    const regions = await detectImageRegions(page);
+                    const picked = pickContentCrops(regions);
+                    if (picked.photo) photoCrop = picked.photo;
+                  }
+                  detectedSource = 'profile';
+                } else if (existingProfile && existingProfile.photo_x != null) {
+                  photoCrop = { x: existingProfile.photo_x!, y: existingProfile.photo_y!, w: existingProfile.photo_w!, h: existingProfile.photo_h! };
+                  mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
+                    ? { x: existingProfile.map_x!, y: existingProfile.map_y!, w: existingProfile.map_w!, h: existingProfile.map_h! }
+                    : null;
+                  detectedSource = 'profile';
+                } else {
                   const regions = await detectImageRegions(page);
                   const picked = pickContentCrops(regions);
-                  if (picked.photo) photoCrop = picked.photo;
+                  if (picked.photo) {
+                    photoCrop = picked.photo;
+                    mapCrop = picked.map;
+                    detectedSource = 'detection';
+                  } else {
+                    mapCrop = mapCropFallback;
+                  }
                 }
-                detectedSource = 'profile';
-              } else if (existingProfile && existingProfile.photo_x != null) {
-                photoCrop = { x: existingProfile.photo_x!, y: existingProfile.photo_y!, w: existingProfile.photo_w!, h: existingProfile.photo_h! };
-                mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
-                  ? { x: existingProfile.map_x!, y: existingProfile.map_y!, w: existingProfile.map_w!, h: existingProfile.map_h! }
-                  : null;
-                detectedSource = 'profile';
-              } else {
-                const regions = await detectImageRegions(page);
-                const picked = pickContentCrops(regions);
-                if (picked.photo) {
-                  photoCrop = picked.photo;
-                  mapCrop = picked.map;
-                  detectedSource = 'detection';
-                } else {
-                  mapCrop = mapCropFallback;
+
+                if (profile && profile.hasMap === false) mapCrop = null;
+
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
+                if (photoSaved) { totalPhotos++; matchedCount++; matchesInPass++; }
+                if (mapSaved) totalMaps++;
+
+                if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
+                  detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
                 }
+              } catch (pageErr: any) {
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+                continue;
+              } finally {
+                page?.cleanup?.();
+                setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
+            }
+            return matchesInPass;
+          };
 
-              // Hard guard: profiles with hasMap:false must NEVER produce a map.
-              if (profile && profile.hasMap === false) mapCrop = null;
-
-              const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
-              if (photoSaved) { totalPhotos++; matchedCount++; }
-              if (mapSaved) totalMaps++;
-
-              if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
-                detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
-              }
-            } catch (pageErr: any) {
-              console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
-              continue;
-            } finally {
-              page?.cleanup?.();
-              setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
+          if (profile.matchStrategy === "order") {
+            await runOrderPass();
+          } else {
+            const matched = await runTextMatchPass();
+            // orderFallback: if the text-match pass found nothing (e.g. older
+            // vendor deck without unit IDs on photo pages), retry the same file
+            // using the order strategy. The map page will naturally match no
+            // unit; overview-map logic elsewhere handles that separately.
+            if (matched === 0 && profile.orderFallback) {
+              console.info(`[extractPhotos] ${fileLabel}: 0 unit_number matches — falling back to order strategy`);
+              await runOrderPass();
             }
           }
         } finally {
