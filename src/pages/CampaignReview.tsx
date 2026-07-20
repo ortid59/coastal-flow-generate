@@ -129,7 +129,7 @@ const normalizeVendor = (value: string | null | undefined) =>
 
 // ---------- Vendor profile registry ----------
 type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual";
-type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map";
+type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
   unitRegex?: string;
@@ -149,7 +149,7 @@ const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false },
   "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
   "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
-  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "single_midband", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true },
+  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true },
   "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2 },
   "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false },
   "OFM":           { matchStrategy: "manual" },
@@ -673,6 +673,7 @@ export default function CampaignReview() {
     setExtracting(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
     const photosSummary: ExtractionFileSummary[] = [];
+    let overviewSavedThisRun = false;
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -1045,6 +1046,37 @@ export default function CampaignReview() {
 
                 if (!matchedUnit) {
                   console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
+                  // First unmatched page in this run + vendor profile expects a
+                  // campaign overview map → render the whole page and save as
+                  // vendor_overview_map_url. Never assigned to any unit.
+                  if (!overviewSavedThisRun && profile?.hasMap) {
+                    try {
+                      const viewport = page.getViewport({ scale: 1.5 });
+                      const canvas = document.createElement('canvas');
+                      canvas.width = Math.round(viewport.width);
+                      canvas.height = Math.round(viewport.height);
+                      const ctx = canvas.getContext('2d')!;
+                      await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, `Rendering overview p${pageNum}`);
+                      const blob = await new Promise<Blob>((resolve, reject) =>
+                        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('overview export failed')), 'image/png'),
+                      );
+                      const bytes = new Uint8Array(await blob.arrayBuffer());
+                      const path = `${id}/overview-map.png`;
+                      const { error: upErr } = await supabase.storage
+                        .from('minimaps').upload(path, bytes, { contentType: 'image/png', upsert: true });
+                      if (!upErr) {
+                        const { data: pub } = supabase.storage.from('minimaps').getPublicUrl(path);
+                        const url = `${pub.publicUrl}?v=${Date.now()}`;
+                        await supabase.from('campaigns').update({ vendor_overview_map_url: url }).eq('id', id);
+                        overviewSavedThisRun = true;
+                        console.info(`[extractPhotos] saved page ${pageNum} as campaign overview map`);
+                      } else {
+                        console.warn('[extractPhotos] overview upload failed:', upErr.message);
+                      }
+                    } catch (ovErr: any) {
+                      console.warn('[extractPhotos] overview save failed:', ovErr?.message ?? ovErr);
+                    }
+                  }
                   continue;
                 }
                 console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
@@ -1053,7 +1085,28 @@ export default function CampaignReview() {
                 let mapCrop: CropBox | null = null;
                 let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
-                if (profile?.crop) {
+                if (profile?.crop === "image_regions") {
+                  // Crop exactly to the actual raster image bounding boxes on
+                  // the page. Largest = billboard photo. Second (>=3% area) =
+                  // inset map. Only one image → no map, no placeholder.
+                  const regions = await detectImageRegions(page);
+                  const content = regions
+                    .filter((r) => r.area >= 0.03) // drop logos/rules
+                    .sort((a, b) => b.area - a.area);
+                  if (content.length >= 1) {
+                    photoCrop = { x: content[0].x, y: content[0].y, w: content[0].w, h: content[0].h };
+                    detectedSource = 'detection';
+                    const second = content.slice(1).find((r) => {
+                      const dx = Math.abs((r.x + r.w / 2) - (content[0].x + content[0].w / 2));
+                      const dy = Math.abs((r.y + r.h / 2) - (content[0].y + content[0].h / 2));
+                      return (dx > 0.1 || dy > 0.1) && r.area >= 0.03;
+                    });
+                    mapCrop = second ? { x: second.x, y: second.y, w: second.w, h: second.h } : null;
+                  } else {
+                    console.warn(`[extractPhotos] ${file.original_name} p${pageNum}: no image regions detected — falling back`);
+                    mapCrop = null;
+                  }
+                } else if (profile?.crop) {
                   photoCrop = cropBoxForMode(profile.crop);
                   mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
                   if (profile.crop === "single_left" || profile.crop === "single_midband") {
