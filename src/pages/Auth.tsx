@@ -21,12 +21,20 @@ export default function Auth() {
   const location = useLocation();
   const { session, loading } = useAuth();
 
+  // Validate `next` as a same-origin relative path before using it.
+  const safeNext = (() => {
+    const q = new URLSearchParams(location.search).get("next");
+    if (q && q.startsWith("/") && !q.startsWith("//")) return q;
+    const from = (location.state as { from?: string } | null)?.from;
+    if (from && from.startsWith("/") && !from.startsWith("//")) return from;
+    return "/";
+  })();
+
   useEffect(() => {
     if (!loading && session) {
-      const from = (location.state as { from?: string } | null)?.from || "/";
-      navigate(from, { replace: true });
+      navigate(safeNext, { replace: true });
     }
-  }, [session, loading, navigate, location.state]);
+  }, [session, loading, navigate, safeNext]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +54,7 @@ export default function Auth() {
       return;
     }
 
-    const redirectTo = `${window.location.origin}/`;
+    const redirectTo = `${window.location.origin}${safeNext}`;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { emailRedirectTo: redirectTo },
