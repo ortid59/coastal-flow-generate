@@ -205,7 +205,7 @@ export default function NewCampaign() {
           // units.vendor so the client-side photo extraction can resolve a
           // profile reliably.
           try {
-            const KNOWN_VENDOR_KEYS = ["alchemy", "adkom", "tasty", "cco", "lamar", "be seen", "ofm", "new tradition"];
+            const KNOWN_VENDOR_KEYS = ["alchemy", "adkom", "tasty", "cco", "clear channel", "clearchannel", "lamar", "be seen", "beseen", "ofm", "new tradition"];
             const matchesKnown = (v?: string | null) => {
               const s = (v ?? "").toLowerCase();
               return !!s && KNOWN_VENDOR_KEYS.some((k) => s.includes(k));
