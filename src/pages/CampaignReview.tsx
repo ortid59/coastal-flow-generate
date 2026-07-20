@@ -129,7 +129,7 @@ const normalizeVendor = (value: string | null | undefined) =>
 
 // ---------- Vendor profile registry ----------
 type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual";
-type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map";
+type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
   unitRegex?: string;
