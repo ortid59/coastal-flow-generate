@@ -916,15 +916,25 @@ export default function CampaignReview() {
           });
           continue;
         }
+        let profile = profileResolved;
+        let effectiveVendor = effectiveVendorResolved;
         if (!profile) {
-          console.warn(`[extractPhotos] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
-          photosSummary.push({
-            file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
-            strategy: 'unresolved', matched: 0, total: 0,
-            note: 'Vendor could not be matched to a known profile — manual placement needed.',
-          });
-          continue;
+          if (singleVendorCampaign) {
+            const distinctVendors = Array.from(new Set(unitsNeedingPhotos.map((u: any) => (u.vendor ?? '').trim()).filter(Boolean)));
+            effectiveVendor = distinctVendors[0] ?? effectiveVendor ?? file.vendor ?? null;
+            profile = GENERIC_PROFILE;
+            console.info(`[extractPhotos] ${fileLabel}: no registered profile for "${file.vendor ?? ''}"; using generic fallback in single-vendor campaign (vendor="${effectiveVendor}")`);
+          } else {
+            console.warn(`[extractPhotos] cannot resolve vendor for ${fileLabel} (file.vendor="${file.vendor ?? ''}") — skipping`);
+            photosSummary.push({
+              file: fileLabel, kind: 'photos', vendor: file.vendor ?? null,
+              strategy: 'unresolved', matched: 0, total: 0,
+              note: 'Vendor could not be matched to a known profile — manual placement needed.',
+            });
+            continue;
+          }
         }
+
         if (effectiveVendor && effectiveVendor !== file.vendor) {
           console.info(`[extractPhotos] file.vendor "${file.vendor}" did not resolve directly; using "${effectiveVendor}"`);
         }
