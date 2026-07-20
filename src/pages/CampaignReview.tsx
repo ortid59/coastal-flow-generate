@@ -904,8 +904,10 @@ export default function CampaignReview() {
        const fileLabel = file.original_name ?? 'PDF';
        let matchedCount = 0;
        try {
-        const { vendor: effectiveVendor, profile } = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
-        const strategyLabel = profile?.matchStrategy ?? 'unresolved';
+         const resolved = resolveEffectiveVendor(file.vendor, unitsNeedingPhotos);
+         let effectiveVendor: string | null = resolved.vendor;
+         let profile: VendorProfile | null = resolved.profile;
+         const strategyLabel = profile?.matchStrategy ?? 'unresolved';
 
         if (profile?.matchStrategy === "manual") {
           console.info(`[extractPhotos] vendor "${effectiveVendor ?? file.vendor}" is manual-only — skipping auto extraction`);
