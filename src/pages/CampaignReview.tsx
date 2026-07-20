@@ -1825,7 +1825,7 @@ export default function CampaignReview() {
                       return (
                       <Fragment key={vendor}>
                         <tr className="bg-muted/60 sticky">
-                          <td colSpan={14} className="px-3 py-2">
+                          <td colSpan={15} className="px-3 py-2">
                             <button
                               type="button"
                               onClick={() => toggleVendorCollapse(vendor)}
