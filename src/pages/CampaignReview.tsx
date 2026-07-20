@@ -918,9 +918,8 @@ export default function CampaignReview() {
           });
           continue;
         }
-        let profile = profileResolved;
-        let effectiveVendor = effectiveVendorResolved;
-        if (!profile) {
+         if (!profile) {
+
           if (singleVendorCampaign) {
             const distinctVendors = Array.from(new Set(unitsNeedingPhotos.map((u: any) => (u.vendor ?? '').trim()).filter(Boolean)));
             effectiveVendor = distinctVendors[0] ?? effectiveVendor ?? file.vendor ?? null;
