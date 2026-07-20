@@ -51,7 +51,9 @@ type Campaign = {
   option_b_end: string | null;
   option_c_start: string | null;
   option_c_end: string | null;
+  margin_pct: number | null;
 };
+
 
 type Unit = {
   id: string;
@@ -65,6 +67,7 @@ type Unit = {
   highlights: string | null;
   four_week_impressions: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk: number | null;
   cpm: number | null;
   recommended: boolean | null;
   included: boolean | null;
@@ -136,13 +139,17 @@ type VendorProfile = {
   pagesPerUnit?: number;
   skipCoverPages?: number;
   skipUntilFirstPhotoPage?: boolean;
+  /** If a unit_number pass yields zero matches, retry the file with the
+   *  order strategy. Handles older vendor decks that omit unit IDs on
+   *  photo pages while newer "Maps Photosheets" prefix each page with the ID. */
+  orderFallback?: boolean;
 };
 
 const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false },
   "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
   "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
-  "CCO":           { matchStrategy: "order",      crop: "single_midband", hasMap: false, skipUntilFirstPhotoPage: true },
+  "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "single_midband", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true },
   "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2 },
   "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false },
   "OFM":           { matchStrategy: "manual" },
@@ -244,7 +251,11 @@ const normalizeUnitToken = (s: string | null | undefined) =>
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\s+/g, "")
     .toUpperCase()
-    .trim();
+    .trim()
+    // Strip leading zeros so "003167" and "3167" match. Only strips when the
+    // remainder still contains at least one digit — keeps "0" from vanishing.
+    .replace(/^0+(?=\d)/, "");
+
 
 const fuzzyAddressMatch = (pageLine: string, locationDescription: string | null | undefined): boolean => {
   if (!locationDescription) return false;
@@ -361,7 +372,24 @@ function stripBoilerplateSentences(text: string) {
     .trim();
 }
 
-function extractHighlightText(items: Array<{ str: string; transform?: number[] }>) {
+function extractHighlightText(items: Array<{ str: string; transform?: number[] }>, rawText?: string) {
+  // 1) Prefer the labeled capture: many vendor sheets literally print
+  //    "Highlights:" before the descriptive paragraph. Grab everything after
+  //    the label up to the next blank paragraph or end of the page text.
+  const labeled = (() => {
+    const source = (rawText ?? items.map((it) => it.str ?? "").join(" ")).replace(/\r/g, "");
+    const m = /highlights\s*[:\-]\s*([\s\S]+)$/i.exec(source);
+    if (!m) return "";
+    // Stop at the first paragraph break, or trailing common section labels.
+    let chunk = m[1];
+    const stop = /\n{2,}|\s{5,}(?:additional\s+info|source|geopath|©|copyright|proposal|photo\s*sheet)/i.exec(chunk);
+    if (stop) chunk = chunk.slice(0, stop.index);
+    return chunk.replace(/\s+/g, " ").trim();
+  })();
+  if (labeled && labeled.length >= 30) {
+    return stripBoilerplateSentences(labeled);
+  }
+
   const lines: { y: number; text: string }[] = [];
   for (const item of items) {
     const text = (item.str ?? "").trim();
@@ -500,13 +528,13 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
         .eq("id", id)
         .single(),
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
+          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -935,11 +963,11 @@ export default function CampaignReview() {
         setExtractProgress((p) => ({ current: p.current, total: p.total + pdf.numPages, label: `Processing ${fileLabel}…` }));
 
         try {
-          // ------- Strategy: order (sequential page→unit assignment) -------
-          if (profile?.matchStrategy === "order") {
+          // ------- Order-strategy pass (sequential page→unit assignment) -------
+          const runOrderPass = async () => {
             const skipCover = profile.skipCoverPages ?? 0;
-            const photoCrop = cropBoxForMode(profile.crop);
-            const mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+            const photoCropOrd = cropBoxForMode(profile.crop);
+            const mapCropOrd = profile.hasMap && profile.mapBox ? profile.mapBox : null;
             let assignIdx = 0;
             let seenFirstPhotoPage = false;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -956,18 +984,14 @@ export default function CampaignReview() {
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
-                // Peek the next unit needing a photo — do NOT consume the slot
-                // until the page is successfully processed, so a bad page doesn't
-                // shift all subsequent assignments.
                 let peek = assignIdx;
                 while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
                 if (peek >= vendorUnits.length) break;
                 const unit = vendorUnits[peek];
 
-                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCropOrd, mapCropOrd);
                 if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
-                // Commit the slot only after a successful run.
                 assignIdx = peek + 1;
               } catch (pageErr: any) {
                 console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping, retrying same unit next page:`, pageErr?.message ?? pageErr);
@@ -977,104 +1001,116 @@ export default function CampaignReview() {
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
             }
-            continue;
-          }
+          };
 
-          // ------- Strategy: per-page text matching (unit_number / address / auto) -------
-          const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
-            let page: any = null;
-            try {
-              page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
-              pagesChecked++;
-              setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
-              const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
-              const items = textContent.items as Array<{ str: string; transform?: number[] }>;
-              const text = items.map((item: any) => item.str).join(' ');
+          // ------- Text-match pass (unit_number / address / auto). Returns match count. -------
+          const runTextMatchPass = async (): Promise<number> => {
+            let matchesInPass = 0;
+            const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
+              let page: any = null;
+              try {
+                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                pagesChecked++;
+                setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
+                const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
+                const items = textContent.items as Array<{ str: string; transform?: number[] }>;
+                const text = items.map((item: any) => item.str).join(' ');
 
-              let matchedUnit: any = null;
+                let matchedUnit: any = null;
 
-              if (profile?.matchStrategy === "unit_number" && unitRegex) {
-                unitRegex.lastIndex = 0;
-                const matches = Array.from(text.matchAll(unitRegex));
-                for (const m of matches) {
-                  const tok = normalizeUnitToken(m[1] ?? m[0]);
-                  if (!tok) continue;
-                  const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
-                  if (found) { matchedUnit = found; break; }
+                if (profile?.matchStrategy === "unit_number" && unitRegex) {
+                  unitRegex.lastIndex = 0;
+                  const matches = Array.from(text.matchAll(unitRegex));
+                  for (const m of matches) {
+                    const tok = normalizeUnitToken(m[1] ?? m[0]);
+                    if (!tok) continue;
+                    const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
+                    if (found) { matchedUnit = found; break; }
+                  }
+                } else if (profile?.matchStrategy === "address") {
+                  const lines = items
+                    .map((it) => (it.str ?? "").trim())
+                    .filter(Boolean)
+                    .sort((a, b) => b.length - a.length)
+                    .slice(0, 6);
+                  for (const line of lines) {
+                    const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
+                    if (found) { matchedUnit = found; break; }
+                  }
+                } else {
+                  matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
                 }
-              } else if (profile?.matchStrategy === "address") {
-                // Largest text line (by length) as proxy for the address line.
-                const lines = items
-                  .map((it) => (it.str ?? "").trim())
-                  .filter(Boolean)
-                  .sort((a, b) => b.length - a.length)
-                  .slice(0, 6);
-                for (const line of lines) {
-                  const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
-                  if (found) { matchedUnit = found; break; }
+
+                if (!matchedUnit) {
+                  console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
+                  continue;
                 }
-              } else {
-                // No profile or auto-detect fallback — keep prior generic matcher.
-                matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
-              }
+                console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
 
-              if (!matchedUnit) {
-                console.info(`[extractPhotos] ${file.original_name} p${pageNum}: no match`);
-                continue;
-              }
-              console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
+                let photoCrop: CropBox = billboardCropFallback;
+                let mapCrop: CropBox | null = null;
+                let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
-              // Decide crops based on profile, saved profile, or auto-detection.
-              let photoCrop: CropBox = billboardCropFallback;
-              let mapCrop: CropBox | null = null;
-              let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
-
-              if (profile?.crop) {
-                photoCrop = cropBoxForMode(profile.crop);
-                mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
-                // For single_left / single_midband, try real region detection too.
-                if (profile.crop === "single_left" || profile.crop === "single_midband") {
+                if (profile?.crop) {
+                  photoCrop = cropBoxForMode(profile.crop);
+                  mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+                  if (profile.crop === "single_left" || profile.crop === "single_midband") {
+                    const regions = await detectImageRegions(page);
+                    const picked = pickContentCrops(regions);
+                    if (picked.photo) photoCrop = picked.photo;
+                  }
+                  detectedSource = 'profile';
+                } else if (existingProfile && existingProfile.photo_x != null) {
+                  photoCrop = { x: existingProfile.photo_x!, y: existingProfile.photo_y!, w: existingProfile.photo_w!, h: existingProfile.photo_h! };
+                  mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
+                    ? { x: existingProfile.map_x!, y: existingProfile.map_y!, w: existingProfile.map_w!, h: existingProfile.map_h! }
+                    : null;
+                  detectedSource = 'profile';
+                } else {
                   const regions = await detectImageRegions(page);
                   const picked = pickContentCrops(regions);
-                  if (picked.photo) photoCrop = picked.photo;
+                  if (picked.photo) {
+                    photoCrop = picked.photo;
+                    mapCrop = picked.map;
+                    detectedSource = 'detection';
+                  } else {
+                    mapCrop = mapCropFallback;
+                  }
                 }
-                detectedSource = 'profile';
-              } else if (existingProfile && existingProfile.photo_x != null) {
-                photoCrop = { x: existingProfile.photo_x!, y: existingProfile.photo_y!, w: existingProfile.photo_w!, h: existingProfile.photo_h! };
-                mapCrop = existingProfile.has_inset_map && existingProfile.map_x != null
-                  ? { x: existingProfile.map_x!, y: existingProfile.map_y!, w: existingProfile.map_w!, h: existingProfile.map_h! }
-                  : null;
-                detectedSource = 'profile';
-              } else {
-                const regions = await detectImageRegions(page);
-                const picked = pickContentCrops(regions);
-                if (picked.photo) {
-                  photoCrop = picked.photo;
-                  mapCrop = picked.map;
-                  detectedSource = 'detection';
-                } else {
-                  mapCrop = mapCropFallback;
+
+                if (profile && profile.hasMap === false) mapCrop = null;
+
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
+                if (photoSaved) { totalPhotos++; matchedCount++; matchesInPass++; }
+                if (mapSaved) totalMaps++;
+
+                if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
+                  detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
                 }
+              } catch (pageErr: any) {
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
+                continue;
+              } finally {
+                page?.cleanup?.();
+                setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
+            }
+            return matchesInPass;
+          };
 
-              // Hard guard: profiles with hasMap:false must NEVER produce a map.
-              if (profile && profile.hasMap === false) mapCrop = null;
-
-              const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, matchedUnit, photoCrop, mapCrop);
-              if (photoSaved) { totalPhotos++; matchedCount++; }
-              if (mapSaved) totalMaps++;
-
-              if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
-                detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
-              }
-            } catch (pageErr: any) {
-              console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
-              continue;
-            } finally {
-              page?.cleanup?.();
-              setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
+          if (profile.matchStrategy === "order") {
+            await runOrderPass();
+          } else {
+            const matched = await runTextMatchPass();
+            // orderFallback: if the text-match pass found nothing (e.g. older
+            // vendor deck without unit IDs on photo pages), retry the same file
+            // using the order strategy. The map page will naturally match no
+            // unit; overview-map logic elsewhere handles that separately.
+            if (matched === 0 && profile.orderFallback) {
+              console.info(`[extractPhotos] ${fileLabel}: 0 unit_number matches — falling back to order strategy`);
+              await runOrderPass();
             }
           }
         } finally {
@@ -1297,7 +1333,7 @@ export default function CampaignReview() {
                 unit = findUnitForPage(text, vendorUnits, file.vendor);
               }
 
-              const paragraph = unit ? extractHighlightText(items) : "";
+              const paragraph = unit ? extractHighlightText(items, text) : "";
               if (unit && paragraph) {
                 const existing = collected.get(unit.id) ?? [];
                 if (existing.length === 0) matchedCount++;
@@ -1773,7 +1809,8 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-left">Location</th>
                       <th className="px-2 py-2.5 text-left">Highlights</th>
                       <th className="px-2 py-2.5 text-right">4wk Imp</th>
-                      <th className="px-2 py-2.5 text-right">Rate</th>
+                      <th className="px-2 py-2.5 text-right">4-Wk Rate</th>
+                      <th className="px-2 py-2.5 text-right">Total</th>
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
                       <th className="px-2 py-2.5 text-center bg-[hsl(var(--accent-gold)/0.18)]">Recommend</th>
@@ -1788,7 +1825,7 @@ export default function CampaignReview() {
                       return (
                       <Fragment key={vendor}>
                         <tr className="bg-muted/60 sticky">
-                          <td colSpan={14} className="px-3 py-2">
+                          <td colSpan={15} className="px-3 py-2">
                             <button
                               type="button"
                               onClick={() => toggleVendorCollapse(vendor)}
@@ -1944,7 +1981,10 @@ export default function CampaignReview() {
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {fmtNum(u.four_week_impressions)}
                           </td>
-                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="4-week rate shown in the client Portal (negotiated × margin)">
+                            {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}
+                          </td>
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Total campaign cost from the Excel (all periods + production + install)">
                             {fmtMoney(u.total_cost)}
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
