@@ -251,7 +251,11 @@ const normalizeUnitToken = (s: string | null | undefined) =>
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\s+/g, "")
     .toUpperCase()
-    .trim();
+    .trim()
+    // Strip leading zeros so "003167" and "3167" match. Only strips when the
+    // remainder still contains at least one digit — keeps "0" from vanishing.
+    .replace(/^0+(?=\d)/, "");
+
 
 const fuzzyAddressMatch = (pageLine: string, locationDescription: string | null | undefined): boolean => {
   if (!locationDescription) return false;
