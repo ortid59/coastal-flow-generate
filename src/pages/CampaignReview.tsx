@@ -1809,7 +1809,8 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-left">Location</th>
                       <th className="px-2 py-2.5 text-left">Highlights</th>
                       <th className="px-2 py-2.5 text-right">4wk Imp</th>
-                      <th className="px-2 py-2.5 text-right">Rate</th>
+                      <th className="px-2 py-2.5 text-right">4-Wk Rate</th>
+                      <th className="px-2 py-2.5 text-right">Total</th>
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
                       <th className="px-2 py-2.5 text-center bg-[hsl(var(--accent-gold)/0.18)]">Recommend</th>
