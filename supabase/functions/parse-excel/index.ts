@@ -151,9 +151,32 @@ const TEXT_FIELDS_NULLABLE_NUMERIC = new Set(["spot_length", "loop_length"]);
 const GREEN_HEXES = new Set(["D9EAD3", "C6EFCE", "B6D7A8", "93C47D"]);
 
 // Normalize: strip surrounding whitespace, collapse internal whitespace
-// (including embedded newlines), lowercase. Handles non-breaking spaces.
+// (including embedded newlines), unify hyphens & non-breaking spaces, lowercase.
 const norm = (s: string) =>
-  s.replace(/\s+/g, " ").replace(/\u00a0/g, " ").trim().toLowerCase();
+  s
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+// Fuzzy fallback for headers that don't match an exact dictionary key.
+// PRIORITY ORDER is critical: a header containing "total" NEVER maps to a
+// rate field; "negotiated" beats "rate card" beats "net rate".
+function fuzzyFieldFor(headerNorm: string): string | null {
+  const h = headerNorm;
+  const hasTotal = h.includes("total");
+  if (!hasTotal && h.includes("negotiated")) return "negotiated_rate_4wk";
+  if (!hasTotal && h.includes("rate card")) return "rate_card_4wk";
+  if (!hasTotal && h.includes("net rate")) return "negotiated_rate_4wk";
+  if (hasTotal && (h.includes("cost") || h.includes("investment") || h.includes("gross") || /\btotal\b/.test(h))) return "total_cost";
+  const isImpr = h.includes("impression") || /\bimp\b/.test(h) || h.includes("a18+") || h.includes("18+");
+  if (isImpr) {
+    if ((h.includes("4") || h.includes("four")) && (h.includes("week") || h.includes("wk"))) return "four_week_impressions";
+    if (h.includes("week") || h.includes("wk") || h.includes("weekly")) return "weekly_impressions";
+  }
+  return null;
+}
 
 function buildHeaderIndexFrom(row: any[], map: Record<string, string>): Record<string, number> {
   const lookup: Record<string, string> = {};
@@ -161,7 +184,8 @@ function buildHeaderIndexFrom(row: any[], map: Record<string, string>): Record<s
   const out: Record<string, number> = {};
   row.forEach((cell, idx) => {
     if (cell == null) return;
-    const field = lookup[norm(String(cell))];
+    const n = norm(String(cell));
+    const field = lookup[n] ?? fuzzyFieldFor(n);
     if (field && out[field] == null) out[field] = idx;
   });
   return out;
