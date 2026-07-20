@@ -362,14 +362,30 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           {/* Right photo */}
           <div className="relative bg-[hsl(var(--off-white))] min-h-[40vh] lg:min-h-full overflow-hidden">
             {heroPhoto ? (
-              <motion.img
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-                src={heroPhoto}
-                alt="Featured billboard"
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+              <>
+                {/* Blurred fill background — visible only when the uploaded
+                 *  image is landscape (width > height) so we don't crop it.
+                 *  Portrait images fill via object-cover and hide this layer. */}
+                <img
+                  src={heroPhoto}
+                  alt=""
+                  aria-hidden
+                  className={`absolute inset-0 h-full w-full object-cover scale-125 blur-2xl opacity-70 transition-opacity ${heroIsLandscape ? "" : "hidden"}`}
+                />
+                <motion.img
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+                  src={heroPhoto}
+                  alt="Featured billboard"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setHeroIsLandscape(img.naturalWidth > img.naturalHeight);
+                  }}
+                  className={`absolute inset-0 h-full w-full ${heroIsLandscape ? "object-contain" : "object-cover"}`}
+                  style={{ objectPosition: "center" }}
+                />
+              </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                 <ImageOff className="h-14 w-14" />
