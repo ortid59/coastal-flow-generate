@@ -372,7 +372,24 @@ function stripBoilerplateSentences(text: string) {
     .trim();
 }
 
-function extractHighlightText(items: Array<{ str: string; transform?: number[] }>) {
+function extractHighlightText(items: Array<{ str: string; transform?: number[] }>, rawText?: string) {
+  // 1) Prefer the labeled capture: many vendor sheets literally print
+  //    "Highlights:" before the descriptive paragraph. Grab everything after
+  //    the label up to the next blank paragraph or end of the page text.
+  const labeled = (() => {
+    const source = (rawText ?? items.map((it) => it.str ?? "").join(" ")).replace(/\r/g, "");
+    const m = /highlights\s*[:\-]\s*([\s\S]+)$/i.exec(source);
+    if (!m) return "";
+    // Stop at the first paragraph break, or trailing common section labels.
+    let chunk = m[1];
+    const stop = /\n{2,}|\s{5,}(?:additional\s+info|source|geopath|©|copyright|proposal|photo\s*sheet)/i.exec(chunk);
+    if (stop) chunk = chunk.slice(0, stop.index);
+    return chunk.replace(/\s+/g, " ").trim();
+  })();
+  if (labeled && labeled.length >= 30) {
+    return stripBoilerplateSentences(labeled);
+  }
+
   const lines: { y: number; text: string }[] = [];
   for (const item of items) {
     const text = (item.str ?? "").trim();
