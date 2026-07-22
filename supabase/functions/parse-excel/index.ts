@@ -177,6 +177,7 @@ const norm = (s: string) =>
 function fuzzyFieldFor(headerNorm: string): string | null {
   const h = headerNorm;
   const hasTotal = h.includes("total");
+  if (!hasTotal && h.includes("proposed price")) return "negotiated_rate_4wk";
   if (!hasTotal && h.includes("negotiated")) return "negotiated_rate_4wk";
   if (!hasTotal && h.includes("rate card")) return "rate_card_4wk";
   if (!hasTotal && h.includes("net rate")) return "negotiated_rate_4wk";
