@@ -128,8 +128,8 @@ const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
 // ---------- Vendor profile registry ----------
-type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual";
-type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions";
+type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial";
+type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions" | "image_regions_left";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
   unitRegex?: string;
@@ -140,28 +140,29 @@ type VendorProfile = {
   skipCoverPages?: number;
   skipUntilFirstPhotoPage?: boolean;
   /** If a unit_number pass yields zero matches, retry the file with the
-   *  order strategy. Handles older vendor decks that omit unit IDs on
-   *  photo pages while newer "Maps Photosheets" prefix each page with the ID. */
+   *  order strategy. */
   orderFallback?: boolean;
-  /** Alternate vendor spellings that should also resolve to this profile. */
+  /** Alternate vendor spellings that also resolve to this profile. */
   aliases?: string[];
+  /** Vendor delivers Excel only — no PDF headsheet expected. Suppresses
+   *  "no PDF for market" warnings and auto-extraction for its files. */
+  excelOnly?: boolean;
 };
 
 const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false, aliases: ["Alchemy"] },
-  "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
-  "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
+  "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2010-\\u2015\\u2212][0-9]{4,6})", crop: "image_regions_left", hasMap: false },
+  "Tasty Media":   { matchStrategy: "district_text", crop: "full_bleed", hasMap: false },
   "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true, aliases: ["Clear Channel Outdoor", "Clear Channel", "ClearChannel"] },
-  "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2, aliases: ["Lamar Advertising"] },
-  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, aliases: ["BeSeen", "Be Seen Media"] },
+  "Lamar":         { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Lamar Advertising"] },
+  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, pagesPerUnit: 2, aliases: ["BeSeen", "Be Seen Media"] },
   "OFM":           { matchStrategy: "manual" },
-  "New Tradition": { matchStrategy: "manual", aliases: ["New Tradition Media"] },
+  "New Tradition": { matchStrategy: "unit_number_partial", crop: "full_bleed", hasMap: false, aliases: ["New Tradition Media"] },
+  "Orange Barrel": { matchStrategy: "manual", excelOnly: true, aliases: ["Orange Barrel Media", "OBM", "IKE"] },
 };
 
 // Generic profile used ONLY when a single-vendor campaign has a file whose
-// vendor string doesn't resolve to a registered profile. Uses the generic
-// findUnitForPage matcher (falls through when unitRegex is absent), the
-// image-region crop mode, and labeled-highlight capture.
+// vendor string doesn't resolve to a registered profile.
 const GENERIC_PROFILE: VendorProfile = {
   matchStrategy: "unit_number",
   crop: "image_regions",
@@ -511,10 +512,15 @@ export default function CampaignReview() {
     const pdfs = vendorFiles.filter((f) => f.original_name?.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) return [];
     const marketUnitCounts = new Map<string, number>();
+    // Track units under excel-only vendors so we don't flag their markets as
+    // "uncovered" — those vendors deliver Excel only and get photos via
+    // manual upload or Excel-embedded imagery.
     for (const u of units) {
       const m = (u.market ?? "").trim();
       if (!m) continue;
       if (u.billboard_photo_url) continue;
+      const vp = resolveVendorProfile(u.vendor);
+      if (vp?.excelOnly) continue;
       marketUnitCounts.set(m, (marketUnitCounts.get(m) ?? 0) + 1);
     }
     const out: Array<{ market: string; count: number }> = [];
@@ -522,7 +528,7 @@ export default function CampaignReview() {
       const tokens = market
         .split(/[\s,]+/)
         .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t)); // skip "IL", "CA"
+        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t));
       const covered = pdfs.some((f) => {
         const name = (f.original_name ?? "").toLowerCase();
         return tokens.some((t) => name.includes(t));
@@ -698,7 +704,7 @@ export default function CampaignReview() {
 
       const { data: units, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, billboard_photo_url, inset_map_url, row_index')
+        .select('id, unit_number, vendor, market, location_description, billboard_photo_url, inset_map_url, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
@@ -738,6 +744,24 @@ export default function CampaignReview() {
 
       // Detect image regions on a PDF page via the operator list. Coordinates
       // are returned in 0..1 page-relative space with y measured from the top.
+      // Post-processing (Rule A): clip to page rect, dedup by IoU>0.8, drop
+      // decorative strips (aspect>4:1), drop tiny (<3%).
+      const rectIoU = (a: CropBox, b: CropBox): number => {
+        const x1 = Math.max(a.x, b.x);
+        const y1 = Math.max(a.y, b.y);
+        const x2 = Math.min(a.x + a.w, b.x + b.w);
+        const y2 = Math.min(a.y + a.h, b.y + b.h);
+        const iw = Math.max(0, x2 - x1), ih = Math.max(0, y2 - y1);
+        const inter = iw * ih;
+        const ua = a.w * a.h + b.w * b.h - inter;
+        return ua > 0 ? inter / ua : 0;
+      };
+      const rectUnion = (a: CropBox, b: CropBox): CropBox => {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const x2 = Math.max(a.x + a.w, b.x + b.w);
+        const y2 = Math.max(a.y + a.h, b.y + b.h);
+        return { x, y, w: x2 - x, h: y2 - y };
+      };
       const detectImageRegions = async (page: any): Promise<Array<CropBox & { area: number }>> => {
         try {
           const view: number[] = page.view ?? [0, 0, 612, 792];
@@ -752,7 +776,7 @@ export default function CampaignReview() {
             a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
             a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
           ];
-          const regions: Array<CropBox & { area: number }> = [];
+          const raw: CropBox[] = [];
           for (let i = 0; i < ops.fnArray.length; i++) {
             const fn = ops.fnArray[i];
             const args = ops.argsArray[i];
@@ -771,26 +795,49 @@ export default function CampaignReview() {
               ]);
               const xs = corners.map((c) => c[0]);
               const ys = corners.map((c) => c[1]);
-              const minX = Math.min(...xs), maxX = Math.max(...xs);
-              const minY = Math.min(...ys), maxY = Math.max(...ys);
-              const x = Math.max(0, Math.min(1, minX / pdfW));
-              const w = Math.max(0, Math.min(1, (maxX - minX) / pdfW));
-              const yTop = Math.max(0, Math.min(1, 1 - maxY / pdfH));
-              const h = Math.max(0, Math.min(1, (maxY - minY) / pdfH));
-              if (w > 0 && h > 0) regions.push({ x, y: yTop, w, h, area: w * h });
+              // Clip to page rect BEFORE clamping — some vendor images extend
+              // 1.3–1.4× beyond the page and would otherwise dominate area.
+              const minX = Math.max(0, Math.min(pdfW, Math.min(...xs)));
+              const maxX = Math.max(0, Math.min(pdfW, Math.max(...xs)));
+              const minY = Math.max(0, Math.min(pdfH, Math.min(...ys)));
+              const maxY = Math.max(0, Math.min(pdfH, Math.max(...ys)));
+              const x = minX / pdfW;
+              const w = (maxX - minX) / pdfW;
+              const yTop = 1 - maxY / pdfH;
+              const h = (maxY - minY) / pdfH;
+              if (w > 0.005 && h > 0.005) raw.push({ x, y: yTop, w, h });
             }
           }
-          return regions;
+          // Dedup by IoU>0.8 (merge into union).
+          const merged: CropBox[] = [];
+          for (const r of raw) {
+            let placed = false;
+            for (let i = 0; i < merged.length; i++) {
+              if (rectIoU(merged[i], r) > 0.8) { merged[i] = rectUnion(merged[i], r); placed = true; break; }
+            }
+            if (!placed) merged.push(r);
+          }
+          // Exclude decorative strips (aspect > 4:1) and tiny regions (< 3%).
+          const out: Array<CropBox & { area: number }> = [];
+          for (const r of merged) {
+            const area = r.w * r.h;
+            if (area < 0.03) continue;
+            const ar = r.h > 0 ? r.w / r.h : 999;
+            if (ar > 4 || ar < 0.25) continue;
+            out.push({ ...r, area });
+          }
+          return out;
         } catch (e) {
           console.warn('[extractPhotos] detectImageRegions failed:', e);
           return [];
         }
       };
 
+      // Legacy pick for older fallback paths. image_regions crop uses its own
+      // in-place logic below with the map gating rules.
       const pickContentCrops = (regions: Array<CropBox & { area: number }>): { photo: CropBox | null; map: CropBox | null } => {
         const content = regions
           .filter((r) => {
-            if (r.area < 0.05) return false; // tiny: logos/icons
             const fullWidth = r.w > 0.8;
             if (fullWidth && r.y < 0.25) return false; // header strip
             if (fullWidth && r.y + r.h > 0.80) return false; // footer strip
@@ -808,6 +855,33 @@ export default function CampaignReview() {
         return { photo, map };
       };
 
+      // Rule A5/A6/A7: pick photo + map with strict gating.
+      //   - Skip page if >10 raw regions (mosaic/index).
+      //   - Skip page if no region >= 5% (not a photo page).
+      //   - Map only when hasMap, area 3-45%, aspect 0.4-2.6, IoU with photo < 0.2.
+      const pickImageRegions = (
+        regions: Array<CropBox & { area: number }>,
+        hasMap: boolean,
+      ): { photo: CropBox | null; map: CropBox | null; skipPage: boolean } => {
+        if (regions.length > 10) return { photo: null, map: null, skipPage: true };
+        const bigEnough = regions.filter((r) => r.area >= 0.05);
+        if (!bigEnough.length) return { photo: null, map: null, skipPage: true };
+        const sorted = [...regions].sort((a, b) => b.area - a.area);
+        const photo = sorted[0];
+        let map: CropBox | null = null;
+        if (hasMap) {
+          for (const r of sorted.slice(1)) {
+            const ar = r.h > 0 ? r.w / r.h : 999;
+            if (r.area < 0.03 || r.area > 0.45) continue;
+            if (ar < 0.4 || ar > 2.6) continue;
+            if (rectIoU(r, photo) >= 0.2) continue;
+            map = { x: r.x, y: r.y, w: r.w, h: r.h };
+            break;
+          }
+        }
+        return { photo: { x: photo.x, y: photo.y, w: photo.w, h: photo.h }, map, skipPage: false };
+      };
+
       let totalPhotos = 0;
       let totalMaps = 0;
       let pagesChecked = 0;
@@ -815,11 +889,12 @@ export default function CampaignReview() {
       // Crop modes from the vendor profile registry, resolved to crop boxes.
       const cropBoxForMode = (mode: VendorCropMode | undefined): CropBox => {
         switch (mode) {
-          case "single_left":     return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
-          case "full_bleed":      return { x: 0.0,  y: 0.15, w: 1.0,  h: 0.73 };
-          case "single_midband":  return { x: 0.0,  y: 0.18, w: 1.0,  h: 0.55 };
-          case "photo_plus_map":  return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
-          default:                return billboardCropFallback;
+          case "single_left":         return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          case "image_regions_left":  return { x: 0.00, y: 0.05, w: 0.55, h: 0.75 };
+          case "full_bleed":          return { x: 0.0,  y: 0.15, w: 1.0,  h: 0.73 };
+          case "single_midband":      return { x: 0.0,  y: 0.18, w: 1.0,  h: 0.55 };
+          case "photo_plus_map":      return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          default:                    return billboardCropFallback;
         }
       };
 
@@ -994,12 +1069,19 @@ export default function CampaignReview() {
 
         try {
           // ------- Order-strategy pass (sequential page→unit assignment) -------
+          // pagesPerUnit=N: only pages where ((pageNum - skipCover - 1) % N) === 0
+          // advance the unit index. Other pages (detail spreads, spec pages) are
+          // still checked but never consume a slot. Skipped pages by Rule A7
+          // (no content image) also do NOT consume a slot.
           const runOrderPass = async () => {
             const skipCover = profile.skipCoverPages ?? 0;
-            const photoCropOrd = cropBoxForMode(profile.crop);
-            const mapCropOrd = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+            const pagesPerUnit = Math.max(1, profile.pagesPerUnit ?? 1);
+            const useImageRegions = profile.crop === "image_regions" || profile.crop === "image_regions_left";
+            const staticPhotoCrop = cropBoxForMode(profile.crop);
+            const staticMapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
             let assignIdx = 0;
             let seenFirstPhotoPage = false;
+            let photoPageCounter = 0;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
               let page: any = null;
@@ -1008,18 +1090,42 @@ export default function CampaignReview() {
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${fileLabel}` }));
                 if (pageNum <= skipCover) continue;
+                const regions = await detectImageRegions(page);
                 if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                  const regions = await detectImageRegions(page);
                   const hasContentImage = regions.some((r) => r.area >= 0.05);
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
+                // Rule A6/A7: skip mosaic (>10 imgs) and non-photo pages.
+                if (regions.length > 10) continue;
+                const hasBigEnough = regions.some((r) => r.area >= 0.05);
+                if (!hasBigEnough) continue;
+                // pagesPerUnit: only 1st page of each unit's window advances.
+                if (photoPageCounter % pagesPerUnit !== 0) { photoPageCounter++; continue; }
+                photoPageCounter++;
+
                 let peek = assignIdx;
                 while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
                 if (peek >= vendorUnits.length) break;
                 const unit = vendorUnits[peek];
 
-                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCropOrd, mapCropOrd);
+                let photoCrop = staticPhotoCrop;
+                let mapCrop: CropBox | null = staticMapCrop;
+                if (useImageRegions) {
+                  if (profile.crop === "image_regions_left") {
+                    // Adkom: prefer largest image whose centre is in the left 60%.
+                    const left = regions.filter((r) => (r.x + r.w / 2) < 0.6).sort((a, b) => b.area - a.area);
+                    photoCrop = left[0] ?? staticPhotoCrop;
+                    mapCrop = null;
+                  } else {
+                    const picked = pickImageRegions(regions, !!profile.hasMap);
+                    if (picked.skipPage) continue;
+                    photoCrop = picked.photo ?? staticPhotoCrop;
+                    mapCrop = picked.map;
+                  }
+                }
+
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
                 if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
                 assignIdx = peek + 1;
@@ -1058,6 +1164,32 @@ export default function CampaignReview() {
                     if (!tok) continue;
                     const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
                     if (found) { matchedUnit = found; break; }
+                  }
+                } else if (profile?.matchStrategy === "unit_number_partial") {
+                  // New Tradition: media kits print "#NNNN" or bare 3-4 digit
+                  // codes on photo pages. Match ONLY when the token equals
+                  // exactly one Excel unit number in the pool. Never order-match.
+                  const tokens = Array.from(text.matchAll(/#?\b(\d{3,6})\b/g)).map((m) => normalizeUnitToken(m[1]));
+                  const seen = new Set<string>();
+                  for (const tok of tokens) {
+                    if (!tok || seen.has(tok)) continue;
+                    seen.add(tok);
+                    const hits = vendorUnits.filter((u) => normalizeUnitToken(u.unit_number) === tok);
+                    if (hits.length === 1) { matchedUnit = hits[0]; break; }
+                  }
+                } else if (profile?.matchStrategy === "district_text") {
+                  // Tasty Media: pages carry "Where <District Name>". Match
+                  // against unit.market or unit.location_description tokens.
+                  const whereMatch = /(?:^|\W)where\s+([A-Za-z][A-Za-z\s\-']{2,40}?)(?:\s{2,}|$|\d|,)/i.exec(text);
+                  const district = whereMatch?.[1]?.trim();
+                  if (district) {
+                    const dNorm = normalizeMatchText(district);
+                    matchedUnit = vendorUnits.find((u) => {
+                      const mkt = normalizeMatchText(u.market ?? "");
+                      const loc = normalizeMatchText(u.location_description ?? "");
+                      return (mkt && (mkt.includes(dNorm) || dNorm.includes(mkt))) ||
+                             (loc && loc.includes(dNorm));
+                    }) ?? null;
                   }
                 } else if (profile?.matchStrategy === "address") {
                   const lines = items
@@ -1115,26 +1247,29 @@ export default function CampaignReview() {
                 let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
                 if (profile?.crop === "image_regions") {
-                  // Crop exactly to the actual raster image bounding boxes on
-                  // the page. Largest = billboard photo. Second (>=3% area) =
-                  // inset map. Only one image → no map, no placeholder.
+                  // Rule A: strict picker (>10 skip, need ≥5% img, aspect/IoU gate on map).
                   const regions = await detectImageRegions(page);
-                  const content = regions
-                    .filter((r) => r.area >= 0.03) // drop logos/rules
-                    .sort((a, b) => b.area - a.area);
-                  if (content.length >= 1) {
-                    photoCrop = { x: content[0].x, y: content[0].y, w: content[0].w, h: content[0].h };
-                    detectedSource = 'detection';
-                    const second = content.slice(1).find((r) => {
-                      const dx = Math.abs((r.x + r.w / 2) - (content[0].x + content[0].w / 2));
-                      const dy = Math.abs((r.y + r.h / 2) - (content[0].y + content[0].h / 2));
-                      return (dx > 0.1 || dy > 0.1) && r.area >= 0.03;
-                    });
-                    mapCrop = second ? { x: second.x, y: second.y, w: second.w, h: second.h } : null;
-                  } else {
-                    console.warn(`[extractPhotos] ${file.original_name} p${pageNum}: no image regions detected — falling back`);
-                    mapCrop = null;
+                  const picked = pickImageRegions(regions, !!profile.hasMap);
+                  if (picked.skipPage) {
+                    console.info(`[extractPhotos] ${file.original_name} p${pageNum}: skipped by image_regions rules`);
+                    continue;
                   }
+                  if (picked.photo) {
+                    photoCrop = picked.photo;
+                    detectedSource = 'detection';
+                    mapCrop = picked.map;
+                  }
+                } else if (profile?.crop === "image_regions_left") {
+                  const regions = await detectImageRegions(page);
+                  const left = regions.filter((r) => (r.x + r.w / 2) < 0.6).sort((a, b) => b.area - a.area);
+                  if (left.length) {
+                    photoCrop = { x: left[0].x, y: left[0].y, w: left[0].w, h: left[0].h };
+                    detectedSource = 'detection';
+                  } else {
+                    photoCrop = cropBoxForMode("image_regions_left");
+                    detectedSource = 'profile';
+                  }
+                  mapCrop = null;
                 } else if (profile?.crop) {
                   photoCrop = cropBoxForMode(profile.crop);
                   mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
@@ -1276,7 +1411,7 @@ export default function CampaignReview() {
 
       const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, highlights, row_index')
+        .select('id, unit_number, vendor, market, location_description, highlights, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
@@ -1405,6 +1540,27 @@ export default function CampaignReview() {
                   const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
                   if (found) { unit = found; break; }
                 }
+              } else if (profile?.matchStrategy === "unit_number_partial") {
+                const tokens = Array.from(text.matchAll(/#?\b(\d{3,6})\b/g)).map((m) => normalizeUnitToken(m[1]));
+                const seen = new Set<string>();
+                for (const tok of tokens) {
+                  if (!tok || seen.has(tok)) continue;
+                  seen.add(tok);
+                  const hits = vendorUnits.filter((u) => normalizeUnitToken(u.unit_number) === tok);
+                  if (hits.length === 1) { unit = hits[0]; break; }
+                }
+              } else if (profile?.matchStrategy === "district_text") {
+                const whereMatch = /(?:^|\W)where\s+([A-Za-z][A-Za-z\s\-']{2,40}?)(?:\s{2,}|$|\d|,)/i.exec(text);
+                const district = whereMatch?.[1]?.trim();
+                if (district) {
+                  const dNorm = normalizeMatchText(district);
+                  unit = vendorUnits.find((u: any) => {
+                    const mkt = normalizeMatchText(u.market ?? "");
+                    const loc = normalizeMatchText(u.location_description ?? "");
+                    return (mkt && (mkt.includes(dNorm) || dNorm.includes(mkt))) ||
+                           (loc && loc.includes(dNorm));
+                  }) ?? null;
+                }
               } else if (profile?.matchStrategy === "address") {
                 const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
                   .sort((a, b) => b.length - a.length).slice(0, 6);
@@ -1415,7 +1571,6 @@ export default function CampaignReview() {
               } else if (profile?.matchStrategy === "order") {
                 if (pageNum <= skipCover) { /* cover */ }
                 else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                  // Without rendering, approximate: treat first text-light page as first photo page.
                   if (items.length < 40) seenFirstPhotoPage = true;
                 } else {
                   unit = vendorUnits[orderIdx] ?? null;
