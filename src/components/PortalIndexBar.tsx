@@ -1,5 +1,5 @@
 import { ImageOff, MapPin, Sparkles } from "lucide-react";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { displayAddress } from "@/lib/shortAddress";
 import { fmtCompactImpressions, fmtRateShort } from "@/lib/format";
 
 type ChipUnit = {
