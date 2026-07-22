@@ -7,7 +7,7 @@ import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 
