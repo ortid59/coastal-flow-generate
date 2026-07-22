@@ -145,7 +145,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .from("units")
           .select(
             // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, address, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
