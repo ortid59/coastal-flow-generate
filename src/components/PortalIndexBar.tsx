@@ -54,7 +54,7 @@ export function PortalIndexBar({ units }: Props) {
         {/* 2-column grid of small tiles */}
         <ol className="grid gap-3 sm:grid-cols-2">
           {units.map((u, i) => {
-            const short = parseShortAddress(u.location_description) || `Unit ${u.unit_number}`;
+            const short = displayAddress(u) || `Unit ${u.unit_number}`;
             const weekly =
               u.weekly_impressions ??
               (u.four_week_impressions ? Math.round(u.four_week_impressions / 4) : null);
