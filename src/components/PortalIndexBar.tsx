@@ -6,6 +6,7 @@ type ChipUnit = {
   id: string;
   unit_number: string;
   location_description: string | null;
+  address?: string | null;
   billboard_photo_url: string | null;
   weekly_impressions?: number | null;
   four_week_impressions?: number | null;
