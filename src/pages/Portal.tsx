@@ -535,7 +535,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                           <ul className="space-y-1">
                             {visibleUnits.map((u) => (
                               <li key={u.id} className="text-xs text-foreground/80 truncate">
-                                • {u.location_description ?? u.unit_number}
+                                • {displayAddress(u) || u.location_description || u.unit_number}
                               </li>
                             ))}
                           </ul>
