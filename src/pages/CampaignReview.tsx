@@ -739,6 +739,24 @@ export default function CampaignReview() {
 
       // Detect image regions on a PDF page via the operator list. Coordinates
       // are returned in 0..1 page-relative space with y measured from the top.
+      // Post-processing (Rule A): clip to page rect, dedup by IoU>0.8, drop
+      // decorative strips (aspect>4:1), drop tiny (<3%).
+      const rectIoU = (a: CropBox, b: CropBox): number => {
+        const x1 = Math.max(a.x, b.x);
+        const y1 = Math.max(a.y, b.y);
+        const x2 = Math.min(a.x + a.w, b.x + b.w);
+        const y2 = Math.min(a.y + a.h, b.y + b.h);
+        const iw = Math.max(0, x2 - x1), ih = Math.max(0, y2 - y1);
+        const inter = iw * ih;
+        const ua = a.w * a.h + b.w * b.h - inter;
+        return ua > 0 ? inter / ua : 0;
+      };
+      const rectUnion = (a: CropBox, b: CropBox): CropBox => {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const x2 = Math.max(a.x + a.w, b.x + b.w);
+        const y2 = Math.max(a.y + a.h, b.y + b.h);
+        return { x, y, w: x2 - x, h: y2 - y };
+      };
       const detectImageRegions = async (page: any): Promise<Array<CropBox & { area: number }>> => {
         try {
           const view: number[] = page.view ?? [0, 0, 612, 792];
@@ -753,7 +771,7 @@ export default function CampaignReview() {
             a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
             a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
           ];
-          const regions: Array<CropBox & { area: number }> = [];
+          const raw: CropBox[] = [];
           for (let i = 0; i < ops.fnArray.length; i++) {
             const fn = ops.fnArray[i];
             const args = ops.argsArray[i];
@@ -772,26 +790,49 @@ export default function CampaignReview() {
               ]);
               const xs = corners.map((c) => c[0]);
               const ys = corners.map((c) => c[1]);
-              const minX = Math.min(...xs), maxX = Math.max(...xs);
-              const minY = Math.min(...ys), maxY = Math.max(...ys);
-              const x = Math.max(0, Math.min(1, minX / pdfW));
-              const w = Math.max(0, Math.min(1, (maxX - minX) / pdfW));
-              const yTop = Math.max(0, Math.min(1, 1 - maxY / pdfH));
-              const h = Math.max(0, Math.min(1, (maxY - minY) / pdfH));
-              if (w > 0 && h > 0) regions.push({ x, y: yTop, w, h, area: w * h });
+              // Clip to page rect BEFORE clamping — some vendor images extend
+              // 1.3–1.4× beyond the page and would otherwise dominate area.
+              const minX = Math.max(0, Math.min(pdfW, Math.min(...xs)));
+              const maxX = Math.max(0, Math.min(pdfW, Math.max(...xs)));
+              const minY = Math.max(0, Math.min(pdfH, Math.min(...ys)));
+              const maxY = Math.max(0, Math.min(pdfH, Math.max(...ys)));
+              const x = minX / pdfW;
+              const w = (maxX - minX) / pdfW;
+              const yTop = 1 - maxY / pdfH;
+              const h = (maxY - minY) / pdfH;
+              if (w > 0.005 && h > 0.005) raw.push({ x, y: yTop, w, h });
             }
           }
-          return regions;
+          // Dedup by IoU>0.8 (merge into union).
+          const merged: CropBox[] = [];
+          for (const r of raw) {
+            let placed = false;
+            for (let i = 0; i < merged.length; i++) {
+              if (rectIoU(merged[i], r) > 0.8) { merged[i] = rectUnion(merged[i], r); placed = true; break; }
+            }
+            if (!placed) merged.push(r);
+          }
+          // Exclude decorative strips (aspect > 4:1) and tiny regions (< 3%).
+          const out: Array<CropBox & { area: number }> = [];
+          for (const r of merged) {
+            const area = r.w * r.h;
+            if (area < 0.03) continue;
+            const ar = r.h > 0 ? r.w / r.h : 999;
+            if (ar > 4 || ar < 0.25) continue;
+            out.push({ ...r, area });
+          }
+          return out;
         } catch (e) {
           console.warn('[extractPhotos] detectImageRegions failed:', e);
           return [];
         }
       };
 
+      // Legacy pick for older fallback paths. image_regions crop uses its own
+      // in-place logic below with the map gating rules.
       const pickContentCrops = (regions: Array<CropBox & { area: number }>): { photo: CropBox | null; map: CropBox | null } => {
         const content = regions
           .filter((r) => {
-            if (r.area < 0.05) return false; // tiny: logos/icons
             const fullWidth = r.w > 0.8;
             if (fullWidth && r.y < 0.25) return false; // header strip
             if (fullWidth && r.y + r.h > 0.80) return false; // footer strip
@@ -807,6 +848,33 @@ export default function CampaignReview() {
           return dx > 0.15 || dy > 0.15;
         }) ?? null;
         return { photo, map };
+      };
+
+      // Rule A5/A6/A7: pick photo + map with strict gating.
+      //   - Skip page if >10 raw regions (mosaic/index).
+      //   - Skip page if no region >= 5% (not a photo page).
+      //   - Map only when hasMap, area 3-45%, aspect 0.4-2.6, IoU with photo < 0.2.
+      const pickImageRegions = (
+        regions: Array<CropBox & { area: number }>,
+        hasMap: boolean,
+      ): { photo: CropBox | null; map: CropBox | null; skipPage: boolean } => {
+        if (regions.length > 10) return { photo: null, map: null, skipPage: true };
+        const bigEnough = regions.filter((r) => r.area >= 0.05);
+        if (!bigEnough.length) return { photo: null, map: null, skipPage: true };
+        const sorted = [...regions].sort((a, b) => b.area - a.area);
+        const photo = sorted[0];
+        let map: CropBox | null = null;
+        if (hasMap) {
+          for (const r of sorted.slice(1)) {
+            const ar = r.h > 0 ? r.w / r.h : 999;
+            if (r.area < 0.03 || r.area > 0.45) continue;
+            if (ar < 0.4 || ar > 2.6) continue;
+            if (rectIoU(r, photo) >= 0.2) continue;
+            map = { x: r.x, y: r.y, w: r.w, h: r.h };
+            break;
+          }
+        }
+        return { photo: { x: photo.x, y: photo.y, w: photo.w, h: photo.h }, map, skipPage: false };
       };
 
       let totalPhotos = 0;
