@@ -49,6 +49,11 @@ const COLUMN_MAP: Record<string, string> = {
   "# of Four week Periods": "four_week_periods",
   "Artwork Due Date": "artwork_due_date",
   "Notes": "notes",
+  // Tasty Media supplies a clean street address in a dedicated column while
+  // "Location Description" holds marketing prose. Prefer this for the
+  // displayed address line downstream.
+  "Address": "address",
+
   // Rate / cost columns
   "4 Week Negotiated Rate": "negotiated_rate_4wk",
   "4-Week Negotiated Rate": "negotiated_rate_4wk",
