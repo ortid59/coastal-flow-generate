@@ -1406,7 +1406,7 @@ export default function CampaignReview() {
 
       const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, location_description, highlights, row_index')
+        .select('id, unit_number, vendor, market, location_description, highlights, row_index')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
