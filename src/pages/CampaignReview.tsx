@@ -1160,6 +1160,32 @@ export default function CampaignReview() {
                     const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
                     if (found) { matchedUnit = found; break; }
                   }
+                } else if (profile?.matchStrategy === "unit_number_partial") {
+                  // New Tradition: media kits print "#NNNN" or bare 3-4 digit
+                  // codes on photo pages. Match ONLY when the token equals
+                  // exactly one Excel unit number in the pool. Never order-match.
+                  const tokens = Array.from(text.matchAll(/#?\b(\d{3,6})\b/g)).map((m) => normalizeUnitToken(m[1]));
+                  const seen = new Set<string>();
+                  for (const tok of tokens) {
+                    if (!tok || seen.has(tok)) continue;
+                    seen.add(tok);
+                    const hits = vendorUnits.filter((u) => normalizeUnitToken(u.unit_number) === tok);
+                    if (hits.length === 1) { matchedUnit = hits[0]; break; }
+                  }
+                } else if (profile?.matchStrategy === "district_text") {
+                  // Tasty Media: pages carry "Where <District Name>". Match
+                  // against unit.market or unit.location_description tokens.
+                  const whereMatch = /(?:^|\W)where\s+([A-Za-z][A-Za-z\s\-']{2,40}?)(?:\s{2,}|$|\d|,)/i.exec(text);
+                  const district = whereMatch?.[1]?.trim();
+                  if (district) {
+                    const dNorm = normalizeMatchText(district);
+                    matchedUnit = vendorUnits.find((u) => {
+                      const mkt = normalizeMatchText(u.market ?? "");
+                      const loc = normalizeMatchText(u.location_description ?? "");
+                      return (mkt && (mkt.includes(dNorm) || dNorm.includes(mkt))) ||
+                             (loc && loc.includes(dNorm));
+                    }) ?? null;
+                  }
                 } else if (profile?.matchStrategy === "address") {
                   const lines = items
                     .map((it) => (it.str ?? "").trim())
@@ -1216,26 +1242,29 @@ export default function CampaignReview() {
                 let detectedSource: 'profile' | 'detection' | 'fallback' = 'fallback';
 
                 if (profile?.crop === "image_regions") {
-                  // Crop exactly to the actual raster image bounding boxes on
-                  // the page. Largest = billboard photo. Second (>=3% area) =
-                  // inset map. Only one image → no map, no placeholder.
+                  // Rule A: strict picker (>10 skip, need ≥5% img, aspect/IoU gate on map).
                   const regions = await detectImageRegions(page);
-                  const content = regions
-                    .filter((r) => r.area >= 0.03) // drop logos/rules
-                    .sort((a, b) => b.area - a.area);
-                  if (content.length >= 1) {
-                    photoCrop = { x: content[0].x, y: content[0].y, w: content[0].w, h: content[0].h };
-                    detectedSource = 'detection';
-                    const second = content.slice(1).find((r) => {
-                      const dx = Math.abs((r.x + r.w / 2) - (content[0].x + content[0].w / 2));
-                      const dy = Math.abs((r.y + r.h / 2) - (content[0].y + content[0].h / 2));
-                      return (dx > 0.1 || dy > 0.1) && r.area >= 0.03;
-                    });
-                    mapCrop = second ? { x: second.x, y: second.y, w: second.w, h: second.h } : null;
-                  } else {
-                    console.warn(`[extractPhotos] ${file.original_name} p${pageNum}: no image regions detected — falling back`);
-                    mapCrop = null;
+                  const picked = pickImageRegions(regions, !!profile.hasMap);
+                  if (picked.skipPage) {
+                    console.info(`[extractPhotos] ${file.original_name} p${pageNum}: skipped by image_regions rules`);
+                    continue;
                   }
+                  if (picked.photo) {
+                    photoCrop = picked.photo;
+                    detectedSource = 'detection';
+                    mapCrop = picked.map;
+                  }
+                } else if (profile?.crop === "image_regions_left") {
+                  const regions = await detectImageRegions(page);
+                  const left = regions.filter((r) => (r.x + r.w / 2) < 0.6).sort((a, b) => b.area - a.area);
+                  if (left.length) {
+                    photoCrop = { x: left[0].x, y: left[0].y, w: left[0].w, h: left[0].h };
+                    detectedSource = 'detection';
+                  } else {
+                    photoCrop = cropBoxForMode("image_regions_left");
+                    detectedSource = 'profile';
+                  }
+                  mapCrop = null;
                 } else if (profile?.crop) {
                   photoCrop = cropBoxForMode(profile.crop);
                   mapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
