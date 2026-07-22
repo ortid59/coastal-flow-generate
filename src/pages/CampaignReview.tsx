@@ -884,11 +884,12 @@ export default function CampaignReview() {
       // Crop modes from the vendor profile registry, resolved to crop boxes.
       const cropBoxForMode = (mode: VendorCropMode | undefined): CropBox => {
         switch (mode) {
-          case "single_left":     return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
-          case "full_bleed":      return { x: 0.0,  y: 0.15, w: 1.0,  h: 0.73 };
-          case "single_midband":  return { x: 0.0,  y: 0.18, w: 1.0,  h: 0.55 };
-          case "photo_plus_map":  return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
-          default:                return billboardCropFallback;
+          case "single_left":         return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          case "image_regions_left":  return { x: 0.00, y: 0.05, w: 0.55, h: 0.75 };
+          case "full_bleed":          return { x: 0.0,  y: 0.15, w: 1.0,  h: 0.73 };
+          case "single_midband":      return { x: 0.0,  y: 0.18, w: 1.0,  h: 0.55 };
+          case "photo_plus_map":      return { x: 0.04, y: 0.18, w: 0.55, h: 0.55 };
+          default:                    return billboardCropFallback;
         }
       };
 
