@@ -1535,6 +1535,27 @@ export default function CampaignReview() {
                   const found = vendorUnits.find((u) => normalizeUnitToken(u.unit_number) === tok);
                   if (found) { unit = found; break; }
                 }
+              } else if (profile?.matchStrategy === "unit_number_partial") {
+                const tokens = Array.from(text.matchAll(/#?\b(\d{3,6})\b/g)).map((m) => normalizeUnitToken(m[1]));
+                const seen = new Set<string>();
+                for (const tok of tokens) {
+                  if (!tok || seen.has(tok)) continue;
+                  seen.add(tok);
+                  const hits = vendorUnits.filter((u) => normalizeUnitToken(u.unit_number) === tok);
+                  if (hits.length === 1) { unit = hits[0]; break; }
+                }
+              } else if (profile?.matchStrategy === "district_text") {
+                const whereMatch = /(?:^|\W)where\s+([A-Za-z][A-Za-z\s\-']{2,40}?)(?:\s{2,}|$|\d|,)/i.exec(text);
+                const district = whereMatch?.[1]?.trim();
+                if (district) {
+                  const dNorm = normalizeMatchText(district);
+                  unit = vendorUnits.find((u: any) => {
+                    const mkt = normalizeMatchText(u.market ?? "");
+                    const loc = normalizeMatchText(u.location_description ?? "");
+                    return (mkt && (mkt.includes(dNorm) || dNorm.includes(mkt))) ||
+                           (loc && loc.includes(dNorm));
+                  }) ?? null;
+                }
               } else if (profile?.matchStrategy === "address") {
                 const lines = items.map((it) => (it.str ?? "").trim()).filter(Boolean)
                   .sort((a, b) => b.length - a.length).slice(0, 6);
@@ -1545,7 +1566,6 @@ export default function CampaignReview() {
               } else if (profile?.matchStrategy === "order") {
                 if (pageNum <= skipCover) { /* cover */ }
                 else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                  // Without rendering, approximate: treat first text-light page as first photo page.
                   if (items.length < 40) seenFirstPhotoPage = true;
                 } else {
                   unit = vendorUnits[orderIdx] ?? null;
