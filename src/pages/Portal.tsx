@@ -1075,7 +1075,7 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
             )}
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">
-              {parseShortAddress(unit.location_description) ||
+              {displayAddress(unit) ||
                 unit.format ||
                 "Premium Placement"}
             </h4>
