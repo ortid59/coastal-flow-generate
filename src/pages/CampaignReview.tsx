@@ -512,10 +512,15 @@ export default function CampaignReview() {
     const pdfs = vendorFiles.filter((f) => f.original_name?.toLowerCase().endsWith(".pdf"));
     if (!pdfs.length) return [];
     const marketUnitCounts = new Map<string, number>();
+    // Track units under excel-only vendors so we don't flag their markets as
+    // "uncovered" — those vendors deliver Excel only and get photos via
+    // manual upload or Excel-embedded imagery.
     for (const u of units) {
       const m = (u.market ?? "").trim();
       if (!m) continue;
       if (u.billboard_photo_url) continue;
+      const vp = resolveVendorProfile(u.vendor);
+      if (vp?.excelOnly) continue;
       marketUnitCounts.set(m, (marketUnitCounts.get(m) ?? 0) + 1);
     }
     const out: Array<{ market: string; count: number }> = [];
@@ -523,7 +528,7 @@ export default function CampaignReview() {
       const tokens = market
         .split(/[\s,]+/)
         .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t)); // skip "IL", "CA"
+        .filter((t) => t.length >= 3 && !/^[a-z]{2}$/.test(t));
       const covered = pdfs.some((f) => {
         const name = (f.original_name ?? "").toLowerCase();
         return tokens.some((t) => name.includes(t));
