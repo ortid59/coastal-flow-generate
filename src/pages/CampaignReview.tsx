@@ -63,6 +63,7 @@ type Unit = {
   format: string | null;
   size: string | null;
   location_description: string | null;
+  address: string | null;
   insight_bullets: string[] | null;
   highlights: string | null;
   four_week_impressions: number | null;
