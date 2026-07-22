@@ -2200,7 +2200,7 @@ export default function CampaignReview() {
                           </td>
                           <td className="px-2 py-2 align-top">
                             <div className="font-medium text-foreground break-words leading-snug">
-                              {parseShortAddress(u.location_description) || "—"}
+                              {displayAddress(u) || "—"}
                             </div>
                             <div
                               className="mt-0.5 text-[10px] text-muted-foreground leading-snug break-words"
