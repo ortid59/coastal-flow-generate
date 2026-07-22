@@ -103,13 +103,24 @@ const COLUMN_MAP_C: Record<string, string> = {
   "Description": "notes",
 };
 
-// Notes-as-highlights heuristic: real sentence prose, not a short code.
+// Notes-as-highlights heuristic: real sentence prose, not a short code or
+// operational note. Rejects:
+//   - short strings (< 40 chars) or lack of whitespace / punctuation
+//   - operational keywords (production, install, approval, take down, due,
+//     deadline) — vendor ops warnings must never reach the client proposal
+//   - mostly-uppercase (> 40% of letters) — usually WARNINGS / instructions
 function notesLooksLikeProse(s: any): boolean {
   if (s == null) return false;
   const t = String(s).replace(/\s+/g, " ").trim();
   if (t.length <= 40) return false;
   if (!/\s/.test(t)) return false;
   if (!/[.!?]/.test(t)) return false;
+  if (/\b(production|install(ation)?|approval|take\s*down|takedown|due|deadline|artwork)\b/i.test(t)) return false;
+  const letters = t.replace(/[^A-Za-z]/g, "");
+  if (letters.length > 0) {
+    const upper = letters.replace(/[^A-Z]/g, "").length;
+    if (upper / letters.length > 0.4) return false;
+  }
   return true;
 }
 
