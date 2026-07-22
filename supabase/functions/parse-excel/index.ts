@@ -103,6 +103,7 @@ const COLUMN_MAP_C: Record<string, string> = {
   "Latitude": "latitude",
   "Longitude": "longitude",
   "Geopath Spot ID": "geopath_id",
+  "Address": "address",
   "Notes": "notes",
   "Comments": "notes",
   "Description": "notes",
