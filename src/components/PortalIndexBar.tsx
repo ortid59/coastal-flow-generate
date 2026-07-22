@@ -1,11 +1,12 @@
 import { ImageOff, MapPin, Sparkles } from "lucide-react";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { displayAddress } from "@/lib/shortAddress";
 import { fmtCompactImpressions, fmtRateShort } from "@/lib/format";
 
 type ChipUnit = {
   id: string;
   unit_number: string;
   location_description: string | null;
+  address?: string | null;
   billboard_photo_url: string | null;
   weekly_impressions?: number | null;
   four_week_impressions?: number | null;
@@ -53,7 +54,7 @@ export function PortalIndexBar({ units }: Props) {
         {/* 2-column grid of small tiles */}
         <ol className="grid gap-3 sm:grid-cols-2">
           {units.map((u, i) => {
-            const short = parseShortAddress(u.location_description) || `Unit ${u.unit_number}`;
+            const short = displayAddress(u) || `Unit ${u.unit_number}`;
             const weekly =
               u.weekly_impressions ??
               (u.four_week_impressions ? Math.round(u.four_week_impressions / 4) : null);

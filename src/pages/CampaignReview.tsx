@@ -32,7 +32,7 @@ import { HighlightsCell } from "@/components/HighlightsCell";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { LogoReplace } from "@/components/LogoReplace";
 import { Progress } from "@/components/ui/progress";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 
 type Campaign = {
   id: string;
@@ -63,6 +63,7 @@ type Unit = {
   format: string | null;
   size: string | null;
   location_description: string | null;
+  address: string | null;
   insight_bullets: string[] | null;
   highlights: string | null;
   four_week_impressions: number | null;
@@ -558,7 +559,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
+          "id, unit_number, market, vendor, format, size, location_description, address, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -2199,7 +2200,7 @@ export default function CampaignReview() {
                           </td>
                           <td className="px-2 py-2 align-top">
                             <div className="font-medium text-foreground break-words leading-snug">
-                              {parseShortAddress(u.location_description) || "—"}
+                              {displayAddress(u) || "—"}
                             </div>
                             <div
                               className="mt-0.5 text-[10px] text-muted-foreground leading-snug break-words"

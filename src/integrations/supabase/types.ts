@@ -210,6 +210,7 @@ export type Database = {
       }
       units: {
         Row: {
+          address: string | null
           artwork_due_date: string | null
           billboard_photo_url: string | null
           campaign_id: string | null
@@ -260,6 +261,7 @@ export type Database = {
           zip: string | null
         }
         Insert: {
+          address?: string | null
           artwork_due_date?: string | null
           billboard_photo_url?: string | null
           campaign_id?: string | null
@@ -310,6 +312,7 @@ export type Database = {
           zip?: string | null
         }
         Update: {
+          address?: string | null
           artwork_due_date?: string | null
           billboard_photo_url?: string | null
           campaign_id?: string | null

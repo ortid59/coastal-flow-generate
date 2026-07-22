@@ -7,7 +7,7 @@ import brand from "@/config/brand.json";
 import { Logo } from "@/components/Logo";
 import { WhoWeAre } from "@/components/WhoWeAre";
 import { MeetTheTeam } from "@/components/MeetTheTeam";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 
@@ -45,6 +45,7 @@ type Unit = {
   format: string | null;
   size: string | null;
   location_description: string | null;
+  address: string | null;
   insight_bullets: string[] | null;
   highlights: string | null;
   weekly_impressions: number | null;
@@ -126,7 +127,7 @@ export default function ProposalPrint() {
         supabase
           .from("units")
           .select(
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, address, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, production_cost, install_cost, cpm, recommended, included, billboard_photo_url, inset_map_url, geopath_id, media_type, facing, city, zip, latitude, longitude, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -564,7 +565,7 @@ function PrintableQuote({
             lineHeight: 1.2,
           }}
         >
-          {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+          {displayAddress(unit) || unit.format || "Premium Placement"}
         </h2>
         {unit.location_description && (
           <div style={{ fontSize: 11, color: Q_GREY, marginTop: 2 }}>{unit.location_description}</div>

@@ -30,7 +30,7 @@ import { WhoWeAre } from "@/components/WhoWeAre";
 import { CountUp } from "@/components/CountUp";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { fmtCostLine } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
@@ -71,6 +71,7 @@ type Unit = {
   format: string | null;
   size: string | null;
   location_description: string | null;
+  address: string | null;
   insight_bullets: string[] | null;
   highlights: string | null;
   weekly_impressions: number | null;
@@ -144,7 +145,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .from("units")
           .select(
             // VENDOR FIELD INTENTIONALLY EXCLUDED — see Unit type comment.
-            "id, unit_number, market, format, size, location_description, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
+            "id, unit_number, market, format, size, location_description, address, insight_bullets, highlights, weekly_impressions, four_week_impressions, total_cost, negotiated_rate_4wk, production_cost, install_cost, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, latitude, longitude, geopath_id, media_type, facing, city, zip, tier_a, tier_b, tier_c",
           )
           .eq("campaign_id", campaignId)
           .order("market", { ascending: true })
@@ -534,7 +535,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                           <ul className="space-y-1">
                             {visibleUnits.map((u) => (
                               <li key={u.id} className="text-xs text-foreground/80 truncate">
-                                • {u.location_description ?? u.unit_number}
+                                • {displayAddress(u) || u.location_description || u.unit_number}
                               </li>
                             ))}
                           </ul>
@@ -1074,7 +1075,7 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
             )}
             <span className="mt-5 gold-rule" />
             <h4 className="mt-5 font-heading text-2xl md:text-4xl font-bold tracking-tight leading-tight text-foreground">
-              {parseShortAddress(unit.location_description) ||
+              {displayAddress(unit) ||
                 unit.format ||
                 "Premium Placement"}
             </h4>
@@ -1360,7 +1361,7 @@ function PrintableQuote({
             lineHeight: 1.2,
           }}
         >
-          {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+          {displayAddress(unit) || unit.format || "Premium Placement"}
         </h2>
         {unit.location_description && (
           <div style={{ fontSize: 11, color: GREY, marginTop: 2 }}>{unit.location_description}</div>

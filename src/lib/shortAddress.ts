@@ -93,3 +93,17 @@ export function parseShortAddress(raw: string | null | undefined): string {
   if (!landmark) return tidyStreet;
   return `${tidyStreet}, near ${tidyRoad(landmark)}`;
 }
+
+/**
+ * Preferred address line for a unit. Some vendors (e.g. Tasty Media) supply
+ * a clean street address in a dedicated column; when present we use it as-is.
+ * Otherwise we derive a short address from the verbose Location Description.
+ */
+export function displayAddress(u: {
+  address?: string | null;
+  location_description?: string | null;
+}): string {
+  const raw = (u.address ?? "").trim();
+  if (raw) return raw;
+  return parseShortAddress(u.location_description);
+}
