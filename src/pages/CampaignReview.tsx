@@ -128,8 +128,8 @@ const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
 // ---------- Vendor profile registry ----------
-type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual";
-type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions";
+type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial";
+type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions" | "image_regions_left";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
   unitRegex?: string;
@@ -140,28 +140,29 @@ type VendorProfile = {
   skipCoverPages?: number;
   skipUntilFirstPhotoPage?: boolean;
   /** If a unit_number pass yields zero matches, retry the file with the
-   *  order strategy. Handles older vendor decks that omit unit IDs on
-   *  photo pages while newer "Maps Photosheets" prefix each page with the ID. */
+   *  order strategy. */
   orderFallback?: boolean;
-  /** Alternate vendor spellings that should also resolve to this profile. */
+  /** Alternate vendor spellings that also resolve to this profile. */
   aliases?: string[];
+  /** Vendor delivers Excel only — no PDF headsheet expected. Suppresses
+   *  "no PDF for market" warnings and auto-extraction for its files. */
+  excelOnly?: boolean;
 };
 
 const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Alchemy Media": { matchStrategy: "unit_number", unitRegex: "SITE\\s*#\\s*([0-9]{3,6})", crop: "single_midband", hasMap: false, aliases: ["Alchemy"] },
-  "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2011][0-9]{4,6})", crop: "single_left", hasMap: false },
-  "Tasty Media":   { matchStrategy: "address",    crop: "full_bleed", hasMap: false, pagesPerUnit: 2 },
+  "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2010-\\u2015\\u2212][0-9]{4,6})", crop: "image_regions_left", hasMap: false },
+  "Tasty Media":   { matchStrategy: "district_text", crop: "full_bleed", hasMap: false },
   "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true, aliases: ["Clear Channel Outdoor", "Clear Channel", "ClearChannel"] },
-  "Lamar":         { matchStrategy: "order",      crop: "photo_plus_map", hasMap: true, mapBox: { x: 0.63, y: 0.11, w: 0.31, h: 0.24 }, skipCoverPages: 2, aliases: ["Lamar Advertising"] },
-  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, aliases: ["BeSeen", "Be Seen Media"] },
+  "Lamar":         { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Lamar Advertising"] },
+  "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, pagesPerUnit: 2, aliases: ["BeSeen", "Be Seen Media"] },
   "OFM":           { matchStrategy: "manual" },
-  "New Tradition": { matchStrategy: "manual", aliases: ["New Tradition Media"] },
+  "New Tradition": { matchStrategy: "unit_number_partial", crop: "full_bleed", hasMap: false, aliases: ["New Tradition Media"] },
+  "Orange Barrel": { matchStrategy: "manual", excelOnly: true, aliases: ["Orange Barrel Media", "OBM", "IKE"] },
 };
 
 // Generic profile used ONLY when a single-vendor campaign has a file whose
-// vendor string doesn't resolve to a registered profile. Uses the generic
-// findUnitForPage matcher (falls through when unitRegex is absent), the
-// image-region crop mode, and labeled-highlight capture.
+// vendor string doesn't resolve to a registered profile.
 const GENERIC_PROFILE: VendorProfile = {
   matchStrategy: "unit_number",
   crop: "image_regions",
