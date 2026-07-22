@@ -1064,12 +1064,19 @@ export default function CampaignReview() {
 
         try {
           // ------- Order-strategy pass (sequential page→unit assignment) -------
+          // pagesPerUnit=N: only pages where ((pageNum - skipCover - 1) % N) === 0
+          // advance the unit index. Other pages (detail spreads, spec pages) are
+          // still checked but never consume a slot. Skipped pages by Rule A7
+          // (no content image) also do NOT consume a slot.
           const runOrderPass = async () => {
             const skipCover = profile.skipCoverPages ?? 0;
-            const photoCropOrd = cropBoxForMode(profile.crop);
-            const mapCropOrd = profile.hasMap && profile.mapBox ? profile.mapBox : null;
+            const pagesPerUnit = Math.max(1, profile.pagesPerUnit ?? 1);
+            const useImageRegions = profile.crop === "image_regions" || profile.crop === "image_regions_left";
+            const staticPhotoCrop = cropBoxForMode(profile.crop);
+            const staticMapCrop = profile.hasMap && profile.mapBox ? profile.mapBox : null;
             let assignIdx = 0;
             let seenFirstPhotoPage = false;
+            let photoPageCounter = 0;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
               let page: any = null;
@@ -1078,18 +1085,42 @@ export default function CampaignReview() {
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${fileLabel}` }));
                 if (pageNum <= skipCover) continue;
+                const regions = await detectImageRegions(page);
                 if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
-                  const regions = await detectImageRegions(page);
                   const hasContentImage = regions.some((r) => r.area >= 0.05);
                   if (!hasContentImage) continue;
                   seenFirstPhotoPage = true;
                 }
+                // Rule A6/A7: skip mosaic (>10 imgs) and non-photo pages.
+                if (regions.length > 10) continue;
+                const hasBigEnough = regions.some((r) => r.area >= 0.05);
+                if (!hasBigEnough) continue;
+                // pagesPerUnit: only 1st page of each unit's window advances.
+                if (photoPageCounter % pagesPerUnit !== 0) { photoPageCounter++; continue; }
+                photoPageCounter++;
+
                 let peek = assignIdx;
                 while (peek < vendorUnits.length && vendorUnits[peek].billboard_photo_url) peek++;
                 if (peek >= vendorUnits.length) break;
                 const unit = vendorUnits[peek];
 
-                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCropOrd, mapCropOrd);
+                let photoCrop = staticPhotoCrop;
+                let mapCrop: CropBox | null = staticMapCrop;
+                if (useImageRegions) {
+                  if (profile.crop === "image_regions_left") {
+                    // Adkom: prefer largest image whose centre is in the left 60%.
+                    const left = regions.filter((r) => (r.x + r.w / 2) < 0.6).sort((a, b) => b.area - a.area);
+                    photoCrop = left[0] ?? staticPhotoCrop;
+                    mapCrop = null;
+                  } else {
+                    const picked = pickImageRegions(regions, !!profile.hasMap);
+                    if (picked.skipPage) continue;
+                    photoCrop = picked.photo ?? staticPhotoCrop;
+                    mapCrop = picked.map;
+                  }
+                }
+
+                const { photoSaved, mapSaved } = await processUnitPage(page, pageNum, unit, photoCrop, mapCrop);
                 if (photoSaved) { totalPhotos++; matchedCount++; }
                 if (mapSaved) totalMaps++;
                 assignIdx = peek + 1;
