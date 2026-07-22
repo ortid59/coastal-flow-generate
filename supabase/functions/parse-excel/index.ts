@@ -782,63 +782,90 @@ Deno.serve(async (req) => {
       let overviewImages = 0;
       try {
         const images = await extractWorkbookImages(buf, wb.SheetNames);
-        // Restrict to images on the chosen data sheet — other sheets are noise.
-        const sheetImages = images.filter((im) => im.sheetName === chosenSheetName);
 
-        // Look up unit ids for this campaign so we can write inset_map_url.
+        // Look up unit ids for this campaign so we can write inset_map_url /
+        // billboard_photo_url (Type C).
         const { data: existingUnits } = await supabase
           .from("units")
-          .select("id, unit_number, inset_map_url")
+          .select("id, unit_number, inset_map_url, billboard_photo_url")
           .eq("campaign_id", campaignId);
-        const unitByNumber = new Map<string, { id: string; inset_map_url: string | null }>();
+        const unitByNumber = new Map<string, { id: string; inset_map_url: string | null; billboard_photo_url: string | null }>();
         (existingUnits ?? []).forEach((u: any) =>
-          unitByNumber.set(String(u.unit_number).trim(), { id: u.id, inset_map_url: u.inset_map_url }),
+          unitByNumber.set(String(u.unit_number).trim(), {
+            id: u.id, inset_map_url: u.inset_map_url, billboard_photo_url: u.billboard_photo_url,
+          }),
         );
 
-        for (const img of sheetImages) {
+        // OFM (Type C): per-unit sheets carry the billboard photo — sheet NAME
+        // equals the Inventory # (e.g. "380B"). Route those to billboard_photo_url.
+        const unitNumsUpper = new Set(Array.from(unitByNumber.keys()).map((k) => k.toUpperCase()));
+        const sheetNameToUnit = (name: string): string | null => {
+          const n = name.trim().toUpperCase();
+          if (unitNumsUpper.has(n)) {
+            for (const key of unitByNumber.keys()) if (key.toUpperCase() === n) return key;
+          }
+          return null;
+        };
+
+        // Filter: chosen sheet images (row-anchored maps) + per-unit sheet
+        // images (Type C billboard photos).
+        const relevantImages = images.filter((im) => {
+          if (im.sheetName === chosenSheetName) return true;
+          return sheetNameToUnit(im.sheetName) != null;
+        });
+
+        for (const img of relevantImages) {
+          // Type C per-unit sheet → billboard photo.
+          const perSheetUnit = sheetNameToUnit(img.sheetName);
+          if (perSheetUnit && img.sheetName !== chosenSheetName) {
+            const u = unitByNumber.get(perSheetUnit);
+            if (!u || u.billboard_photo_url) continue;
+            const path = `${campaignId}/${u.id}.${img.ext}`;
+            const up = await supabase.storage
+              .from("photos")
+              .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+            if (up.error) {
+              console.warn(`[parse-excel] photo upload failed for ${perSheetUnit}:`, up.error.message);
+              continue;
+            }
+            const { data: signed, error: sErr } = await supabase.storage
+              .from("photos")
+              .createSignedUrl(path, 60 * 60 * 24 * 365);
+            if (sErr || !signed) { console.warn(`[parse-excel] sign failed for ${perSheetUnit}:`, sErr?.message); continue; }
+            const { error: updErr } = await supabase
+              .from("units").update({ billboard_photo_url: signed.signedUrl }).eq("id", u.id);
+            if (updErr) { console.warn(`[parse-excel] billboard_photo_url write failed for ${perSheetUnit}:`, updErr.message); continue; }
+            u.billboard_photo_url = signed.signedUrl;
+            imagesMatched++;
+            continue;
+          }
+
+          // Chosen sheet (row-anchored) → inset map or campaign overview.
           const matched = matchImageToUnit(img.anchorRow, rowToUnit, headerRow);
           if (matched) {
             const u = unitByNumber.get(matched);
             if (!u) continue;
-            // Don't overwrite a manually-uploaded or previously-extracted map.
             if (u.inset_map_url) continue;
             const path = `${campaignId}/${u.id}-vendor-map.${img.ext}`;
             const up = await supabase.storage
               .from("minimaps")
               .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
-            if (up.error) {
-              console.warn(`[parse-excel] image upload failed for ${matched}:`, up.error.message);
-              continue;
-            }
+            if (up.error) { console.warn(`[parse-excel] image upload failed for ${matched}:`, up.error.message); continue; }
             const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
             const { error: updErr } = await supabase
-              .from("units")
-              .update({ inset_map_url: pub.publicUrl })
-              .eq("id", u.id);
-            if (updErr) {
-              console.warn(`[parse-excel] inset_map_url write failed for ${matched}:`, updErr.message);
-              continue;
-            }
-            // Cache so a second image for the same row doesn't overwrite.
+              .from("units").update({ inset_map_url: pub.publicUrl }).eq("id", u.id);
+            if (updErr) { console.warn(`[parse-excel] inset_map_url write failed for ${matched}:`, updErr.message); continue; }
             u.inset_map_url = pub.publicUrl;
             imagesMatched++;
           } else {
-            // Sheet-level / overview map. Store the FIRST one we see per file.
-            // (Heather said don't render yet, but extract & store.)
             if (overviewImages > 0) continue;
             const path = `${campaignId}/overview-${f.id}.${img.ext}`;
             const up = await supabase.storage
               .from("minimaps")
               .upload(path, img.bytes, { contentType: img.contentType, upsert: true });
-            if (up.error) {
-              console.warn(`[parse-excel] overview upload failed:`, up.error.message);
-              continue;
-            }
+            if (up.error) { console.warn(`[parse-excel] overview upload failed:`, up.error.message); continue; }
             const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
-            await supabase
-              .from("campaigns")
-              .update({ vendor_overview_map_url: pub.publicUrl })
-              .eq("id", campaignId);
+            await supabase.from("campaigns").update({ vendor_overview_map_url: pub.publicUrl }).eq("id", campaignId);
             overviewImages++;
           }
         }
