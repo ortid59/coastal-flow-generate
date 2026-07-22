@@ -565,7 +565,7 @@ function PrintableQuote({
             lineHeight: 1.2,
           }}
         >
-          {parseShortAddress(unit.location_description) || unit.format || "Premium Placement"}
+          {displayAddress(unit) || unit.format || "Premium Placement"}
         </h2>
         {unit.location_description && (
           <div style={{ fontSize: 11, color: Q_GREY, marginTop: 2 }}>{unit.location_description}</div>
