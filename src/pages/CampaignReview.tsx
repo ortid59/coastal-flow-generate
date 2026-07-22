@@ -32,7 +32,7 @@ import { HighlightsCell } from "@/components/HighlightsCell";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { LogoReplace } from "@/components/LogoReplace";
 import { Progress } from "@/components/ui/progress";
-import { parseShortAddress } from "@/lib/shortAddress";
+import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 
 type Campaign = {
   id: string;
