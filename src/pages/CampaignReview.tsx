@@ -312,7 +312,10 @@ const unitNumberTokens = (unitNumber: string | null | undefined) => {
   return Array.from(tokens).filter((token) => token && token !== "NAN").sort((a, b) => b.length - a.length);
 };
 
-const EXTRACTION_STEP_TIMEOUT_MS = 45_000;
+// Per-step timeout is 90s to survive brief tab throttling. Background tabs
+// throttle rAF far more aggressively; the visibility gate below stops the
+// loop when hidden so this ceiling is only exhausted on a genuinely stuck page.
+const EXTRACTION_STEP_TIMEOUT_MS = 90_000;
 
 function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTION_STEP_TIMEOUT_MS): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -321,6 +324,29 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTI
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function isTransientRenderError(err: any): boolean {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return msg.includes("timed out") || msg.includes("upload failed") || msg.includes("network");
+}
+
+// Resolve once the tab is visible again. Chrome throttles rAF in background
+// tabs, so pdf.js page rendering will exceed our per-page ceiling — pause
+// the loop instead of burning pages into guaranteed timeouts.
+function waitForVisible(): Promise<void> {
+  if (typeof document === "undefined" || document.visibilityState === "visible") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        document.removeEventListener("visibilitychange", onVis);
+        resolve();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
   });
 }
 
