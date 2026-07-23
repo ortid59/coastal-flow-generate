@@ -654,8 +654,13 @@ export default function CampaignReview() {
   // creation flow, where NewCampaign navigates here while status === "parsing").
   // Resumable auto-extract: a "currently running" guard plus a pass-count cap
   // so partial failures get a second/third pass instead of being latched out forever.
+  // Additional gate: only re-pass when there are REACHABLE units still needing
+  // work (i.e. covered by an uploaded PDF for a matching vendor). Units in a
+  // market with no covering PDF can never match — the uncovered-markets banner
+  // handles them; re-sweeping the whole PDF set for them is pure waste.
   const autoRunningRef = useRef(false);
   const autoPassCountRef = useRef(0);
+  const lastReachableSignatureRef = useRef<string>("");
   const MAX_AUTO_PASSES = 3;
   useEffect(() => {
     if (!campaign) return;
@@ -663,9 +668,38 @@ export default function CampaignReview() {
     if (units.length === 0) return;
     if (autoRunningRef.current) return;
     if (autoPassCountRef.current >= MAX_AUTO_PASSES) return;
-    const needsPhotos = units.some((u) => !u.billboard_photo_url);
-    const needsHighlights = units.some((u) => !u.highlights);
+    // Reachable = has a PDF file whose (possibly-normalized) vendor matches
+    // the unit's vendor. Any PDF present is treated as coverage in a
+    // single-vendor campaign (GENERIC_PROFILE fallback path).
+    const pdfVendorKeys = new Set(
+      vendorFiles
+        .filter((f) => f.original_name?.toLowerCase().endsWith('.pdf'))
+        .map((f) => normalizeVendor(f.vendor))
+        .filter(Boolean) as string[],
+    );
+    const anyPdf = pdfVendorKeys.size > 0 || vendorFiles.some((f) => f.original_name?.toLowerCase().endsWith('.pdf'));
+    const singleVendor = new Set(units.map((u) => normalizeVendor(u.vendor)).filter(Boolean)).size <= 1;
+    const isReachable = (u: Unit) => {
+      if (!anyPdf) return false;
+      if (singleVendor) return true;
+      const key = normalizeVendor(u.vendor);
+      return !!key && pdfVendorKeys.has(key);
+    };
+    const reachablePendingPhotos = units.filter((u) => !u.billboard_photo_url && isReachable(u));
+    const reachablePendingHighlights = units.filter((u) => !u.highlights && isReachable(u));
+    const needsPhotos = reachablePendingPhotos.length > 0;
+    const needsHighlights = reachablePendingHighlights.length > 0;
     if (!needsPhotos && !needsHighlights) return;
+    // Stop repeating passes that don't make progress: signature of the pending
+    // reachable id-set. If it hasn't changed since the last pass, don't burn
+    // another sweep — the remaining pages already failed transiently or aren't
+    // matchable in this PDF set.
+    const signature = [
+      ...reachablePendingPhotos.map((u) => `p:${u.id}`),
+      ...reachablePendingHighlights.map((u) => `h:${u.id}`),
+    ].sort().join("|");
+    if (autoPassCountRef.current > 0 && signature === lastReachableSignatureRef.current) return;
+    lastReachableSignatureRef.current = signature;
     autoRunningRef.current = true;
     autoPassCountRef.current += 1;
     (async () => {
@@ -677,7 +711,7 @@ export default function CampaignReview() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign?.status, units]);
+  }, [campaign?.status, units, vendorFiles]);
 
 
   // Persist the most recently detected crop for a vendor as the saved default,
