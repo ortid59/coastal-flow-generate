@@ -1354,7 +1354,7 @@ export default function CampaignReview() {
                       console.warn('[extractPhotos] overview save failed:', ovErr?.message ?? ovErr);
                     }
                   }
-                  continue;
+                  return 'ok';
                 }
                 console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
 
