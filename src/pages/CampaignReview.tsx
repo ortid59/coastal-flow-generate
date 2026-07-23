@@ -981,14 +981,30 @@ export default function CampaignReview() {
           return { photoSaved: false, mapSaved: false };
         }
         const unitNumber = String(unit.unit_number);
+        await waitForVisible();
         const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(viewport.width);
-        canvas.height = Math.round(viewport.height);
-        const ctx = canvas.getContext('2d')!;
-        await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, `Rendering page ${pageNum}`);
-        const W = canvas.width;
-        const H = canvas.height;
+        const W = Math.round(viewport.width);
+        const H = Math.round(viewport.height);
+
+        // Prefer OffscreenCanvas (rendering keeps working while the tab is
+        // background-throttled) and fall back to the DOM canvas when the
+        // browser or pdfjs won't accept it.
+        let renderCanvas: any;
+        let renderCtx: any;
+        const canUseOffscreen = typeof (globalThis as any).OffscreenCanvas === "function";
+        if (canUseOffscreen) {
+          try {
+            renderCanvas = new (globalThis as any).OffscreenCanvas(W, H);
+            renderCtx = renderCanvas.getContext('2d');
+          } catch { renderCanvas = null; }
+        }
+        if (!renderCanvas) {
+          renderCanvas = document.createElement('canvas');
+          renderCanvas.width = W;
+          renderCanvas.height = H;
+          renderCtx = renderCanvas.getContext('2d');
+        }
+        await withTimeout(page.render({ canvasContext: renderCtx, viewport }).promise, `Rendering page ${pageNum}`);
 
         const uploadCrop = async (
           crop: CropBox,
@@ -996,21 +1012,32 @@ export default function CampaignReview() {
           storagePath: string,
           dbField: string,
         ): Promise<boolean> => {
-          const cropCanvas = document.createElement('canvas');
-          cropCanvas.width = Math.max(1, Math.round(W * crop.w));
-          cropCanvas.height = Math.max(1, Math.round(H * crop.h));
-          const cropCtx = cropCanvas.getContext('2d')!;
+          const cw = Math.max(1, Math.round(W * crop.w));
+          const ch = Math.max(1, Math.round(H * crop.h));
+          let cropCanvas: any;
+          let cropCtx: any;
+          if (canUseOffscreen) {
+            try { cropCanvas = new (globalThis as any).OffscreenCanvas(cw, ch); cropCtx = cropCanvas.getContext('2d'); } catch { cropCanvas = null; }
+          }
+          if (!cropCanvas) {
+            cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cw;
+            cropCanvas.height = ch;
+            cropCtx = cropCanvas.getContext('2d');
+          }
           cropCtx.drawImage(
-            canvas,
+            renderCanvas,
             Math.round(W * crop.x),
             Math.round(H * crop.y),
             Math.round(W * crop.w),
             Math.round(H * crop.h),
-            0, 0, cropCanvas.width, cropCanvas.height,
+            0, 0, cw, ch,
           );
-          const imageBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
-            cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
-          ), `Exporting ${unitNumber} ${dbField}`);
+          const imageBlob: Blob = typeof cropCanvas.convertToBlob === 'function'
+            ? await withTimeout(cropCanvas.convertToBlob({ type: 'image/png' }), `Exporting ${unitNumber} ${dbField}`)
+            : await withTimeout(new Promise<Blob>((resolve, reject) =>
+                (cropCanvas as HTMLCanvasElement).toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
+              ), `Exporting ${unitNumber} ${dbField}`);
           const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
           const { error: upErr } = await supabase.storage
             .from(storageBucket).upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
@@ -1032,14 +1059,19 @@ export default function CampaignReview() {
           return true;
         };
 
-        let photoSaved = false;
-        let mapSaved = false;
+        // Upload photo + map in parallel — they're independent storage writes.
+        const jobs: Array<Promise<{ kind: 'photo' | 'map'; saved: boolean }>> = [];
         if (!unit.billboard_photo_url) {
-          photoSaved = await uploadCrop(photoCrop, 'photos', `${id}/${unit.id}.png`, 'billboard_photo_url');
+          jobs.push(uploadCrop(photoCrop, 'photos', `${id}/${unit.id}.png`, 'billboard_photo_url')
+            .then((saved) => ({ kind: 'photo', saved })));
         }
         if (mapCrop && !unit.inset_map_url) {
-          mapSaved = await uploadCrop(mapCrop, 'minimaps', `${id}/${unit.id}-map.png`, 'inset_map_url');
+          jobs.push(uploadCrop(mapCrop, 'minimaps', `${id}/${unit.id}-map.png`, 'inset_map_url')
+            .then((saved) => ({ kind: 'map', saved })));
         }
+        const results = await Promise.all(jobs);
+        const photoSaved = results.find((r) => r.kind === 'photo')?.saved ?? false;
+        const mapSaved = results.find((r) => r.kind === 'map')?.saved ?? false;
         return { photoSaved, mapSaved };
       };
 
