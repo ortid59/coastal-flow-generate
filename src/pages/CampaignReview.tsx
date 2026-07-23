@@ -1422,13 +1422,24 @@ export default function CampaignReview() {
                 if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
                   detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
                 }
+                return 'ok';
               } catch (pageErr: any) {
-                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
-                continue;
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed:`, pageErr?.message ?? pageErr);
+                return isTransientRenderError(pageErr) && !isRetry ? 'retry' : 'ok';
               } finally {
                 page?.cleanup?.();
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
+            };
+            for (const pageNum of pageOrder) {
+              const res = await runPage(pageNum, false);
+              if (res === 'stop') break;
+              if (res === 'retry') retryPages.push(pageNum);
+            }
+            if (nextPagePromise) { try { const p = await nextPagePromise; p?.cleanup?.(); } catch { /* ignore */ } nextPagePromise = null; }
+            for (const pageNum of retryPages) {
+              const res = await runPage(pageNum, true);
+              if (res === 'stop') break;
             }
             return matchesInPass;
           };
