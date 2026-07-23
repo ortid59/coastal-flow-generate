@@ -1186,6 +1186,7 @@ export default function CampaignReview() {
             let photoPageCounter = 0;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
+              await waitForVisible();
               let page: any = null;
               try {
                 page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
