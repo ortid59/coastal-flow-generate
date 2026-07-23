@@ -1951,6 +1951,11 @@ export default function CampaignReview() {
           {extractProgress.label && (
             <p className="text-[11px] text-muted-foreground truncate">{extractProgress.label}</p>
           )}
+          {extractionPaused && (
+            <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              Extraction paused — keep this tab visible to continue.
+            </p>
+          )}
         </div>
       )}
 
