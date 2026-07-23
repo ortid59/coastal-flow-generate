@@ -312,7 +312,10 @@ const unitNumberTokens = (unitNumber: string | null | undefined) => {
   return Array.from(tokens).filter((token) => token && token !== "NAN").sort((a, b) => b.length - a.length);
 };
 
-const EXTRACTION_STEP_TIMEOUT_MS = 45_000;
+// Per-step timeout is 90s to survive brief tab throttling. Background tabs
+// throttle rAF far more aggressively; the visibility gate below stops the
+// loop when hidden so this ceiling is only exhausted on a genuinely stuck page.
+const EXTRACTION_STEP_TIMEOUT_MS = 90_000;
 
 function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTION_STEP_TIMEOUT_MS): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -321,6 +324,29 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EXTRACTI
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function isTransientRenderError(err: any): boolean {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return msg.includes("timed out") || msg.includes("upload failed") || msg.includes("network");
+}
+
+// Resolve once the tab is visible again. Chrome throttles rAF in background
+// tabs, so pdf.js page rendering will exceed our per-page ceiling — pause
+// the loop instead of burning pages into guaranteed timeouts.
+function waitForVisible(): Promise<void> {
+  if (typeof document === "undefined" || document.visibilityState === "visible") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        document.removeEventListener("visibilitychange", onVis);
+        resolve();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
   });
 }
 
@@ -472,6 +498,15 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
+  const [extractionPaused, setExtractionPaused] = useState(false);
+  // Subscribe to visibility changes so the pause banner shows/hides in sync
+  // with the loops' own waitForVisible() gates.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => setExtractionPaused(document.visibilityState !== "visible");
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   const [extractProgress, setExtractProgress] = useState<{ current: number; total: number; label: string }>({
     current: 0,
     total: 0,
@@ -619,8 +654,13 @@ export default function CampaignReview() {
   // creation flow, where NewCampaign navigates here while status === "parsing").
   // Resumable auto-extract: a "currently running" guard plus a pass-count cap
   // so partial failures get a second/third pass instead of being latched out forever.
+  // Additional gate: only re-pass when there are REACHABLE units still needing
+  // work (i.e. covered by an uploaded PDF for a matching vendor). Units in a
+  // market with no covering PDF can never match — the uncovered-markets banner
+  // handles them; re-sweeping the whole PDF set for them is pure waste.
   const autoRunningRef = useRef(false);
   const autoPassCountRef = useRef(0);
+  const lastReachableSignatureRef = useRef<string>("");
   const MAX_AUTO_PASSES = 3;
   useEffect(() => {
     if (!campaign) return;
@@ -628,9 +668,38 @@ export default function CampaignReview() {
     if (units.length === 0) return;
     if (autoRunningRef.current) return;
     if (autoPassCountRef.current >= MAX_AUTO_PASSES) return;
-    const needsPhotos = units.some((u) => !u.billboard_photo_url);
-    const needsHighlights = units.some((u) => !u.highlights);
+    // Reachable = has a PDF file whose (possibly-normalized) vendor matches
+    // the unit's vendor. Any PDF present is treated as coverage in a
+    // single-vendor campaign (GENERIC_PROFILE fallback path).
+    const pdfVendorKeys = new Set(
+      vendorFiles
+        .filter((f) => f.original_name?.toLowerCase().endsWith('.pdf'))
+        .map((f) => normalizeVendor(f.vendor))
+        .filter(Boolean) as string[],
+    );
+    const anyPdf = pdfVendorKeys.size > 0 || vendorFiles.some((f) => f.original_name?.toLowerCase().endsWith('.pdf'));
+    const singleVendor = new Set(units.map((u) => normalizeVendor(u.vendor)).filter(Boolean)).size <= 1;
+    const isReachable = (u: Unit) => {
+      if (!anyPdf) return false;
+      if (singleVendor) return true;
+      const key = normalizeVendor(u.vendor);
+      return !!key && pdfVendorKeys.has(key);
+    };
+    const reachablePendingPhotos = units.filter((u) => !u.billboard_photo_url && isReachable(u));
+    const reachablePendingHighlights = units.filter((u) => !u.highlights && isReachable(u));
+    const needsPhotos = reachablePendingPhotos.length > 0;
+    const needsHighlights = reachablePendingHighlights.length > 0;
     if (!needsPhotos && !needsHighlights) return;
+    // Stop repeating passes that don't make progress: signature of the pending
+    // reachable id-set. If it hasn't changed since the last pass, don't burn
+    // another sweep — the remaining pages already failed transiently or aren't
+    // matchable in this PDF set.
+    const signature = [
+      ...reachablePendingPhotos.map((u) => `p:${u.id}`),
+      ...reachablePendingHighlights.map((u) => `h:${u.id}`),
+    ].sort().join("|");
+    if (autoPassCountRef.current > 0 && signature === lastReachableSignatureRef.current) return;
+    lastReachableSignatureRef.current = signature;
     autoRunningRef.current = true;
     autoPassCountRef.current += 1;
     (async () => {
@@ -642,7 +711,7 @@ export default function CampaignReview() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign?.status, units]);
+  }, [campaign?.status, units, vendorFiles]);
 
 
   // Persist the most recently detected crop for a vendor as the saved default,
@@ -912,14 +981,30 @@ export default function CampaignReview() {
           return { photoSaved: false, mapSaved: false };
         }
         const unitNumber = String(unit.unit_number);
+        await waitForVisible();
         const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(viewport.width);
-        canvas.height = Math.round(viewport.height);
-        const ctx = canvas.getContext('2d')!;
-        await withTimeout(page.render({ canvasContext: ctx, viewport }).promise, `Rendering page ${pageNum}`);
-        const W = canvas.width;
-        const H = canvas.height;
+        const W = Math.round(viewport.width);
+        const H = Math.round(viewport.height);
+
+        // Prefer OffscreenCanvas (rendering keeps working while the tab is
+        // background-throttled) and fall back to the DOM canvas when the
+        // browser or pdfjs won't accept it.
+        let renderCanvas: any;
+        let renderCtx: any;
+        const canUseOffscreen = typeof (globalThis as any).OffscreenCanvas === "function";
+        if (canUseOffscreen) {
+          try {
+            renderCanvas = new (globalThis as any).OffscreenCanvas(W, H);
+            renderCtx = renderCanvas.getContext('2d');
+          } catch { renderCanvas = null; }
+        }
+        if (!renderCanvas) {
+          renderCanvas = document.createElement('canvas');
+          renderCanvas.width = W;
+          renderCanvas.height = H;
+          renderCtx = renderCanvas.getContext('2d');
+        }
+        await withTimeout(page.render({ canvasContext: renderCtx, viewport }).promise, `Rendering page ${pageNum}`);
 
         const uploadCrop = async (
           crop: CropBox,
@@ -927,21 +1012,32 @@ export default function CampaignReview() {
           storagePath: string,
           dbField: string,
         ): Promise<boolean> => {
-          const cropCanvas = document.createElement('canvas');
-          cropCanvas.width = Math.max(1, Math.round(W * crop.w));
-          cropCanvas.height = Math.max(1, Math.round(H * crop.h));
-          const cropCtx = cropCanvas.getContext('2d')!;
+          const cw = Math.max(1, Math.round(W * crop.w));
+          const ch = Math.max(1, Math.round(H * crop.h));
+          let cropCanvas: any;
+          let cropCtx: any;
+          if (canUseOffscreen) {
+            try { cropCanvas = new (globalThis as any).OffscreenCanvas(cw, ch); cropCtx = cropCanvas.getContext('2d'); } catch { cropCanvas = null; }
+          }
+          if (!cropCanvas) {
+            cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cw;
+            cropCanvas.height = ch;
+            cropCtx = cropCanvas.getContext('2d');
+          }
           cropCtx.drawImage(
-            canvas,
+            renderCanvas,
             Math.round(W * crop.x),
             Math.round(H * crop.y),
             Math.round(W * crop.w),
             Math.round(H * crop.h),
-            0, 0, cropCanvas.width, cropCanvas.height,
+            0, 0, cw, ch,
           );
-          const imageBlob = await withTimeout(new Promise<Blob>((resolve, reject) =>
-            cropCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
-          ), `Exporting ${unitNumber} ${dbField}`);
+          const imageBlob: Blob = typeof cropCanvas.convertToBlob === 'function'
+            ? await withTimeout(cropCanvas.convertToBlob({ type: 'image/png' }), `Exporting ${unitNumber} ${dbField}`)
+            : await withTimeout(new Promise<Blob>((resolve, reject) =>
+                (cropCanvas as HTMLCanvasElement).toBlob((b) => b ? resolve(b) : reject(new Error('Image export failed')), 'image/png'),
+              ), `Exporting ${unitNumber} ${dbField}`);
           const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
           const { error: upErr } = await supabase.storage
             .from(storageBucket).upload(storagePath, imageBytes, { contentType: 'image/png', upsert: true });
@@ -963,14 +1059,19 @@ export default function CampaignReview() {
           return true;
         };
 
-        let photoSaved = false;
-        let mapSaved = false;
+        // Upload photo + map in parallel — they're independent storage writes.
+        const jobs: Array<Promise<{ kind: 'photo' | 'map'; saved: boolean }>> = [];
         if (!unit.billboard_photo_url) {
-          photoSaved = await uploadCrop(photoCrop, 'photos', `${id}/${unit.id}.png`, 'billboard_photo_url');
+          jobs.push(uploadCrop(photoCrop, 'photos', `${id}/${unit.id}.png`, 'billboard_photo_url')
+            .then((saved) => ({ kind: 'photo', saved })));
         }
         if (mapCrop && !unit.inset_map_url) {
-          mapSaved = await uploadCrop(mapCrop, 'minimaps', `${id}/${unit.id}-map.png`, 'inset_map_url');
+          jobs.push(uploadCrop(mapCrop, 'minimaps', `${id}/${unit.id}-map.png`, 'inset_map_url')
+            .then((saved) => ({ kind: 'map', saved })));
         }
+        const results = await Promise.all(jobs);
+        const photoSaved = results.find((r) => r.kind === 'photo')?.saved ?? false;
+        const mapSaved = results.find((r) => r.kind === 'map')?.saved ?? false;
         return { photoSaved, mapSaved };
       };
 
@@ -1085,6 +1186,7 @@ export default function CampaignReview() {
             let photoPageCounter = 0;
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               if (assignIdx >= vendorUnits.length) break;
+              await waitForVisible();
               let page: any = null;
               try {
                 page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
@@ -1144,11 +1246,25 @@ export default function CampaignReview() {
           const runTextMatchPass = async (): Promise<number> => {
             let matchesInPass = 0;
             const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-              if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
+            const retryPages: number[] = [];
+            // Simple 2-stage pipeline: prefetch page N+1 while processing N.
+            let nextPagePromise: Promise<any> | null = null;
+            const pageOrder: number[] = [];
+            for (let n = 1; n <= pdf.numPages; n++) pageOrder.push(n);
+            const runPage = async (pageNum: number, isRetry: boolean): Promise<'ok' | 'retry' | 'stop'> => {
+              await waitForVisible();
+              if (!vendorUnits.some((u) => !u.billboard_photo_url)) return 'stop';
               let page: any = null;
               try {
-                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                page = nextPagePromise
+                  ? await withTimeout(nextPagePromise, `Loading page ${pageNum}`)
+                  : await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                nextPagePromise = null;
+                // Kick off next page fetch in parallel with current page's work.
+                const nextNum = pageNum + 1;
+                if (!isRetry && nextNum <= pdf.numPages) {
+                  try { nextPagePromise = pdf.getPage(nextNum); } catch { nextPagePromise = null; }
+                }
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
                 const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
@@ -1239,7 +1355,7 @@ export default function CampaignReview() {
                       console.warn('[extractPhotos] overview save failed:', ovErr?.message ?? ovErr);
                     }
                   }
-                  continue;
+                  return 'ok';
                 }
                 console.info(`[extractPhotos] ${file.original_name} p${pageNum}: matched unit ${matchedUnit.unit_number}`);
 
@@ -1253,7 +1369,7 @@ export default function CampaignReview() {
                   const picked = pickImageRegions(regions, !!profile.hasMap);
                   if (picked.skipPage) {
                     console.info(`[extractPhotos] ${file.original_name} p${pageNum}: skipped by image_regions rules`);
-                    continue;
+                    return 'ok';
                   }
                   if (picked.photo) {
                     photoCrop = picked.photo;
@@ -1307,13 +1423,24 @@ export default function CampaignReview() {
                 if ((photoSaved || mapSaved) && vendorKey && detectedSource === 'detection') {
                   detectedVendorCropsRef.current[vendorKey] = { photo: photoCrop, map: mapCrop };
                 }
+                return 'ok';
               } catch (pageErr: any) {
-                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed — skipping:`, pageErr?.message ?? pageErr);
-                continue;
+                console.warn(`[extractPhotos] page ${pageNum} of ${file.original_name} failed:`, pageErr?.message ?? pageErr);
+                return isTransientRenderError(pageErr) && !isRetry ? 'retry' : 'ok';
               } finally {
                 page?.cleanup?.();
                 setExtractProgress((p) => ({ ...p, current: p.current + 1 }));
               }
+            };
+            for (const pageNum of pageOrder) {
+              const res = await runPage(pageNum, false);
+              if (res === 'stop') break;
+              if (res === 'retry') retryPages.push(pageNum);
+            }
+            if (nextPagePromise) { try { const p = await nextPagePromise; p?.cleanup?.(); } catch { /* ignore */ } nextPagePromise = null; }
+            for (const pageNum of retryPages) {
+              const res = await runPage(pageNum, true);
+              if (res === 'stop') break;
             }
             return matchesInPass;
           };
@@ -1523,6 +1650,7 @@ export default function CampaignReview() {
           const skipCover = profile?.skipCoverPages ?? 0;
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            await waitForVisible();
             let page: any = null;
             let consumedOrderSlot = false;
             try {
@@ -1822,6 +1950,11 @@ export default function CampaignReview() {
           />
           {extractProgress.label && (
             <p className="text-[11px] text-muted-foreground truncate">{extractProgress.label}</p>
+          )}
+          {extractionPaused && (
+            <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              Extraction paused — keep this tab visible to continue.
+            </p>
           )}
         </div>
       )}

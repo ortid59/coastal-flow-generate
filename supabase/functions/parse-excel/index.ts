@@ -740,10 +740,29 @@ Deno.serve(async (req) => {
 
 
       if (inserts.length > 0) {
-        // Dedupe by unit_number within this file — Postgres ON CONFLICT cannot
-        // affect the same row twice in a single statement. Last occurrence wins.
+        // Dedupe by unit_number within this file. Vendors sometimes repeat
+        // the same unit across rows (different rate periods / flight dates)
+        // — descriptive fields must come from the FIRST occurrence (never
+        // concatenated), and later rows may only overwrite rate/date fields.
+        // Highlights/notes/description come from the first row only.
+        const FIRST_WINS_FIELDS = new Set([
+          "highlights", "notes", "description",
+          "address", "location_description", "market", "media_type",
+          "size", "impressions_weekly", "impressions_4wk", "cpm",
+        ]);
         const seen = new Map<string, any>();
-        for (const row of inserts) seen.set(row.unit_number, row);
+        for (const row of inserts) {
+          const key = row.unit_number;
+          const prior = seen.get(key);
+          if (!prior) { seen.set(key, row); continue; }
+          // Merge: prior wins for descriptive; row wins for other fields
+          // (rates, dates) matching current tier behavior.
+          for (const [k, v] of Object.entries(row)) {
+            if (FIRST_WINS_FIELDS.has(k)) continue;
+            if (v === undefined || v === null || v === "") continue;
+            prior[k] = v;
+          }
+        }
         const deduped = Array.from(seen.values());
 
         // Preserve existing highlights when the new row doesn't derive one
