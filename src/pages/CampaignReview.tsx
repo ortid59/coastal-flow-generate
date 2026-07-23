@@ -498,6 +498,15 @@ export default function CampaignReview() {
   const [reparsing, setReparsing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
+  const [extractionPaused, setExtractionPaused] = useState(false);
+  // Subscribe to visibility changes so the pause banner shows/hides in sync
+  // with the loops' own waitForVisible() gates.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => setExtractionPaused(document.visibilityState !== "visible");
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   const [extractProgress, setExtractProgress] = useState<{ current: number; total: number; label: string }>({
     current: 0,
     total: 0,
