@@ -1368,7 +1368,7 @@ export default function CampaignReview() {
                   const picked = pickImageRegions(regions, !!profile.hasMap);
                   if (picked.skipPage) {
                     console.info(`[extractPhotos] ${file.original_name} p${pageNum}: skipped by image_regions rules`);
-                    continue;
+                    return 'ok';
                   }
                   if (picked.photo) {
                     photoCrop = picked.photo;
