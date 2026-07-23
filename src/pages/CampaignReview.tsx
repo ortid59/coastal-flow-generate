@@ -1245,11 +1245,25 @@ export default function CampaignReview() {
           const runTextMatchPass = async (): Promise<number> => {
             let matchesInPass = 0;
             const unitRegex = profile?.unitRegex ? new RegExp(profile.unitRegex, "gi") : null;
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-              if (!vendorUnits.some((u) => !u.billboard_photo_url)) break;
+            const retryPages: number[] = [];
+            // Simple 2-stage pipeline: prefetch page N+1 while processing N.
+            let nextPagePromise: Promise<any> | null = null;
+            const pageOrder: number[] = [];
+            for (let n = 1; n <= pdf.numPages; n++) pageOrder.push(n);
+            const runPage = async (pageNum: number, isRetry: boolean): Promise<'ok' | 'retry' | 'stop'> => {
+              await waitForVisible();
+              if (!vendorUnits.some((u) => !u.billboard_photo_url)) return 'stop';
               let page: any = null;
               try {
-                page = await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                page = nextPagePromise
+                  ? await withTimeout(nextPagePromise, `Loading page ${pageNum}`)
+                  : await withTimeout(pdf.getPage(pageNum), `Loading page ${pageNum}`);
+                nextPagePromise = null;
+                // Kick off next page fetch in parallel with current page's work.
+                const nextNum = pageNum + 1;
+                if (!isRetry && nextNum <= pdf.numPages) {
+                  try { nextPagePromise = pdf.getPage(nextNum); } catch { nextPagePromise = null; }
+                }
                 pagesChecked++;
                 setExtractProgress((p) => ({ ...p, label: `Photo page ${pageNum} of ${pdf.numPages} — ${file.original_name ?? 'PDF'}` }));
                 const textContent: any = await withTimeout<any>(page.getTextContent(), `Reading page ${pageNum} text`);
