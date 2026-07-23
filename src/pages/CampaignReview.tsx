@@ -1650,6 +1650,7 @@ export default function CampaignReview() {
           const skipCover = profile?.skipCoverPages ?? 0;
 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            await waitForVisible();
             let page: any = null;
             let consumedOrderSlot = false;
             try {
