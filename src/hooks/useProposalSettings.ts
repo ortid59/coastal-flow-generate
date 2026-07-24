@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export type TeamMember = {
+  name: string;
+  role: string;
+  photo_url: string | null;
+};
+
 export type ProposalSettings = {
   id: number;
   company_name: string;
@@ -13,8 +19,15 @@ export type ProposalSettings = {
   next_steps_heading: string;
   next_steps_body: string;
   footer_tagline: string;
+  team_members: TeamMember[];
   updated_at?: string;
 };
+
+export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
+  { name: "Heather", role: "Founder & CEO", photo_url: null },
+  { name: "Via", role: "Creative Media Coordinator", photo_url: null },
+  { name: "Roxie", role: "Chief Happiness Officer", photo_url: null },
+];
 
 export const DEFAULT_PROPOSAL_SETTINGS: ProposalSettings = {
   id: 1,
@@ -30,6 +43,7 @@ export const DEFAULT_PROPOSAL_SETTINGS: ProposalSettings = {
   next_steps_heading: "Next Steps",
   next_steps_body: "",
   footer_tagline: "",
+  team_members: DEFAULT_TEAM_MEMBERS,
 };
 
 let cached: ProposalSettings | null = null;
@@ -44,7 +58,11 @@ export async function fetchProposalSettings(): Promise<ProposalSettings> {
       .select("*")
       .eq("id", 1)
       .maybeSingle();
-    cached = (data as ProposalSettings) ?? DEFAULT_PROPOSAL_SETTINGS;
+    const merged = { ...DEFAULT_PROPOSAL_SETTINGS, ...(data ?? {}) } as ProposalSettings;
+    if (!Array.isArray(merged.team_members) || merged.team_members.length === 0) {
+      merged.team_members = DEFAULT_TEAM_MEMBERS;
+    }
+    cached = merged;
     inflight = null;
     return cached;
   })();
