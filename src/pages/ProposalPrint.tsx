@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Phone, Globe, Instagram } from "lucide-react";
@@ -10,10 +10,9 @@ import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
+import { exportNodesToPdf } from "@/lib/pdfExport";
+import { useToast } from "@/hooks/use-toast";
 
-import heatherPhoto from "@/assets/team-heather.jpg";
-import viaPhoto from "@/assets/team-via.webp";
-import roxiePhoto from "@/assets/team-roxie.jpg";
 
 type Campaign = {
   id: string;
