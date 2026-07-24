@@ -294,7 +294,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       </div>
 
       {/* ===== SECTION 1 — COVER / HERO ===== */}
-      <section className="relative bg-card">
+      <section data-pdf-page className="relative bg-card">
         <div className="grid lg:grid-cols-[55%_45%] min-h-[88vh]">
           {/* Left content */}
           <div className="relative flex items-center px-6 md:px-12 lg:px-16 py-16 md:py-24 border-l-[4px] border-[hsl(var(--accent-gold))]">
