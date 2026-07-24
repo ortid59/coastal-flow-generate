@@ -448,7 +448,8 @@ export default function ProposalPrint() {
 
         {/* ===== UNIT QUOTE PAGES (white, matching Portal PDF) ===== */}
         {units.map((unit, idx) => (
-          <div key={unit.id} className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
+          <div key={unit.id} data-pdf-page className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
+
             <PrintableQuote
               unit={unit}
               market={unit.market ?? "Other"}
