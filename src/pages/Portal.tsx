@@ -426,7 +426,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
             {/* Campaign Coverage Map */}
             {campaign?.vendor_overview_map_url && (
-              <div className="mb-10 mt-16">
+              <div data-pdf-page className="mb-10 mt-16">
                 <div className="text-center mb-8">
                   <div className="eyebrow">Coverage</div>
                   <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
