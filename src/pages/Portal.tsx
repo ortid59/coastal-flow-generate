@@ -416,7 +416,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       </section>
 
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
-      <WhoWeAre />
+      <div data-pdf-page><WhoWeAre /></div>
+
 
       {/* ===== SECTION 3 — RECOMMENDED PLACEMENTS ===== */}
       {byMarket.length > 0 && (
