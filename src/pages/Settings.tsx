@@ -19,10 +19,13 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_PROPOSAL_SETTINGS,
+  DEFAULT_TEAM_MEMBERS,
   ProposalSettings,
+  TeamMember,
   fetchProposalSettings,
   invalidateProposalSettings,
 } from "@/hooks/useProposalSettings";
+
 
 type AllowedUser = {
   email: string;
