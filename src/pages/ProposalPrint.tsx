@@ -267,7 +267,11 @@ export default function ProposalPrint() {
           body { margin: 0; }
           nav, header, footer, .sticky, .no-print { display: none !important; }
           .print-section-page { page-break-after: always; page-break-inside: avoid; }
-          .print-unit-page { page-break-after: always; page-break-inside: avoid; }
+          .print-unit-page {
+            page-break-after: always;
+            page-break-inside: avoid;
+            padding: 0.5in !important;
+          }
           img[src=""], img:not([src]) { display: none; }
 
           /* ── Cover: never bleed onto a second page ── */
