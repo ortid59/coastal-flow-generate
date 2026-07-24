@@ -251,6 +251,7 @@ function ProposalContentForm() {
           next_steps_heading: data.next_steps_heading,
           next_steps_body: data.next_steps_body,
           footer_tagline: data.footer_tagline,
+          team_members: data.team_members ?? [],
         },
         { onConflict: "id" },
       );
