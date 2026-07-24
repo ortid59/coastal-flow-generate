@@ -268,12 +268,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               const targetWindow = window.top !== window.self ? window.open("", "_blank") : null;
               setDownloading(true);
               try {
-                const nodes = units
-                  .map((u) => document.getElementById(`pdf-quote-${u.id}`))
-                  .filter((n): n is HTMLElement => !!n);
+                const nodes = Array.from(
+                  document.querySelectorAll<HTMLElement>("[data-pdf-page]"),
+                );
                 if (!nodes.length) {
                   if (targetWindow && !targetWindow.closed) targetWindow.close();
-                  toast({ title: "No quotes to export", variant: "destructive" });
+                  toast({ title: "Nothing to export", variant: "destructive" });
                   return;
                 }
                 const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
@@ -294,7 +294,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       </div>
 
       {/* ===== SECTION 1 — COVER / HERO ===== */}
-      <section className="relative bg-card">
+      <section data-pdf-page className="relative bg-card">
         <div className="grid lg:grid-cols-[55%_45%] min-h-[88vh]">
           {/* Left content */}
           <div className="relative flex items-center px-6 md:px-12 lg:px-16 py-16 md:py-24 border-l-[4px] border-[hsl(var(--accent-gold))]">
@@ -416,7 +416,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       </section>
 
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
-      <WhoWeAre />
+      <div data-pdf-page><WhoWeAre /></div>
+
 
       {/* ===== SECTION 3 — RECOMMENDED PLACEMENTS ===== */}
       {byMarket.length > 0 && (
@@ -425,7 +426,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
             {/* Campaign Coverage Map */}
             {campaign?.vendor_overview_map_url && (
-              <div className="mb-10 mt-16">
+              <div data-pdf-page className="mb-10 mt-16">
                 <div className="text-center mb-8">
                   <div className="eyebrow">Coverage</div>
                   <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
@@ -614,10 +615,11 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       <PortalIndexBar units={units} />
 
       {/* ===== NEXT STEPS ===== */}
-      <NextSteps />
+      <div data-pdf-page><NextSteps /></div>
 
       {/* ===== MEET THE TEAM ===== */}
-      <MeetTheTeam />
+      <div data-pdf-page><MeetTheTeam /></div>
+
 
       {/* ===== CLOSING / CTA ===== */}
       <ClosingCTA clientName={campaign.client_name} />
@@ -997,9 +999,11 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
             <div
               key={u.id}
               id={`pdf-quote-${u.id}`}
+              data-pdf-page
               className="bg-white"
               style={{ width: "780px", padding: "16px" }}
             >
+
               <PrintableQuote
                 unit={u}
                 market={market}

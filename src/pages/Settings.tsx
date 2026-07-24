@@ -19,10 +19,13 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_PROPOSAL_SETTINGS,
+  DEFAULT_TEAM_MEMBERS,
   ProposalSettings,
+  TeamMember,
   fetchProposalSettings,
   invalidateProposalSettings,
 } from "@/hooks/useProposalSettings";
+
 
 type AllowedUser = {
   email: string;
@@ -248,6 +251,7 @@ function ProposalContentForm() {
           next_steps_heading: data.next_steps_heading,
           next_steps_body: data.next_steps_body,
           footer_tagline: data.footer_tagline,
+          team_members: data.team_members ?? [],
         },
         { onConflict: "id" },
       );
@@ -294,11 +298,16 @@ function ProposalContentForm() {
         </Field>
       </Section>
 
-      <Section title="Meet the Team">
+      <Section title="Meet the Team" description="Roster shown on the client proposal. Members without a photo get an initials monogram.">
         <Field label="Section Heading">
           <Input value={data.meet_the_team_heading} onChange={set("meet_the_team_heading")} />
         </Field>
+        <TeamEditor
+          value={data.team_members?.length ? data.team_members : DEFAULT_TEAM_MEMBERS}
+          onChange={(members) => setData((d) => ({ ...d, team_members: members }))}
+        />
       </Section>
+
 
       <Section title="Next Steps">
         <Field label="Heading">
@@ -351,3 +360,130 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function TeamEditor({
+  value,
+  onChange,
+}: {
+  value: TeamMember[];
+  onChange: (v: TeamMember[]) => void;
+}) {
+  const { toast } = useToast();
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+
+  const update = (idx: number, patch: Partial<TeamMember>) => {
+    const next = value.slice();
+    next[idx] = { ...next[idx], ...patch };
+    onChange(next);
+  };
+
+  const remove = (idx: number) => {
+    if (!confirm(`Remove ${value[idx]?.name || "this member"} from the team?`)) return;
+    const next = value.slice();
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
+  const add = () => onChange([...value, { name: "New Member", role: "Role", photo_url: null }]);
+
+  const upload = async (idx: number, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Please choose an image file", variant: "destructive" });
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      toast({ title: "Image is too large", description: "Max 6 MB.", variant: "destructive" });
+      return;
+    }
+    setUploadingIdx(idx);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `team/${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("logos").upload(path, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from("logos").getPublicUrl(path);
+      update(idx, { photo_url: data.publicUrl });
+      toast({ title: "Photo uploaded" });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e?.message ?? "Please try again.", variant: "destructive" });
+    } finally {
+      setUploadingIdx(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+        {value.map((m, i) => (
+          <div key={i} className="rounded-lg border border-border p-4 space-y-3 bg-background">
+            <div className="flex items-center justify-center">
+              <div className="relative h-24 w-24 rounded-full overflow-hidden bg-secondary flex items-center justify-center border">
+                {m.photo_url ? (
+                  <img src={m.photo_url} alt={m.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="font-heading font-bold text-2xl text-muted-foreground">
+                    {initialsOf(m.name)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input value={m.name} onChange={(e) => update(i, { name: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Role</Label>
+              <Input value={m.role} onChange={(e) => update(i, { role: e.target.value })} />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-primary hover:underline cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) upload(i, f);
+                    e.target.value = "";
+                  }}
+                />
+                {uploadingIdx === i ? "Uploading…" : m.photo_url ? "Replace photo" : "Upload photo"}
+              </label>
+              {m.photo_url && (
+                <button
+                  type="button"
+                  onClick={() => update(i, { photo_url: null })}
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="ml-auto text-xs text-muted-foreground hover:text-destructive"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={add}>
+        <Plus className="h-4 w-4" /> Add team member
+      </Button>
+    </div>
+  );
+}
+

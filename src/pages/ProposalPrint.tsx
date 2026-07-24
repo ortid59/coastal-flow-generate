@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, MapPin, Calendar, Sparkles, ImageOff, Mail, Phone, Globe, Instagram } from "lucide-react";
@@ -10,10 +10,9 @@ import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
+import { exportNodesToPdf } from "@/lib/pdfExport";
+import { useToast } from "@/hooks/use-toast";
 
-import heatherPhoto from "@/assets/team-heather.jpg";
-import viaPhoto from "@/assets/team-via.webp";
-import roxiePhoto from "@/assets/team-roxie.jpg";
 
 type Campaign = {
   id: string;
@@ -112,8 +111,12 @@ export default function ProposalPrint() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportState, setExportState] = useState<"idle" | "generating" | "done" | "error">("idle");
+  const [exportError, setExportError] = useState<string | null>(null);
   const settings = useProposalSettings();
-
+  const containerRef = useRef<HTMLDivElement>(null);
+  const autoRanRef = useRef(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!campaignId) return;
@@ -149,28 +152,55 @@ export default function ProposalPrint() {
     })();
   }, [campaignId]);
 
+  const runExport = async () => {
+    if (!containerRef.current || !campaign) return;
+    setExportState("generating");
+    setExportError(null);
+    try {
+      // Wait for images to finish decoding.
+      const images = Array.from(containerRef.current.querySelectorAll("img"));
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          });
+        }),
+      );
+      const nodes = Array.from(
+        containerRef.current.querySelectorAll<HTMLElement>("[data-pdf-page]"),
+      );
+      if (!nodes.length) throw new Error("No proposal sections to export.");
+      const filename = `${(campaign.proposal_name || campaign.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
+      await exportNodesToPdf(nodes, filename);
+      setExportState("done");
+      toast({ title: "PDF downloaded" });
+      // Close the tab if this window was opened by the admin app.
+      setTimeout(() => {
+        try { if (window.opener) window.close(); } catch { /* ignore */ }
+      }, 400);
+    } catch (e: any) {
+      console.error(e);
+      setExportError(e?.message ?? "PDF generation failed, please try again.");
+      setExportState("error");
+      toast({
+        title: "PDF export failed",
+        description: e?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Auto-trigger export once data + first paint are ready.
   useEffect(() => {
-    if (loading || !campaign) return;
-    const waitForImages = () => {
-      const images = Array.from(document.querySelectorAll("img"));
-      if (images.length === 0) {
-        window.print();
-        return;
-      }
-      const promises = images.map((img) => {
-        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-        return new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-        });
-      });
-      Promise.all(promises).then(() => {
-        setTimeout(() => window.print(), 400);
-      });
-    };
-    const t = setTimeout(waitForImages, 1000);
+    if (loading || !campaign || autoRanRef.current) return;
+    autoRanRef.current = true;
+    const t = setTimeout(() => { runExport(); }, 600);
     return () => clearTimeout(t);
-  }, [loading, campaign, units]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, campaign]);
+
 
   if (loading) {
     return (
@@ -302,22 +332,27 @@ export default function ProposalPrint() {
         }
       `}</style>
 
-      <div className="print-page-wrapper">
-        {/* Screen-only info bar */}
+      <div className="print-page-wrapper" ref={containerRef}>
+        {/* Screen-only status bar (does not appear in exported PDF) */}
         <div className="no-print p-4 bg-muted flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Full proposal preview — use your browser's Print / Save as PDF to download. Tip: in the print dialog, turn off "Headers and Footers" for a clean PDF.
+            {exportState === "generating" && "Generating your proposal PDF — this can take a moment for large decks…"}
+            {exportState === "done" && "PDF downloaded. You can close this tab."}
+            {exportState === "error" && (exportError || "PDF generation failed.")}
+            {exportState === "idle" && "Preparing proposal…"}
           </span>
           <button
-            onClick={() => window.print()}
-            className="text-sm font-medium text-primary hover:underline"
+            onClick={runExport}
+            disabled={exportState === "generating"}
+            className="text-sm font-medium text-primary hover:underline disabled:opacity-50"
           >
-            Print / Save PDF
+            {exportState === "generating" ? "Generating…" : exportState === "error" ? "Retry download" : "Download PDF"}
           </button>
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
               <img src={heroPhoto} alt="" loading="eager" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -342,13 +377,14 @@ export default function ProposalPrint() {
         </section>
 
         {/* ===== WHO WE ARE ===== */}
-        <div className="print-section-page print-who-wrapper">
+        <div data-pdf-page className="print-section-page print-who-wrapper">
           <WhoWeAre />
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
         {campaign.vendor_overview_map_url && (
-          <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+          <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
@@ -358,7 +394,8 @@ export default function ProposalPrint() {
 
         {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
         {activeTiers.length >= 2 && (
-          <section className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <section data-pdf-page className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+
             <div style={{ textAlign: "center", marginBottom: 40 }}>
               <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: Q_GOLD, fontWeight: 600, marginBottom: 12 }}>Choose Your Option</p>
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 32, fontWeight: 800, textTransform: "uppercase", color: Q_NAVY, marginBottom: 12 }}>Campaign Options</h2>
@@ -411,7 +448,8 @@ export default function ProposalPrint() {
 
         {/* ===== UNIT QUOTE PAGES (white, matching Portal PDF) ===== */}
         {units.map((unit, idx) => (
-          <div key={unit.id} className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
+          <div key={unit.id} data-pdf-page className="print-unit-page" style={{ background: "#ffffff", padding: 16 }}>
+
             <PrintableQuote
               unit={unit}
               market={unit.market ?? "Other"}
@@ -422,7 +460,7 @@ export default function ProposalPrint() {
         ))}
 
         {/* ===== NEXT STEPS ===== */}
-        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
           <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>{settings.next_steps_heading || "Next Steps"}</h2>
           <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: settings.next_steps_body ? 24 : 48 }} />
@@ -449,12 +487,13 @@ export default function ProposalPrint() {
         </section>
 
         {/* ===== MEET THE TEAM ===== */}
-        <div className="print-section-page print-team-section">
+        <div data-pdf-page className="print-section-page print-team-section">
           <MeetTheTeam />
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
             <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
