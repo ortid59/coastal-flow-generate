@@ -332,22 +332,27 @@ export default function ProposalPrint() {
         }
       `}</style>
 
-      <div className="print-page-wrapper">
-        {/* Screen-only info bar */}
+      <div className="print-page-wrapper" ref={containerRef}>
+        {/* Screen-only status bar (does not appear in exported PDF) */}
         <div className="no-print p-4 bg-muted flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            Full proposal preview — use your browser's Print / Save as PDF to download. Tip: in the print dialog, turn off "Headers and Footers" for a clean PDF.
+            {exportState === "generating" && "Generating your proposal PDF — this can take a moment for large decks…"}
+            {exportState === "done" && "PDF downloaded. You can close this tab."}
+            {exportState === "error" && (exportError || "PDF generation failed.")}
+            {exportState === "idle" && "Preparing proposal…"}
           </span>
           <button
-            onClick={() => window.print()}
-            className="text-sm font-medium text-primary hover:underline"
+            onClick={runExport}
+            disabled={exportState === "generating"}
+            className="text-sm font-medium text-primary hover:underline disabled:opacity-50"
           >
-            Print / Save PDF
+            {exportState === "generating" ? "Generating…" : exportState === "error" ? "Retry download" : "Download PDF"}
           </button>
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
               <img src={heroPhoto} alt="" loading="eager" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
