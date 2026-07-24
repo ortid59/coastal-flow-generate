@@ -615,10 +615,11 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       <PortalIndexBar units={units} />
 
       {/* ===== NEXT STEPS ===== */}
-      <NextSteps />
+      <div data-pdf-page><NextSteps /></div>
 
       {/* ===== MEET THE TEAM ===== */}
-      <MeetTheTeam />
+      <div data-pdf-page><MeetTheTeam /></div>
+
 
       {/* ===== CLOSING / CTA ===== */}
       <ClosingCTA clientName={campaign.client_name} />
