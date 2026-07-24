@@ -1,0 +1,1 @@
+ALTER TABLE public.proposal_settings ADD COLUMN IF NOT EXISTS team_members jsonb NOT NULL DEFAULT '[]'::jsonb;

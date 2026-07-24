@@ -173,6 +173,7 @@ export type Database = {
           meet_the_team_heading: string
           next_steps_body: string
           next_steps_heading: string
+          team_members: Json
           updated_at: string
           who_we_are_body_1: string
           who_we_are_body_2: string
@@ -187,6 +188,7 @@ export type Database = {
           meet_the_team_heading?: string
           next_steps_body?: string
           next_steps_heading?: string
+          team_members?: Json
           updated_at?: string
           who_we_are_body_1?: string
           who_we_are_body_2?: string
@@ -201,6 +203,7 @@ export type Database = {
           meet_the_team_heading?: string
           next_steps_body?: string
           next_steps_heading?: string
+          team_members?: Json
           updated_at?: string
           who_we_are_body_1?: string
           who_we_are_body_2?: string
