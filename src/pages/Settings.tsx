@@ -298,11 +298,16 @@ function ProposalContentForm() {
         </Field>
       </Section>
 
-      <Section title="Meet the Team">
+      <Section title="Meet the Team" description="Roster shown on the client proposal. Members without a photo get an initials monogram.">
         <Field label="Section Heading">
           <Input value={data.meet_the_team_heading} onChange={set("meet_the_team_heading")} />
         </Field>
+        <TeamEditor
+          value={data.team_members?.length ? data.team_members : DEFAULT_TEAM_MEMBERS}
+          onChange={(members) => setData((d) => ({ ...d, team_members: members }))}
+        />
       </Section>
+
 
       <Section title="Next Steps">
         <Field label="Heading">
