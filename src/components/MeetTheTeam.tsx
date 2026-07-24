@@ -1,24 +1,22 @@
 import { motion } from "framer-motion";
-import heather from "@/assets/team-heather.jpg";
-import via from "@/assets/team-via.webp";
-import roxie from "@/assets/team-roxie.jpg";
-import { useProposalSettings } from "@/hooks/useProposalSettings";
+import { useProposalSettings, DEFAULT_TEAM_MEMBERS, TeamMember } from "@/hooks/useProposalSettings";
 
-
-type Member = { name: string; role: string; photo: string };
-
-const team: Member[] = [
-  { name: "Heather", role: "Founder & CEO", photo: heather },
-  { name: "Via", role: "Creative Media Coordinator", photo: via },
-  { name: "Roxie", role: "Chief Happiness Officer", photo: roxie },
-];
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
 
 export function MeetTheTeam() {
   const settings = useProposalSettings();
+  const team: TeamMember[] =
+    settings.team_members && settings.team_members.length > 0
+      ? settings.team_members
+      : DEFAULT_TEAM_MEMBERS;
   return (
     <section className="relative overflow-hidden bg-card">
       <div className="container-app relative py-24 md:py-32">
-        {/* Section heading */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -38,11 +36,10 @@ export function MeetTheTeam() {
           </p>
         </motion.div>
 
-        {/* Cards */}
         <div className="mt-16 grid gap-10 sm:grid-cols-2 md:grid-cols-3 max-w-5xl mx-auto">
           {team.map((m, i) => (
             <motion.article
-              key={m.name}
+              key={`${m.name}-${i}`}
               initial={{ opacity: 0, y: 32 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
@@ -50,13 +47,22 @@ export function MeetTheTeam() {
               whileHover={{ y: -6 }}
               className="group rounded-2xl bg-[hsl(var(--off-white))] border border-border border-t-[3px] border-t-[hsl(var(--accent-gold))] p-6 shadow-elev-sm transition-shadow hover:shadow-elev-md text-center"
             >
-              <div className="relative mx-auto h-44 w-44 overflow-hidden rounded-full ring-4 ring-card shadow-elev-md">
-                <img
-                  src={m.photo}
-                  alt={`${m.name} — ${m.role}`}
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  loading="lazy"
-                />
+              <div className="relative mx-auto h-44 w-44 overflow-hidden rounded-full ring-4 ring-card shadow-elev-md bg-[hsl(var(--ocean)/0.1)] flex items-center justify-center">
+                {m.photo_url ? (
+                  <img
+                    src={m.photo_url}
+                    alt={`${m.name} — ${m.role}`}
+                    crossOrigin="anonymous"
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                ) : (
+                  <span
+                    className="font-heading font-bold uppercase text-[hsl(var(--ocean))] select-none"
+                    style={{ fontSize: "56px", letterSpacing: "0.02em" }}
+                  >
+                    {initialsOf(m.name)}
+                  </span>
+                )}
               </div>
               <span className="mx-auto mt-6 gold-rule" />
               <h3 className="mt-4 font-heading text-xl font-bold uppercase tracking-wide text-foreground">
