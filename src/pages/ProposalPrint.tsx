@@ -460,7 +460,7 @@ export default function ProposalPrint() {
         ))}
 
         {/* ===== NEXT STEPS ===== */}
-        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
           <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>{settings.next_steps_heading || "Next Steps"}</h2>
           <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: settings.next_steps_body ? 24 : 48 }} />
@@ -487,12 +487,13 @@ export default function ProposalPrint() {
         </section>
 
         {/* ===== MEET THE TEAM ===== */}
-        <div className="print-section-page print-team-section">
+        <div data-pdf-page className="print-section-page print-team-section">
           <MeetTheTeam />
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+
           <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
             <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
