@@ -999,9 +999,11 @@ function MarketSection({ market, units, index, campaign, activeTiers, selectedTi
             <div
               key={u.id}
               id={`pdf-quote-${u.id}`}
+              data-pdf-page
               className="bg-white"
               style={{ width: "780px", padding: "16px" }}
             >
+
               <PrintableQuote
                 unit={u}
                 market={market}
