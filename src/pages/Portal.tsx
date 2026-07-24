@@ -263,32 +263,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           <Button
             size="sm"
             variant="outline"
-            disabled={downloading || units.length === 0}
-            onClick={async () => {
-              const targetWindow = window.top !== window.self ? window.open("", "_blank") : null;
-              setDownloading(true);
-              try {
-                const nodes = Array.from(
-                  document.querySelectorAll<HTMLElement>("[data-pdf-page]"),
-                );
-                if (!nodes.length) {
-                  if (targetWindow && !targetWindow.closed) targetWindow.close();
-                  toast({ title: "Nothing to export", variant: "destructive" });
-                  return;
-                }
-                const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
-                await exportNodesToPdf(nodes, filename, targetWindow);
-                toast({ title: "PDF downloaded" });
-              } catch (e: any) {
-                if (targetWindow && !targetWindow.closed) targetWindow.close();
-                toast({ title: "PDF export failed", description: e?.message ?? "Unknown error", variant: "destructive" });
-              } finally {
-                setDownloading(false);
-              }
+            disabled={units.length === 0 || !campaign}
+            onClick={() => {
+              if (!campaign) return;
+              // Open the print-optimized proposal in a new tab; it auto-invokes
+              // window.print() once images are ready. Same layout admin uses.
+              window.open(`/proposal-print/${campaign.id}`, "_blank", "noopener");
             }}
           >
-            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            {downloading ? "Generating…" : "Download PDF"}
+            <Printer className="h-4 w-4" />
+            Download PDF
           </Button>
         </div>
       </div>

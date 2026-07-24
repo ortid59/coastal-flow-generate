@@ -75,13 +75,12 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            {/* Publicly reachable so client portal (/p/:token) can open the
+                print deck in a new tab. RLS gates campaign/unit reads to those
+                with a portal_token set; admins remain authorized via their session. */}
             <Route
               path="/proposal-print/:campaignId"
-              element={
-                <ProtectedRoute>
-                  <ProposalPrint />
-                </ProtectedRoute>
-              }
+              element={<ProposalPrint />}
             />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
