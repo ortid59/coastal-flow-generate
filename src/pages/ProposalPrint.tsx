@@ -394,7 +394,8 @@ export default function ProposalPrint() {
 
         {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
         {activeTiers.length >= 2 && (
-          <section className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <section data-pdf-page className="print-section-page" style={{ background: "#ffffff", padding: "60px 64px", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+
             <div style={{ textAlign: "center", marginBottom: 40 }}>
               <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: Q_GOLD, fontWeight: 600, marginBottom: 12 }}>Choose Your Option</p>
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 32, fontWeight: 800, textTransform: "uppercase", color: Q_NAVY, marginBottom: 12 }}>Campaign Options</h2>
