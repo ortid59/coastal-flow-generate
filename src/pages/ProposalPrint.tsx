@@ -377,13 +377,14 @@ export default function ProposalPrint() {
         </section>
 
         {/* ===== WHO WE ARE ===== */}
-        <div className="print-section-page print-who-wrapper">
+        <div data-pdf-page className="print-section-page print-who-wrapper">
           <WhoWeAre />
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
         {campaign.vendor_overview_map_url && (
-          <section className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+          <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
             <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
