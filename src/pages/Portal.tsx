@@ -268,12 +268,12 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               const targetWindow = window.top !== window.self ? window.open("", "_blank") : null;
               setDownloading(true);
               try {
-                const nodes = units
-                  .map((u) => document.getElementById(`pdf-quote-${u.id}`))
-                  .filter((n): n is HTMLElement => !!n);
+                const nodes = Array.from(
+                  document.querySelectorAll<HTMLElement>("[data-pdf-page]"),
+                );
                 if (!nodes.length) {
                   if (targetWindow && !targetWindow.closed) targetWindow.close();
-                  toast({ title: "No quotes to export", variant: "destructive" });
+                  toast({ title: "Nothing to export", variant: "destructive" });
                   return;
                 }
                 const filename = `${(campaign?.proposal_name || campaign?.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
