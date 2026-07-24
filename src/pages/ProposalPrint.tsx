@@ -111,8 +111,12 @@ export default function ProposalPrint() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportState, setExportState] = useState<"idle" | "generating" | "done" | "error">("idle");
+  const [exportError, setExportError] = useState<string | null>(null);
   const settings = useProposalSettings();
-
+  const containerRef = useRef<HTMLDivElement>(null);
+  const autoRanRef = useRef(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!campaignId) return;
@@ -148,28 +152,55 @@ export default function ProposalPrint() {
     })();
   }, [campaignId]);
 
+  const runExport = async () => {
+    if (!containerRef.current || !campaign) return;
+    setExportState("generating");
+    setExportError(null);
+    try {
+      // Wait for images to finish decoding.
+      const images = Array.from(containerRef.current.querySelectorAll("img"));
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          });
+        }),
+      );
+      const nodes = Array.from(
+        containerRef.current.querySelectorAll<HTMLElement>("[data-pdf-page]"),
+      );
+      if (!nodes.length) throw new Error("No proposal sections to export.");
+      const filename = `${(campaign.proposal_name || campaign.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
+      await exportNodesToPdf(nodes, filename);
+      setExportState("done");
+      toast({ title: "PDF downloaded" });
+      // Close the tab if this window was opened by the admin app.
+      setTimeout(() => {
+        try { if (window.opener) window.close(); } catch { /* ignore */ }
+      }, 400);
+    } catch (e: any) {
+      console.error(e);
+      setExportError(e?.message ?? "PDF generation failed, please try again.");
+      setExportState("error");
+      toast({
+        title: "PDF export failed",
+        description: e?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Auto-trigger export once data + first paint are ready.
   useEffect(() => {
-    if (loading || !campaign) return;
-    const waitForImages = () => {
-      const images = Array.from(document.querySelectorAll("img"));
-      if (images.length === 0) {
-        window.print();
-        return;
-      }
-      const promises = images.map((img) => {
-        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-        return new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-        });
-      });
-      Promise.all(promises).then(() => {
-        setTimeout(() => window.print(), 400);
-      });
-    };
-    const t = setTimeout(waitForImages, 1000);
+    if (loading || !campaign || autoRanRef.current) return;
+    autoRanRef.current = true;
+    const t = setTimeout(() => { runExport(); }, 600);
     return () => clearTimeout(t);
-  }, [loading, campaign, units]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, campaign]);
+
 
   if (loading) {
     return (
