@@ -10,7 +10,6 @@ import { MeetTheTeam } from "@/components/MeetTheTeam";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
-import { exportNodesToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -153,11 +152,12 @@ export default function ProposalPrint() {
   }, [campaignId]);
 
   const runExport = async () => {
-    if (!containerRef.current || !campaign) return;
+    if (!containerRef.current) return;
     setExportState("generating");
     setExportError(null);
     try {
-      // Wait for images to finish decoding.
+      // Wait for images + fonts before invoking the browser print dialog so
+      // pages don't rasterize with blank photos.
       const images = Array.from(containerRef.current.querySelectorAll("img"));
       await Promise.all(
         images.map((img) => {
@@ -168,18 +168,11 @@ export default function ProposalPrint() {
           });
         }),
       );
-      const nodes = Array.from(
-        containerRef.current.querySelectorAll<HTMLElement>("[data-pdf-page]"),
-      );
-      if (!nodes.length) throw new Error("No proposal sections to export.");
-      const filename = `${(campaign.proposal_name || campaign.campaign_name || "proposal").replace(/[^\w-]+/g, "_")}.pdf`;
-      await exportNodesToPdf(nodes, filename);
+      try {
+        if ((document as any).fonts?.ready) await (document as any).fonts.ready;
+      } catch { /* ignore */ }
+      window.print();
       setExportState("done");
-      toast({ title: "PDF downloaded" });
-      // Close the tab if this window was opened by the admin app.
-      setTimeout(() => {
-        try { if (window.opener) window.close(); } catch { /* ignore */ }
-      }, 400);
     } catch (e: any) {
       console.error(e);
       setExportError(e?.message ?? "PDF generation failed, please try again.");
@@ -192,14 +185,26 @@ export default function ProposalPrint() {
     }
   };
 
-  // Auto-trigger export once data + first paint are ready.
+  // Auto-trigger print once data + first paint are ready.
   useEffect(() => {
     if (loading || !campaign || autoRanRef.current) return;
     autoRanRef.current = true;
-    const t = setTimeout(() => { runExport(); }, 600);
+    const t = setTimeout(() => { runExport(); }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, campaign]);
+
+  // If the tab was opened programmatically (Download button), close it after
+  // the user finishes/cancels the browser print dialog.
+  useEffect(() => {
+    const onAfterPrint = () => {
+      setTimeout(() => {
+        try { if (window.opener) window.close(); } catch { /* ignore */ }
+      }, 300);
+    };
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, []);
 
 
   if (loading) {
@@ -246,7 +251,7 @@ export default function ProposalPrint() {
       <style>{`
         @page {
           size: Letter portrait;
-          margin: 0.5in 0.6in;
+          margin: 0;
         }
         @media print {
           * {
