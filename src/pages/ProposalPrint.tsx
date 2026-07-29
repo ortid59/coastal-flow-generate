@@ -279,15 +279,13 @@ export default function ProposalPrint() {
           #root { width: 8.5in; }
           nav, header, footer, .sticky, .no-print { display: none !important; }
 
-          /* Every full-page section: exactly one Letter page, centered content, no clipping */
+          /* Every full-page section: at least one Letter page, centered content, never clip */
           .print-section-page,
           .print-unit-page {
             width: 8.5in !important;
-            height: 11in !important;
             min-height: 11in !important;
-            max-height: 11in !important;
             box-sizing: border-box !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
@@ -300,6 +298,13 @@ export default function ProposalPrint() {
             padding: 0.5in !important;
             justify-content: flex-start !important;
           }
+          /* Closing CTA keeps its 2-column grid layout in print */
+          .print-cta-section {
+            display: grid !important;
+            grid-template-columns: 40% 60% !important;
+            align-items: stretch !important;
+          }
+
           /* Prevent a trailing blank page: the last printable block must not force another break. */
           .print-page-wrapper > *:last-child,
           .print-page-wrapper > *:last-child .print-section-page,
@@ -566,15 +571,16 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section data-pdf-page className="print-section-page print-dark-section print-cta-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
 
-          <div style={{ background: NAVY_LIGHT, padding: "60px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ background: NAVY_LIGHT, padding: "48px 36px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
-            <p style={{ marginTop: 28, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
-            <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 16 }} />
-            <blockquote style={{ marginTop: 28, fontStyle: "italic", fontSize: 17, color: GOLD, lineHeight: 1.6 }}>"Positioned where your audience moves."</blockquote>
+            <p style={{ marginTop: 24, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
+            <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 14 }} />
+            <blockquote style={{ marginTop: 24, fontStyle: "italic", fontSize: 16, color: GOLD, lineHeight: 1.5 }}>"Positioned where your audience moves."</blockquote>
           </div>
-          <div style={{ padding: "60px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ padding: "48px 48px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>For {campaign.client_name}</p>
             <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 48, fontWeight: 800, textTransform: "uppercase", lineHeight: 0.95, color: WHITE }}>Let's Get<br />To Work.</h2>
             <div style={{ height: 3, width: 80, background: GOLD, borderRadius: 2, marginTop: 20 }} />
