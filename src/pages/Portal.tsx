@@ -230,10 +230,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C', dateRange: fmtTierRange(campaign?.option_c_start ?? null, campaign?.option_c_end ?? null) },
   ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string; dateRange: string | null }[];
 
-  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') =>
-    units
+  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
+    return units
       .filter((u) => u.included && u[key])
-      .reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+      .reduce(
+        (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
+        0,
+      );
+  };
+
 
 
   if (loading) {
