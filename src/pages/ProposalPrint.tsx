@@ -282,6 +282,14 @@ export default function ProposalPrint() {
             page-break-inside: avoid;
             padding: 0.5in !important;
           }
+          /* Prevent a trailing blank page: the last printable block must not force another break. */
+          .print-page-wrapper > *:last-child,
+          .print-page-wrapper > *:last-child .print-section-page,
+          .print-section-page:last-child,
+          .print-unit-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
           img[src=""], img:not([src]) { display: none; }
 
           /* ── Cover: never bleed onto a second page ── */
