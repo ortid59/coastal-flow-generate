@@ -596,7 +596,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, address, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
+          "id, unit_number, market, vendor, format, size, location_description, address, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
