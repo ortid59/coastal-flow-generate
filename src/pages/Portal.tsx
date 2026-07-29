@@ -616,7 +616,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       )}
 
       {/* ===== PROPOSAL INDEX ===== */}
-      <PortalIndexBar units={units} />
+      <PortalIndexBar units={units} marginMult={1 + ((campaign?.margin_pct ?? 0) / 100)} />
 
       {/* ===== NEXT STEPS ===== */}
       <div data-pdf-page><NextSteps /></div>
