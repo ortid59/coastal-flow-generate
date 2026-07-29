@@ -1818,23 +1818,26 @@ export default function CampaignReview() {
   };
 
   const stats = useMemo(() => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 20) / 100);
+    const flightTotal = (u: Unit) =>
+      (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1);
     const included = units.filter((u) => u.included !== false);
     const recs = included.filter((u) => u.recommended).length;
     const imps = included.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-    const cost = included.reduce((s, u) => s + (u.total_cost ?? 0), 0);
+    const cost = included.reduce((s, u) => s + flightTotal(u), 0);
     const photos = included.filter((u) => u.billboard_photo_url).length;
     const tierTotals: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
     const tierCounts: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
     for (const u of included) {
       for (const t of TIERS) {
         if (u[t.key]) {
-          tierTotals[t.key] += u.total_cost ?? 0;
+          tierTotals[t.key] += flightTotal(u);
           tierCounts[t.key] += 1;
         }
       }
     }
     return { total: units.length, included: included.length, recs, imps, cost, photos, tierTotals, tierCounts };
-  }, [units]);
+  }, [units, campaign?.margin_pct]);
 
 
   if (loading) {
