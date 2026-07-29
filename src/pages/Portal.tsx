@@ -1135,8 +1135,8 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
                 )}
                 {unit.four_week_impressions != null && (
                   <div>
-                    <span className="font-semibold text-foreground">4-Week Impressions:</span>{" "}
-                    {fmtNum(unit.four_week_impressions)}
+                    <span className="font-semibold text-foreground">{flightImpressionsLabel(unit.four_week_periods)}:</span>{" "}
+                    {fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))}
                   </div>
                 )}
                 <div>{fmtCostLine("Production", unit.production_cost)}</div>
