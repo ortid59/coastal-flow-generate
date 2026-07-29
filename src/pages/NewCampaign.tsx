@@ -25,6 +25,7 @@ type Vendor = {
   vendor_name: string;
   excel_files: File[];
   photo_pdfs: File[];
+  flight_periods_override: string;
 };
 
 const MAX_VENDORS = 25;
@@ -36,7 +37,9 @@ const newVendor = (): Vendor => ({
   vendor_name: "",
   excel_files: [],
   photo_pdfs: [],
+  flight_periods_override: "",
 });
+
 
 export default function NewCampaign() {
   const { user } = useAuth();
