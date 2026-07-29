@@ -29,8 +29,9 @@ type Props = {
  * displayed as a 2-column vertical grid of small tiles.
  * Each tile links to the corresponding `#unit-{id}` anchor on the page.
  */
-export function PortalIndexBar({ units }: Props) {
+export function PortalIndexBar({ units, marginMult = 1 }: Props) {
   if (!units.length) return null;
+
 
   const onClick = (id: string) => {
     window.dispatchEvent(new CustomEvent("cm:focus-unit", { detail: { id } }));
