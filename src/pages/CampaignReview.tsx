@@ -129,6 +129,31 @@ const normalizeMatchText = (value: string | null | undefined) =>
 const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
+// Parse "Latitude: 41.36638" and "Longitude: -85.1097" from PDF page text and
+// match to a vendor unit whose lat/lon are both within ~0.002 absolute diff.
+// Returns null if the page has no lat/lon or no unit is within tolerance.
+const GEO_TOLERANCE = 0.002;
+function matchUnitByGeo(text: string, units: Array<{ latitude: number | null; longitude: number | null }>): any | null {
+  const latM = /Latitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
+  const lonM = /Longitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
+  if (!latM || !lonM) return null;
+  const lat = parseFloat(latM[1]);
+  const lon = parseFloat(lonM[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  let best: any = null;
+  let bestDist = Infinity;
+  for (const u of units) {
+    if (u.latitude == null || u.longitude == null) continue;
+    const dLat = Math.abs(u.latitude - lat);
+    const dLon = Math.abs(u.longitude - lon);
+    if (dLat <= GEO_TOLERANCE && dLon <= GEO_TOLERANCE) {
+      const d = dLat + dLon;
+      if (d < bestDist) { bestDist = d; best = u; }
+    }
+  }
+  return best;
+}
+
 // ---------- Vendor profile registry ----------
 type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial" | "geo";
 type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions" | "image_regions_left";
