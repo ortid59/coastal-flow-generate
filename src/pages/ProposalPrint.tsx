@@ -429,15 +429,20 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
-        {campaign.vendor_overview_map_url && (campaign as any).show_coverage_map !== false && (
-          <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
-            <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
-            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
-          </section>
-        )}
+        {(() => {
+          const coverageMaps = campaign.vendor_overview_map_urls?.length
+            ? campaign.vendor_overview_map_urls
+            : (campaign.vendor_overview_map_url ? [campaign.vendor_overview_map_url] : []);
+          if (!(coverageMaps.length > 0 && (campaign as any).show_coverage_map !== false)) return null;
+          return coverageMaps.map((url, i) => (
+            <section key={i} data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
+              <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
+              <img src={url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
+            </section>
+          ));
+        })()}
 
         {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
         {activeTiers.length >= 2 && (
