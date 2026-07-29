@@ -260,7 +260,7 @@ export default function ProposalPrint() {
     <>
       <style>{`
         @page {
-          size: Letter portrait;
+          size: 8.5in 11in;
           margin: 0;
         }
         @media print {
@@ -273,14 +273,32 @@ export default function ProposalPrint() {
             animation-duration: 0s !important;
             transition: none !important;
             transform: none !important;
+            box-sizing: border-box;
           }
-          body { margin: 0; }
+          html, body { margin: 0; padding: 0; width: 8.5in; height: auto; background: #ffffff; }
+          #root { width: 8.5in; }
           nav, header, footer, .sticky, .no-print { display: none !important; }
-          .print-section-page { page-break-after: always; page-break-inside: avoid; }
+
+          /* Every full-page section: exactly one Letter page, centered content, no clipping */
+          .print-section-page,
           .print-unit-page {
-            page-break-after: always;
-            page-break-inside: avoid;
+            width: 8.5in !important;
+            height: 11in !important;
+            min-height: 11in !important;
+            max-height: 11in !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+          }
+          .print-unit-page {
             padding: 0.5in !important;
+            justify-content: flex-start !important;
           }
           /* Prevent a trailing blank page: the last printable block must not force another break. */
           .print-page-wrapper > *:last-child,
@@ -292,20 +310,14 @@ export default function ProposalPrint() {
           }
           img[src=""], img:not([src]) { display: none; }
 
-          /* ── Cover: never bleed onto a second page ── */
-          .print-cover-section {
-            max-height: 100vh !important;
-            overflow: hidden !important;
-            page-break-after: always !important;
-          }
-
           /* ── Who We Are: kill stacked watermark + decorative layers ── */
           .print-who-wrapper [aria-hidden="true"] { display: none !important; }
           .print-who-wrapper [style*="opacity: 0"],
           .print-who-wrapper [style*="opacity:0"] { opacity: 1 !important; }
 
           /* ── Meet The Team: keep all 3 cards on one page ── */
-          .print-team-section { page-break-inside: avoid !important; }
+          .print-team-section { display: flex !important; align-items: center !important; }
+          .print-team-section > * { width: 100% !important; }
           .print-team-section section { padding-top: 40px !important; padding-bottom: 40px !important; }
           .print-team-section .grid {
             display: flex !important;
@@ -327,13 +339,11 @@ export default function ProposalPrint() {
             width: 110px !important;
           }
 
-          /* ── Dark navy section pages: readable text + trim height ── */
+          /* ── Dark navy section pages: readable text + full-bleed ── */
           .print-dark-section {
             background-color: #0A1628 !important;
-            min-height: 0 !important;
-            height: auto !important;
-            padding-top: 60px !important;
-            padding-bottom: 60px !important;
+            padding-top: 0.6in !important;
+            padding-bottom: 0.6in !important;
           }
           .print-dark-section h1,
           .print-dark-section h2,
@@ -351,6 +361,9 @@ export default function ProposalPrint() {
             border-color: #C9A84C !important;
             color: #C9A84C !important;
           }
+
+          /* Cover: full-bleed image */
+          .print-cover-section { padding: 0 !important; }
         }
         @media screen {
           .print-page-wrapper { max-width: 820px; margin: 0 auto; }
