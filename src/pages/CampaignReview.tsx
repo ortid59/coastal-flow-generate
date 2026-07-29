@@ -69,6 +69,7 @@ type Unit = {
   four_week_impressions: number | null;
   total_cost: number | null;
   negotiated_rate_4wk: number | null;
+  four_week_periods: number | null;
   cpm: number | null;
   recommended: boolean | null;
   included: boolean | null;
