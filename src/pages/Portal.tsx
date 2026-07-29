@@ -31,7 +31,7 @@ import { CountUp } from "@/components/CountUp";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
-import { fmtCostLine } from "@/lib/format";
+import { fmtCostLine, flightRateLabel, flightRateValue } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
