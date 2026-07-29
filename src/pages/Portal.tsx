@@ -162,7 +162,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .order("market", { ascending: true })
           .order("unit_number", { ascending: true }),
       ]);
-      if (c.data) setCampaign(c.data as Campaign);
+      if (c.data) setCampaign(c.data as unknown as Campaign);
       // Only INCLUDED units appear in the client presentation.
       // The `recommended` flag controls whether the unit gets the "Recommended" ribbon,
       // not whether it appears at all.
