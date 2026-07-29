@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Ruler,
   Eye,
-  
+  ArrowDown,
+  ArrowRight,
   Mail,
   Phone,
   Globe,
