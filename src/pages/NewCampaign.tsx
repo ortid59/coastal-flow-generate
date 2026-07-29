@@ -600,9 +600,30 @@ function VendorCard({
           />
         </div>
       </div>
+
+      <div className="mt-3 grid gap-1.5 md:max-w-[260px]">
+        <Label htmlFor={`flight-${vendor.id}`} className="text-xs">
+          Flight length (# of 4-week periods, optional)
+        </Label>
+        <Input
+          id={`flight-${vendor.id}`}
+          type="number"
+          min="0"
+          step="0.25"
+          value={vendor.flight_periods_override}
+          onChange={(e) => onChange({ flight_periods_override: e.target.value })}
+          placeholder="Leave blank to use Excel column T"
+          className="h-9"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          0.25 = 1 week, 0.5 = 2 weeks, 1 = 4 weeks, 1.5 = 6 weeks. Overrides every unit
+          under this vendor after parsing.
+        </p>
+      </div>
     </div>
   );
 }
+
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
