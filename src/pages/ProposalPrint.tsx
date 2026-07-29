@@ -428,7 +428,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
-        {campaign.vendor_overview_map_url && (
+        {campaign.vendor_overview_map_url && (campaign as any).show_coverage_map !== false && (
           <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
 
             <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>

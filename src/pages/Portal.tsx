@@ -493,7 +493,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           <div className="container-app py-20 md:py-28">
 
             {/* Campaign Coverage Map */}
-            {campaign?.vendor_overview_map_url && (
+            {campaign?.vendor_overview_map_url && (campaign as any)?.show_coverage_map !== false && (
               <div data-pdf-page className="mb-10 mt-16">
                 <div className="text-center mb-8">
                   <div className="eyebrow">Coverage</div>
