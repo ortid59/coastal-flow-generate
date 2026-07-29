@@ -393,9 +393,14 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 />
               </>
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                <ImageOff className="h-14 w-14" />
-              </div>
+              <div
+                className="absolute inset-0"
+                aria-hidden
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--ocean)) 100%)",
+                }}
+              />
             )}
             <div
               className="absolute inset-0"
