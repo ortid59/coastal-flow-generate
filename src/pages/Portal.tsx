@@ -1438,7 +1438,7 @@ function PrintableQuote({
             <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} grey={GREY} />
           )}
           {unit.four_week_impressions != null && (
-            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} grey={GREY} />
+            <Row k={flightImpressionsLabel(unit.four_week_periods)} v={fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))} grey={GREY} />
           )}
           {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} grey={GREY} />}
           <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 0" }} />
