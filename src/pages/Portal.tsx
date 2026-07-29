@@ -876,7 +876,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
   const s = useProposalSettings();
   const email = s.company_email || "heather.waisanen@gmail.com";
   return (
-    <section className="bg-card">
+    <section style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)" }}>
       <div className="grid lg:grid-cols-[40%_60%]">
         {/* Navy panel */}
         <motion.div
@@ -884,7 +884,8 @@ function ClosingCTA({ clientName }: { clientName: string }) {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="bg-primary text-primary-foreground p-10 md:p-16 flex flex-col justify-center"
+          className="text-primary-foreground p-10 md:p-16 flex flex-col justify-center"
+          style={{ background: "transparent" }}
         >
           <Logo size={48} variant="onDark" className="self-start" />
           <div className="mt-8 font-heading text-sm font-bold uppercase tracking-[0.25em]">
@@ -896,7 +897,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
           </blockquote>
         </motion.div>
 
-        {/* White panel */}
+        {/* Right panel */}
         <motion.div
           initial={{ opacity: 0, x: 24 }}
           whileInView={{ opacity: 1, x: 0 }}
