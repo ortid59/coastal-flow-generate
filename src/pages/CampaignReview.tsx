@@ -2373,8 +2373,11 @@ export default function CampaignReview() {
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="4-week rate shown in the client Portal (negotiated × margin)">
                             {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}
                           </td>
-                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Total campaign cost from the Excel (all periods + production + install)">
-                            {fmtMoney(u.total_cost)}
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Flight length in weeks (four_week_periods × 4)">
+                            {`${Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4)} wks`}
+                          </td>
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="Margin-applied flight total (matches the client proposal)">
+                            {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)) * (u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1))}
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
