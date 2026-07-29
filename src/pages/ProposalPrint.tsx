@@ -22,6 +22,7 @@ type Campaign = {
   client_logo_url: string | null;
   cover_image_url: string | null;
   vendor_overview_map_url: string | null;
+  vendor_overview_map_urls: string[] | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
