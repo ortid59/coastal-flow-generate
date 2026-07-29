@@ -282,6 +282,14 @@ export default function ProposalPrint() {
             page-break-inside: avoid;
             padding: 0.5in !important;
           }
+          /* Prevent a trailing blank page: the last printable block must not force another break. */
+          .print-page-wrapper > *:last-child,
+          .print-page-wrapper > *:last-child .print-section-page,
+          .print-section-page:last-child,
+          .print-unit-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
           img[src=""], img:not([src]) { display: none; }
 
           /* ── Cover: never bleed onto a second page ── */
@@ -479,31 +487,27 @@ export default function ProposalPrint() {
         ))}
 
         {/* ===== NEXT STEPS ===== */}
-        <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>03 · Process</p>
-          <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16 }}>{settings.next_steps_heading || "Next Steps"}</h2>
-          <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: settings.next_steps_body ? 24 : 48 }} />
-          {settings.next_steps_body && (
-            <p style={{ maxWidth: 720, textAlign: "center", color: WHITE, fontSize: 14, lineHeight: 1.6, marginBottom: 40, whiteSpace: "pre-line" }}>
-              {settings.next_steps_body}
-            </p>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 32, maxWidth: 900, width: "100%" }}>
-            {[
-              { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
-              { n: "02", title: "Final Approval", body: "Confirm the unit list and flight dates." },
-              { n: "03", title: "Insertion Order", body: "Sign IOs and lock vendor inventory." },
-              { n: "04", title: "Campaign Goes Live", body: "Creative installed, monitoring begins." },
-            ].map((s) => (
-              <div key={s.n} style={{ textAlign: "center" }}>
-                <div className="step-circle" style={{ width: 56, height: 56, borderRadius: "50%", border: `2px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 18, fontWeight: 700, color: GOLD }}>{s.n}</div>
-                <h3 style={{ marginTop: 16, fontFamily: "Montserrat, sans-serif", fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: WHITE }}>{s.title}</h3>
-                <p style={{ marginTop: 8, fontSize: 13, color: WHITE, lineHeight: 1.5 }}>{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        {(() => {
+          const stepLines = (settings.next_steps_body || "")
+            .split("\n")
+            .map((l) => l.replace(/^\s*\d+[.)]\s*/, "").trim())
+            .filter(Boolean);
+          return (
+            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }} data-gold>03 · Process</p>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, color: WHITE }}>{settings.next_steps_heading || "Next Steps"}</h2>
+              <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 40 }} />
+              <ol style={{ listStyle: "none", padding: 0, margin: 0, maxWidth: 780, width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+                {stepLines.map((text, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 16, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "14px 18px" }}>
+                    <span style={{ flex: "0 0 auto", width: 34, height: 34, borderRadius: "50%", border: `2px solid ${GOLD}`, color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700 }} data-gold>{i + 1}</span>
+                    <span style={{ fontSize: 14, lineHeight: 1.55, color: WHITE }}>{text}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          );
+        })()}
 
         {/* ===== MEET THE TEAM ===== */}
         <div data-pdf-page className="print-section-page print-team-section">
