@@ -450,7 +450,7 @@ export default function ProposalPrint() {
                           <span style={labelStyle}>Total Campaign Cost</span>
                           <span style={valStyle}>
                             {totalPeriods > 0 && (
-                              <span style={{ color: Q_GREY, fontWeight: 400 }}>{totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} · </span>
+                              <span style={{ color: Q_GREY, fontWeight: 400 }}>{fmtPeriods(totalPeriods)} · </span>
                             )}
                             ${totalCampaignCost.toLocaleString()} total
                           </span>
