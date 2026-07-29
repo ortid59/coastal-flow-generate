@@ -722,16 +722,13 @@ function PortalFooter({ clientName }: { clientName: string }) {
 /* =================== Next Steps =================== */
 function NextSteps() {
   const s = useProposalSettings();
-
-  const steps = [
-    { n: "01", title: "Review & Feedback", body: "Walk through the proposal and share questions." },
-    { n: "02", title: "Final Approval", body: "Confirm the unit list and flight dates." },
-    { n: "03", title: "Insertion Order", body: "Sign IOs and lock vendor inventory." },
-    { n: "04", title: "Campaign Goes Live", body: "Creative installed, monitoring begins." },
-  ];
+  const steps = (s.next_steps_body || "")
+    .split("\n")
+    .map((l) => l.replace(/^\s*\d+[.)]\s*/, "").trim())
+    .filter(Boolean);
 
   return (
-    <section className="bg-[hsl(var(--off-white))]">
+    <section className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
       <div className="container-app py-20 md:py-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -740,50 +737,35 @@ function NextSteps() {
           transition={{ duration: 0.6 }}
           className="text-center"
         >
-          <div className="eyebrow">03 · Process</div>
-          <h2 className="mt-3 font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight text-foreground">
+          <div className="eyebrow" style={{ color: "hsl(var(--accent-gold))" }}>03 · Process</div>
+          <h2 className="mt-3 font-heading text-3xl md:text-5xl font-bold uppercase tracking-tight" style={{ color: "#ffffff" }}>
             {s.next_steps_heading || "Next Steps"}
           </h2>
-          <span className="mx-auto mt-5 gold-rule" />
-          {s.next_steps_body && (
-            <p className="mx-auto mt-6 max-w-2xl text-base md:text-lg text-muted-foreground whitespace-pre-line">
-              {s.next_steps_body}
-            </p>
-          )}
-
+          <span className="mx-auto mt-5 block h-[3px] w-16 rounded-full" style={{ background: "hsl(var(--accent-gold))" }} />
         </motion.div>
 
-        <div className="mt-16 grid gap-8 md:grid-cols-4 relative">
-          {/* Connector line (md+) */}
-          <motion.div
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.2, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            style={{ transformOrigin: "0% 50%" }}
-            className="hidden md:block absolute top-7 left-[12%] right-[12%] h-[2px] bg-gradient-gold"
-            aria-hidden
-          />
-
-          {steps.map((s, i) => (
-            <motion.div
-              key={s.n}
-              initial={{ opacity: 0, y: 24 }}
+        <ol className="mx-auto mt-12 max-w-3xl space-y-4">
+          {steps.map((text, i) => (
+            <motion.li
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.55, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-              className="relative text-center"
+              transition={{ duration: 0.4, delay: i * 0.04 }}
+              className="flex items-start gap-4 rounded-lg border border-white/10 bg-white/[0.04] px-5 py-4"
             >
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary border-2 border-[hsl(var(--ocean))] font-heading text-lg font-bold text-[hsl(var(--ocean))] transition-all duration-300 hover:bg-[hsl(var(--ocean))] hover:text-[hsl(var(--ocean-foreground))] hover:scale-110 cursor-default">
-                {s.n}
-              </div>
-              <h3 className="mt-5 font-heading text-base font-bold uppercase tracking-wide text-foreground">
-                {s.title}
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
-            </motion.div>
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-heading text-sm font-bold"
+                style={{ border: "2px solid hsl(var(--accent-gold))", color: "hsl(var(--accent-gold))" }}
+              >
+                {i + 1}
+              </span>
+              <p className="text-base md:text-lg leading-relaxed" style={{ color: "#ffffff" }}>
+                {text}
+              </p>
+            </motion.li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );
