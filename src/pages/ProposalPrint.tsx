@@ -352,6 +352,9 @@ export default function ProposalPrint() {
             padding-top: 0.6in !important;
             padding-bottom: 0.6in !important;
           }
+          .print-dark-section.print-brand-blue {
+            background-color: #005c99 !important;
+          }
           .print-dark-section h1,
           .print-dark-section h2,
           .print-dark-section h3,
@@ -559,7 +562,7 @@ export default function ProposalPrint() {
             </div>
           );
           return (
-            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: "#005c99", color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 64px" }}>
+            <section data-pdf-page className="print-section-page print-dark-section print-brand-blue" style={{ background: "#005c99", color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 64px" }}>
               <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }} data-gold>03 · Process</p>
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, color: WHITE }}>{settings.next_steps_heading || "Next Steps"}</h2>
               <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32 }} />
@@ -578,7 +581,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section data-pdf-page className="print-section-page print-dark-section print-cta-section" style={{ background: "#005c99", color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section data-pdf-page className="print-section-page print-dark-section print-cta-section print-brand-blue" style={{ background: "#005c99", color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
 
           <div style={{ background: "transparent", padding: "48px 36px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
