@@ -559,7 +559,7 @@ export default function ProposalPrint() {
             </div>
           );
           return (
-            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 64px" }}>
+            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)", color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 64px" }}>
               <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }} data-gold>03 · Process</p>
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, color: WHITE }}>{settings.next_steps_heading || "Next Steps"}</h2>
               <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32 }} />
