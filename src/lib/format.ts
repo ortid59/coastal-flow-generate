@@ -42,6 +42,17 @@ export const flightRateValue = (
   return (negotiatedRate4wk ?? 0) * marginMult * p;
 };
 
+export const flightImpressionsLabel = (fourWeekPeriods: number | null | undefined): string =>
+  `${flightWeeks(fourWeekPeriods)}-Week Impressions`;
+
+export const flightImpressionsValue = (
+  fourWeekImpressions: number | null | undefined,
+  fourWeekPeriods: number | null | undefined,
+): number => {
+  const p = fourWeekPeriods && fourWeekPeriods > 0 ? fourWeekPeriods : 1;
+  return Math.round((fourWeekImpressions ?? 0) * p);
+};
+
 
 /** "Production: Included" when 0/null, "Production: $672" otherwise. */
 export const fmtCostLine = (label: string, n: number | null | undefined): string => {
