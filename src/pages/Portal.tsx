@@ -1247,7 +1247,7 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
           Quote details
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
-          <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
+          <DetailStat icon={<Eye className="h-4 w-4" />} label={flightImpressionsLabel(unit.four_week_periods)} value={fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))} />
           <DetailStat icon={<DollarSign className="h-4 w-4" />} label={flightRateLabel(unit.four_week_periods)} value={fmtMoney(flightRateValue(unit.negotiated_rate_4wk, marginMult, unit.four_week_periods))} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
