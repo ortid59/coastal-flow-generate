@@ -578,9 +578,9 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CLOSING CTA ===== */}
-        <section data-pdf-page className="print-section-page print-dark-section print-cta-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
+        <section data-pdf-page className="print-section-page print-dark-section print-cta-section" style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)", color: WHITE, minHeight: "100vh", display: "grid", gridTemplateColumns: "40% 60%" }}>
 
-          <div style={{ background: NAVY_LIGHT, padding: "48px 36px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ background: "transparent", padding: "48px 36px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <Logo size={48} variant="onDark" />
             <p style={{ marginTop: 24, fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.25em", color: WHITE }}>{settings.company_name || "Coastal Maverick"}</p>
             <div style={{ height: 2, width: 48, background: GOLD, borderRadius: 2, marginTop: 14 }} />
