@@ -259,9 +259,9 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     );
   }
 
-  // Hero photo priority: explicit campaign cover image > first unit photo
-  const heroPhoto =
-    campaign.cover_image_url ?? units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
+  // Cover hero image is ONLY the explicitly uploaded cover_image_url.
+  // Never fall back to a unit's billboard photo.
+  const heroPhoto = campaign.cover_image_url ?? null;
   const flightLabel = `${fmtDateShort(campaign.flight_start)} – ${fmtDateShort(campaign.flight_end)}`;
   const primaryMarket = campaign.markets?.[0] ?? byMarket[0]?.[0] ?? "—";
 
