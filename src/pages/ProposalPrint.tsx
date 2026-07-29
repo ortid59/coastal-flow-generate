@@ -146,7 +146,7 @@ export default function ProposalPrint() {
           .order("market", { ascending: true })
           .order("unit_number", { ascending: true }),
       ]);
-      if (c.data) setCampaign(c.data as Campaign);
+      if (c.data) setCampaign(c.data as unknown as Campaign);
       const filtered = ((u.data ?? []) as Unit[]).filter((x) => x.included !== false);
       const seen = new Set<string>();
       const deduped: Unit[] = [];
