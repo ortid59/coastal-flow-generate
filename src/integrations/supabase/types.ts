@@ -56,6 +56,7 @@ export type Database = {
           portal_password_set_at: string | null
           portal_token: string | null
           proposal_name: string | null
+          show_coverage_map: boolean
           show_tier_a: boolean
           show_tier_b: boolean
           show_tier_c: boolean
@@ -86,6 +87,7 @@ export type Database = {
           portal_password_set_at?: string | null
           portal_token?: string | null
           proposal_name?: string | null
+          show_coverage_map?: boolean
           show_tier_a?: boolean
           show_tier_b?: boolean
           show_tier_c?: boolean
@@ -116,6 +118,7 @@ export type Database = {
           portal_password_set_at?: string | null
           portal_token?: string | null
           proposal_name?: string | null
+          show_coverage_map?: boolean
           show_tier_a?: boolean
           show_tier_b?: boolean
           show_tier_c?: boolean
