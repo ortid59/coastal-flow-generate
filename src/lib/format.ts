@@ -20,9 +20,10 @@ export const fmtCompactImpressions = (n: number | null | undefined): string => {
   return `${n} impr/wk`;
 };
 
-/** "$960 / 4wk" — short label for index chips. */
+/** "$960 flight total" — short label for index chips. */
 export const fmtRateShort = (n: number | null | undefined): string =>
-  n == null ? "—" : `${fmtMoney(n)} / 4wk`;
+  n == null ? "—" : `${fmtMoney(n)} flight total`;
+
 
 /** "Production: Included" when 0/null, "Production: $672" otherwise. */
 export const fmtCostLine = (label: string, n: number | null | undefined): string => {

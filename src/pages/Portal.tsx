@@ -186,11 +186,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   }, [campaignId]);
 
   const stats = useMemo(() => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
     const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-    const cost = units.reduce((s, u) => s + (u.total_cost ?? 0), 0);
+    const cost = units.reduce(
+      (s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
+      0,
+    );
     const cpm = imps > 0 ? (cost / imps) * 1000 : null;
     return { units: units.length, imps, cost, cpm };
-  }, [units]);
+  }, [units, campaign?.margin_pct]);
+
 
   const byMarket = useMemo(() => {
     const map = new Map<string, Unit[]>();
@@ -225,10 +230,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
     campaign?.show_tier_c && { key: 'tier_c' as const, label: 'Option C', dateRange: fmtTierRange(campaign?.option_c_start ?? null, campaign?.option_c_end ?? null) },
   ].filter(Boolean) as { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string; dateRange: string | null }[];
 
-  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') =>
-    units
+  const tierTotal = (key: 'tier_a' | 'tier_b' | 'tier_c') => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
+    return units
       .filter((u) => u.included && u[key])
-      .reduce((sum, u) => sum + (u.total_cost ?? 0), 0);
+      .reduce(
+        (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
+        0,
+      );
+  };
+
 
 
   if (loading) {
@@ -605,7 +616,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       )}
 
       {/* ===== PROPOSAL INDEX ===== */}
-      <PortalIndexBar units={units} />
+      <PortalIndexBar units={units} marginMult={1 + ((campaign?.margin_pct ?? 0) / 100)} />
 
       {/* ===== NEXT STEPS ===== */}
       <div data-pdf-page><NextSteps /></div>
@@ -1110,6 +1121,18 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
                 4-Week Rate: {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)}
               </div>
+              {(unit.four_week_periods ?? 0) > 0 && (
+                <div className="mt-2 grid gap-0.5 text-xs">
+                  <div>
+                    <span className="font-semibold text-foreground">Flight:</span>{" "}
+                    {Math.round((unit.four_week_periods ?? 0) * 4)} weeks
+                  </div>
+                  <div>
+                    <span className="font-semibold text-foreground">Flight Investment:</span>{" "}
+                    {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
+                  </div>
+                </div>
+              )}
               <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
                 {unit.weekly_impressions != null && (
                   <div>
@@ -1131,6 +1154,7 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
               </div>
             </div>
           </div>
+
         </motion.div>
 
         {/* Right panel — billboard photo + description details */}
@@ -1232,8 +1256,19 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
           <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Rate" value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} />
+          {(unit.four_week_periods ?? 0) > 0 && (
+            <>
+              <DetailStat icon={<DollarSign className="h-4 w-4" />} label="Flight" value={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} />
+              <DetailStat
+                icon={<DollarSign className="h-4 w-4" />}
+                label="Flight Investment"
+                value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
+              />
+            </>
+          )}
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
+
             label="CPM"
             value={unit.cpm == null ? "—" : `$${unit.cpm.toFixed(2)}`}
           />
@@ -1431,6 +1466,18 @@ function PrintableQuote({
             <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
           )}
           <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} grey={GREY} bold />
+          {(unit.four_week_periods ?? 0) > 0 && (
+            <>
+              <Row k="Flight" v={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} grey={GREY} />
+              <Row
+                k="Flight Investment"
+                v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)) * (unit.four_week_periods ?? 0))}
+                grey={GREY}
+                bold
+              />
+            </>
+          )}
+
         </DetailBlock>
       </div>
 

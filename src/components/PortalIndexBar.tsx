@@ -11,6 +11,8 @@ type ChipUnit = {
   weekly_impressions?: number | null;
   four_week_impressions?: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk?: number | null;
+  four_week_periods?: number | null;
   format?: string | null;
   market?: string | null;
   recommended?: boolean | null;
@@ -18,15 +20,18 @@ type ChipUnit = {
 
 type Props = {
   units: ChipUnit[];
+  marginMult?: number;
 };
+
 
 /**
  * Portal "Index" — proper table-of-contents style section listing,
  * displayed as a 2-column vertical grid of small tiles.
  * Each tile links to the corresponding `#unit-{id}` anchor on the page.
  */
-export function PortalIndexBar({ units }: Props) {
+export function PortalIndexBar({ units, marginMult = 1 }: Props) {
   if (!units.length) return null;
+
 
   const onClick = (id: string) => {
     window.dispatchEvent(new CustomEvent("cm:focus-unit", { detail: { id } }));
@@ -120,8 +125,13 @@ export function PortalIndexBar({ units }: Props) {
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span className="tabular-nums">{fmtCompactImpressions(weekly)}</span>
                       <span aria-hidden>·</span>
-                      <span className="tabular-nums">{fmtRateShort(u.total_cost)}</span>
+                      <span className="tabular-nums">
+                        {fmtRateShort(
+                          (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0) || null,
+                        )}
+                      </span>
                     </div>
+
                   </div>
 
                   {/* Page indicator */}
