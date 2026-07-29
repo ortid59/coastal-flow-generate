@@ -313,8 +313,8 @@ function ProposalContentForm() {
         <Field label="Heading">
           <Input value={data.next_steps_heading} onChange={set("next_steps_heading")} />
         </Field>
-        <Field label="Body text">
-          <Textarea rows={6} value={data.next_steps_body} onChange={set("next_steps_body")} placeholder="Optional intro paragraph shown above the four steps." />
+        <Field label="Steps (one per line)">
+          <Textarea rows={12} value={data.next_steps_body} onChange={set("next_steps_body")} placeholder="One step per line. Rendered as a numbered checklist on the proposal." />
         </Field>
       </Section>
 
