@@ -165,8 +165,18 @@ export default function NewCampaign() {
         original_name: string;
         vendor: string;
       }> = [];
+      // Track storage paths per vendor card so we can apply flight overrides
+      // to the right units after parse-excel finishes.
+      const cardPaths = new Map<string, string[]>();
+      const cardOverride = new Map<string, number>();
 
       for (const v of cleaned) {
+        const paths: string[] = [];
+        const overrideVal = v.flight_periods_override.trim();
+        if (overrideVal) {
+          const n = Number(overrideVal);
+          if (Number.isFinite(n) && n > 0) cardOverride.set(v.id, n);
+        }
         for (const xf of v.excel_files) {
           done += 1;
           setProgress(`Uploading file ${done}/${totalFiles} — ${xf.name}`);
@@ -174,6 +184,7 @@ export default function NewCampaign() {
           const xUp = await supabase.storage.from("uploads").upload(xPath, xf, { upsert: false });
           if (xUp.error) throw xUp.error;
           records.push({ kind: "excel", storage_path: xPath, original_name: xf.name, vendor: v.vendor_name });
+          paths.push(xPath);
         }
         for (const pf of v.photo_pdfs) {
           done += 1;
@@ -182,7 +193,9 @@ export default function NewCampaign() {
           const pUp = await supabase.storage.from("uploads").upload(pPath, pf, { upsert: false });
           if (pUp.error) throw pUp.error;
           records.push({ kind: "photosheets", storage_path: pPath, original_name: pf.name, vendor: v.vendor_name });
+          paths.push(pPath);
         }
+        cardPaths.set(v.id, paths);
       }
 
       if (records.length) {
@@ -208,13 +221,13 @@ export default function NewCampaign() {
           // units.vendor so the client-side photo extraction can resolve a
           // profile reliably.
           try {
-            const KNOWN_VENDOR_KEYS = ["alchemy", "adkom", "tasty", "cco", "clear channel", "clearchannel", "lamar", "be seen", "beseen", "ofm", "new tradition"];
+            const KNOWN_VENDOR_KEYS = ["alchemy", "adkom", "tasty", "cco", "clear channel", "clearchannel", "lamar", "be seen", "beseen", "ofm", "new tradition", "adams"];
             const matchesKnown = (v?: string | null) => {
               const s = (v ?? "").toLowerCase();
               return !!s && KNOWN_VENDOR_KEYS.some((k) => s.includes(k));
             };
             const [{ data: vfRows }, { data: uRows }] = await Promise.all([
-              supabase.from("vendor_files").select("id, vendor").eq("campaign_id", campaignId),
+              supabase.from("vendor_files").select("id, vendor, storage_path").eq("campaign_id", campaignId),
               supabase.from("units").select("vendor").eq("campaign_id", campaignId),
             ]);
             const counts = new Map<string, number>();
@@ -234,10 +247,41 @@ export default function NewCampaign() {
                 }
               }
             }
+
+            // Apply per-vendor flight-length overrides captured at upload
+            // time. For each card with an override, find the vendors
+            // associated with the card's uploaded files (post-normalization)
+            // and set units.four_week_periods for those vendors.
+            if (cardOverride.size > 0) {
+              const { data: vfRows2 } = await supabase
+                .from("vendor_files")
+                .select("vendor, storage_path")
+                .eq("campaign_id", campaignId);
+              const pathToVendor = new Map<string, string>();
+              for (const r of vfRows2 ?? []) {
+                if (r.storage_path && r.vendor) pathToVendor.set(r.storage_path, r.vendor);
+              }
+              for (const [cardId, periods] of cardOverride) {
+                const paths = cardPaths.get(cardId) ?? [];
+                const vendors = new Set<string>();
+                for (const p of paths) {
+                  const v = pathToVendor.get(p);
+                  if (v) vendors.add(v);
+                }
+                for (const v of vendors) {
+                  await supabase
+                    .from("units")
+                    .update({ four_week_periods: periods })
+                    .eq("campaign_id", campaignId)
+                    .eq("vendor", v);
+                }
+              }
+            }
           } catch (e) {
             console.warn("post-parse vendor normalization failed", e);
           }
         });
+
 
       navigate(`/campaigns/${campaignId}/review`);
     } catch (err: any) {
