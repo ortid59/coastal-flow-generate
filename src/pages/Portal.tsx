@@ -949,6 +949,56 @@ function ClosingCTA({ clientName }: { clientName: string }) {
   );
 }
 
+/* =================== Coverage Map Carousel =================== */
+function CoverageMapCarousel({ maps }: { maps: string[] }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start" });
+  const [selected, setSelected] = useState(0);
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => setSelected(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", onSelect);
+    onSelect();
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi]);
+  return (
+    <div className="relative">
+      <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm" ref={emblaRef}>
+        <div className="flex">
+          {maps.map((src, i) => (
+            <div key={i} className="min-w-0 flex-[0_0_100%]">
+              <img src={src} alt="Campaign coverage map" className="w-full h-auto object-contain" loading="lazy" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={() => emblaApi?.scrollPrev()}
+        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border bg-card/90 backdrop-blur p-2 text-foreground shadow-elev-sm transition hover:bg-secondary"
+        aria-label="Previous map"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        onClick={() => emblaApi?.scrollNext()}
+        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border bg-card/90 backdrop-blur p-2 text-foreground shadow-elev-sm transition hover:bg-secondary"
+        aria-label="Next map"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+      <div className="mt-4 flex justify-center gap-2">
+        {maps.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => emblaApi?.scrollTo(i)}
+            aria-label={`Go to map ${i + 1}`}
+            className={`h-2 rounded-full transition-all ${i === selected ? 'w-6 bg-foreground' : 'w-2 bg-foreground/30'}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* =================== Market Section (carousel) =================== */
 function MarketSection({ market, units, index, campaign, activeTiers, selectedTier }: { market: string; units: Unit[]; index: number; campaign: Campaign | null; activeTiers: { key: 'tier_a' | 'tier_b' | 'tier_c'; label: string }[]; selectedTier?: 'tier_a' | 'tier_b' | 'tier_c' | null }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: "start" });
