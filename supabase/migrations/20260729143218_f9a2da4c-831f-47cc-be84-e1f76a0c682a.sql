@@ -1,0 +1,1 @@
+ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS vendor_overview_map_urls jsonb NOT NULL DEFAULT '[]'::jsonb;

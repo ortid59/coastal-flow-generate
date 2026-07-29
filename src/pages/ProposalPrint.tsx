@@ -22,6 +22,7 @@ type Campaign = {
   client_logo_url: string | null;
   cover_image_url: string | null;
   vendor_overview_map_url: string | null;
+  vendor_overview_map_urls: string[] | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
@@ -133,7 +134,7 @@ export default function ProposalPrint() {
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, vendor_overview_map_urls, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -145,7 +146,7 @@ export default function ProposalPrint() {
           .order("market", { ascending: true })
           .order("unit_number", { ascending: true }),
       ]);
-      if (c.data) setCampaign(c.data as Campaign);
+      if (c.data) setCampaign(c.data as unknown as Campaign);
       const filtered = ((u.data ?? []) as Unit[]).filter((x) => x.included !== false);
       const seen = new Set<string>();
       const deduped: Unit[] = [];
@@ -428,15 +429,20 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== CAMPAIGN COVERAGE MAP ===== */}
-        {campaign.vendor_overview_map_url && (campaign as any).show_coverage_map !== false && (
-          <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
-
-            <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
-            <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
-            <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
-            <img src={campaign.vendor_overview_map_url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
-          </section>
-        )}
+        {(() => {
+          const coverageMaps = campaign.vendor_overview_map_urls?.length
+            ? campaign.vendor_overview_map_urls
+            : (campaign.vendor_overview_map_url ? [campaign.vendor_overview_map_url] : []);
+          if (!(coverageMaps.length > 0 && (campaign as any).show_coverage_map !== false)) return null;
+          return coverageMaps.map((url, i) => (
+            <section key={i} data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+              <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }}>Coverage</p>
+              <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 36, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, textAlign: "center" }}>Campaign Coverage Map</h2>
+              <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32, margin: "0 auto 32px" }} />
+              <img src={url} alt="Campaign coverage map" loading="eager" crossOrigin="anonymous" style={{ maxWidth: "85%", height: "auto", borderRadius: 12 }} />
+            </section>
+          ));
+        })()}
 
         {/* ===== CAMPAIGN OPTIONS SUMMARY ===== */}
         {activeTiers.length >= 2 && (

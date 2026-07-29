@@ -794,7 +794,8 @@ export default function CampaignReview() {
     setExtracting(true);
     setExtractProgress({ current: 0, total: 0, label: "Preparing…" });
     const photosSummary: ExtractionFileSummary[] = [];
-    let overviewSavedThisRun = false;
+    const overviewMapUrls: string[] = [];
+    const overviewSavedVendors = new Set<string>();
     try {
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -1356,7 +1357,8 @@ export default function CampaignReview() {
                   // First unmatched page in this run + vendor profile expects a
                   // campaign overview map → render the whole page and save as
                   // vendor_overview_map_url. Never assigned to any unit.
-                  if (!overviewSavedThisRun && profile?.hasMap) {
+                  const effVendor = (effectiveVendor || file.vendor || '').trim();
+                  if (effVendor && !overviewSavedVendors.has(effVendor) && profile?.hasMap) {
                     try {
                       const viewport = page.getViewport({ scale: 1.5 });
                       const canvas = document.createElement('canvas');
@@ -1368,15 +1370,20 @@ export default function CampaignReview() {
                         canvas.toBlob((b) => b ? resolve(b) : reject(new Error('overview export failed')), 'image/png'),
                       );
                       const bytes = new Uint8Array(await blob.arrayBuffer());
-                      const path = `${id}/overview-map.png`;
+                      const vendorSlug = effVendor.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+                      const path = `${id}/overview-map-${vendorSlug}.png`;
                       const { error: upErr } = await supabase.storage
                         .from('minimaps').upload(path, bytes, { contentType: 'image/png', upsert: true });
                       if (!upErr) {
                         const { data: pub } = supabase.storage.from('minimaps').getPublicUrl(path);
                         const url = `${pub.publicUrl}?v=${Date.now()}`;
-                        await supabase.from('campaigns').update({ vendor_overview_map_url: url }).eq('id', id);
-                        overviewSavedThisRun = true;
-                        console.info(`[extractPhotos] saved page ${pageNum} as campaign overview map`);
+                        overviewMapUrls.push(url);
+                        overviewSavedVendors.add(effVendor);
+                        await supabase.from('campaigns').update({
+                          vendor_overview_map_urls: overviewMapUrls,
+                          vendor_overview_map_url: overviewMapUrls[0] ?? null,
+                        } as any).eq('id', id);
+                        console.info(`[extractPhotos] saved page ${pageNum} as coverage map for vendor ${effVendor}`);
                       } else {
                         console.warn('[extractPhotos] overview upload failed:', upErr.message);
                       }

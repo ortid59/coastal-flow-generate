@@ -63,6 +63,7 @@ export type Database = {
           status: string | null
           user_id: string
           vendor_overview_map_url: string | null
+          vendor_overview_map_urls: Json
         }
         Insert: {
           campaign_date?: string | null
@@ -94,6 +95,7 @@ export type Database = {
           status?: string | null
           user_id: string
           vendor_overview_map_url?: string | null
+          vendor_overview_map_urls?: Json
         }
         Update: {
           campaign_date?: string | null
@@ -125,6 +127,7 @@ export type Database = {
           status?: string | null
           user_id?: string
           vendor_overview_map_url?: string | null
+          vendor_overview_map_urls?: Json
         }
         Relationships: []
       }

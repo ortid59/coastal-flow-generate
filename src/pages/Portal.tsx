@@ -46,6 +46,7 @@ type Campaign = {
   client_logo_url: string | null;
   cover_image_url: string | null;
   vendor_overview_map_url: string | null;
+  vendor_overview_map_urls: string[] | null;
   flight_start: string | null;
   flight_end: string | null;
   markets: string[] | null;
@@ -148,7 +149,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, vendor_overview_map_urls, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -161,7 +162,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           .order("market", { ascending: true })
           .order("unit_number", { ascending: true }),
       ]);
-      if (c.data) setCampaign(c.data as Campaign);
+      if (c.data) setCampaign(c.data as unknown as Campaign);
       // Only INCLUDED units appear in the client presentation.
       // The `recommended` flag controls whether the unit gets the "Recommended" ribbon,
       // not whether it appears at all.
@@ -493,25 +494,35 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           <div className="container-app py-20 md:py-28">
 
             {/* Campaign Coverage Map */}
-            {campaign?.vendor_overview_map_url && (campaign as any)?.show_coverage_map !== false && (
-              <div data-pdf-page className="mb-10 mt-16">
-                <div className="text-center mb-8">
-                  <div className="eyebrow">Coverage</div>
-                  <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
-                    Campaign Coverage Map
-                  </h2>
-                  <span className="mx-auto mt-5 gold-rule" />
+            {(() => {
+              const coverageMaps = campaign?.vendor_overview_map_urls?.length
+                ? campaign.vendor_overview_map_urls
+                : (campaign?.vendor_overview_map_url ? [campaign.vendor_overview_map_url] : []);
+              if (!(coverageMaps.length > 0 && (campaign as any)?.show_coverage_map !== false)) return null;
+              return (
+                <div data-pdf-page className="mb-10 mt-16">
+                  <div className="text-center mb-8">
+                    <div className="eyebrow">Coverage</div>
+                    <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
+                      Campaign Coverage Map
+                    </h2>
+                    <span className="mx-auto mt-5 gold-rule" />
+                  </div>
+                  {coverageMaps.length === 1 ? (
+                    <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
+                      <img
+                        src={coverageMaps[0]}
+                        alt="Campaign coverage map"
+                        className="w-full h-auto object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <CoverageMapCarousel maps={coverageMaps} />
+                  )}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
-                  <img
-                    src={campaign.vendor_overview_map_url}
-                    alt="Campaign coverage map"
-                    className="w-full h-auto object-contain"
-                    loading="lazy"
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Campaign Options */}
             {activeTiers.length >= 2 && (
@@ -935,6 +946,56 @@ function ClosingCTA({ clientName }: { clientName: string }) {
         </motion.div>
       </div>
     </section>
+  );
+}
+
+/* =================== Coverage Map Carousel =================== */
+function CoverageMapCarousel({ maps }: { maps: string[] }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start" });
+  const [selected, setSelected] = useState(0);
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => setSelected(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", onSelect);
+    onSelect();
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi]);
+  return (
+    <div className="relative">
+      <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm" ref={emblaRef}>
+        <div className="flex">
+          {maps.map((src, i) => (
+            <div key={i} className="min-w-0 flex-[0_0_100%]">
+              <img src={src} alt="Campaign coverage map" className="w-full h-auto object-contain" loading="lazy" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={() => emblaApi?.scrollPrev()}
+        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border bg-card/90 backdrop-blur p-2 text-foreground shadow-elev-sm transition hover:bg-secondary"
+        aria-label="Previous map"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        onClick={() => emblaApi?.scrollNext()}
+        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border bg-card/90 backdrop-blur p-2 text-foreground shadow-elev-sm transition hover:bg-secondary"
+        aria-label="Next map"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+      <div className="mt-4 flex justify-center gap-2">
+        {maps.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => emblaApi?.scrollTo(i)}
+            aria-label={`Go to map ${i + 1}`}
+            className={`h-2 rounded-full transition-all ${i === selected ? 'w-6 bg-foreground' : 'w-2 bg-foreground/30'}`}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
