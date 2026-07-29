@@ -186,11 +186,16 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
   }, [campaignId]);
 
   const stats = useMemo(() => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
     const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-    const cost = units.reduce((s, u) => s + (u.total_cost ?? 0), 0);
+    const cost = units.reduce(
+      (s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
+      0,
+    );
     const cpm = imps > 0 ? (cost / imps) * 1000 : null;
     return { units: units.length, imps, cost, cpm };
-  }, [units]);
+  }, [units, campaign?.margin_pct]);
+
 
   const byMarket = useMemo(() => {
     const map = new Map<string, Unit[]>();
