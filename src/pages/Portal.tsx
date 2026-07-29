@@ -31,7 +31,7 @@ import { CountUp } from "@/components/CountUp";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
-import { fmtCostLine } from "@/lib/format";
+import { fmtCostLine, flightRateLabel, flightRateValue } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
@@ -1119,20 +1119,8 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
           <div className="mt-8 space-y-5">
             <div>
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-                4-Week Rate: {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)}
+                {flightRateLabel(unit.four_week_periods)}: {fmtMoney(flightRateValue(unit.negotiated_rate_4wk, marginMult, unit.four_week_periods))}
               </div>
-              {(unit.four_week_periods ?? 0) > 0 && (
-                <div className="mt-2 grid gap-0.5 text-xs">
-                  <div>
-                    <span className="font-semibold text-foreground">Flight:</span>{" "}
-                    {Math.round((unit.four_week_periods ?? 0) * 4)} weeks
-                  </div>
-                  <div>
-                    <span className="font-semibold text-foreground">Flight Investment:</span>{" "}
-                    {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
-                  </div>
-                </div>
-              )}
               <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
                 {unit.weekly_impressions != null && (
                   <div>
@@ -1255,17 +1243,7 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
-          <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Rate" value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} />
-          {(unit.four_week_periods ?? 0) > 0 && (
-            <>
-              <DetailStat icon={<DollarSign className="h-4 w-4" />} label="Flight" value={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} />
-              <DetailStat
-                icon={<DollarSign className="h-4 w-4" />}
-                label="Flight Investment"
-                value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
-              />
-            </>
-          )}
+          <DetailStat icon={<DollarSign className="h-4 w-4" />} label={flightRateLabel(unit.four_week_periods)} value={fmtMoney(flightRateValue(unit.negotiated_rate_4wk, marginMult, unit.four_week_periods))} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
 
@@ -1465,18 +1443,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
           )}
-          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} grey={GREY} bold />
-          {(unit.four_week_periods ?? 0) > 0 && (
-            <>
-              <Row k="Flight" v={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} grey={GREY} />
-              <Row
-                k="Flight Investment"
-                v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)) * (unit.four_week_periods ?? 0))}
-                grey={GREY}
-                bold
-              />
-            </>
-          )}
+          <Row k={flightRateLabel(unit.four_week_periods)} v={fmtMoney(flightRateValue(unit.negotiated_rate_4wk, 1 + ((campaign?.margin_pct ?? 0) / 100), unit.four_week_periods))} grey={GREY} bold />
 
         </DetailBlock>
       </div>

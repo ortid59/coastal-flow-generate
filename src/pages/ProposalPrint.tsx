@@ -11,6 +11,7 @@ import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { useToast } from "@/hooks/use-toast";
+import { flightRateLabel, flightRateValue } from "@/lib/format";
 
 
 type Campaign = {
@@ -690,17 +691,7 @@ function PrintableQuote({
           {unit.install_cost != null && (
             <Row k="Install" v={fmtMoney(unit.install_cost)} />
           )}
-          <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} bold />
-          {(unit.four_week_periods ?? 0) > 0 && (
-            <>
-              <Row k="Flight" v={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} />
-              <Row
-                k="Flight Investment"
-                v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)) * (unit.four_week_periods ?? 0))}
-                bold
-              />
-            </>
-          )}
+          <Row k={flightRateLabel(unit.four_week_periods)} v={fmtMoney(flightRateValue(unit.negotiated_rate_4wk, 1 + ((campaign?.margin_pct ?? 0) / 100), unit.four_week_periods))} bold />
 
         </DetailBlock>
       </div>
