@@ -798,7 +798,7 @@ function NextSteps() {
     .filter(Boolean);
 
   return (
-    <section className="bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+    <section className="text-[hsl(var(--primary-foreground))]" style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)" }}>
       <div className="container-app py-20 md:py-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
