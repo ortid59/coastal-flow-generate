@@ -1188,11 +1188,11 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
                 className="absolute bottom-6 left-6 rounded-xl bg-card/95 backdrop-blur border-l-[4px] border-[hsl(var(--accent-gold))] px-6 py-4 shadow-elev-md"
               >
                 <CountUp
-                  value={unit.four_week_impressions}
+                  value={flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods)}
                   className="block num-display text-3xl md:text-4xl text-foreground leading-none"
                 />
                 <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
-                  4-Week Impressions
+                  {flightImpressionsLabel(unit.four_week_periods)}
                 </div>
               </motion.div>
             )}
