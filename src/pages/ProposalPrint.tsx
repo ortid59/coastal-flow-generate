@@ -76,10 +76,19 @@ const fmtMoney = (n: number | null) =>
   n == null
     ? "—"
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-const fmtDateShort = (d: string | null) => (d ? format(new Date(d), "M/d/yyyy") : "—");
 const parseLocalDate = (s: string) => {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1);
+  // Parse YYYY-MM-DD as LOCAL midnight so date-only values don't shift by
+  // one day in US timezones.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(s);
+};
+const fmtDateShort = (d: string | null) => (d ? format(parseLocalDate(d), "M/d/yyyy") : "—");
+const fmtPeriods = (n: number): string => {
+  const rounded = Math.round(n * 100) / 100;
+  const label = rounded === 1 ? "period" : "periods";
+  const str = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${str} ${label}`;
 };
 const fmtTierRange = (s: string | null, e: string | null): string | null => {
   if (!s || !e) return null;
