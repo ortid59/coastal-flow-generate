@@ -492,19 +492,57 @@ export default function ProposalPrint() {
             .split("\n")
             .map((l) => l.replace(/^\s*\d+[.)]\s*/, "").trim())
             .filter(Boolean);
+          const mid = Math.ceil(stepLines.length / 2);
+          const colA = stepLines.slice(0, mid);
+          const colB = stepLines.slice(mid);
+          const chipStyle: React.CSSProperties = {
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 999,
+            padding: "8px 14px",
+          };
+          const numStyle: React.CSSProperties = {
+            flex: "0 0 auto",
+            width: 26,
+            height: 26,
+            borderRadius: "50%",
+            border: `2px solid ${GOLD}`,
+            color: GOLD,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "Montserrat, sans-serif",
+            fontSize: 11,
+            fontWeight: 700,
+          };
+          const renderCol = (arr: string[], offset: number) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+              {arr.map((text, i) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                  <div style={chipStyle}>
+                    <span style={numStyle} data-gold>{offset + i + 1}</span>
+                    <span style={{ fontSize: 13, lineHeight: 1.4, color: WHITE }}>{text}</span>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <span style={{ alignSelf: "center", color: GOLD, fontSize: 14, lineHeight: 1 }} data-gold>▼</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
           return (
-            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 80px" }}>
+            <section data-pdf-page className="print-section-page print-dark-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 64px" }}>
               <p style={{ fontSize: 11, letterSpacing: "0.25em", textTransform: "uppercase", color: GOLD, fontWeight: 600, marginBottom: 12 }} data-gold>03 · Process</p>
               <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 40, fontWeight: 800, textTransform: "uppercase", marginBottom: 16, color: WHITE }}>{settings.next_steps_heading || "Next Steps"}</h2>
-              <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 40 }} />
-              <ol style={{ listStyle: "none", padding: 0, margin: 0, maxWidth: 780, width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-                {stepLines.map((text, i) => (
-                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 16, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "14px 18px" }}>
-                    <span style={{ flex: "0 0 auto", width: 34, height: 34, borderRadius: "50%", border: `2px solid ${GOLD}`, color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 700 }} data-gold>{i + 1}</span>
-                    <span style={{ fontSize: 14, lineHeight: 1.55, color: WHITE }}>{text}</span>
-                  </li>
-                ))}
-              </ol>
+              <div style={{ height: 3, width: 64, background: GOLD, borderRadius: 2, marginBottom: 32 }} />
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 24, maxWidth: 900, width: "100%" }}>
+                {renderCol(colA, 0)}
+                <div style={{ paddingTop: 10, color: GOLD, fontSize: 18 }} data-gold>▶</div>
+                {renderCol(colB, colA.length)}
+              </div>
             </section>
           );
         })()}
