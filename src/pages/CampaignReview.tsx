@@ -615,7 +615,7 @@ export default function CampaignReview() {
     const [c, u] = await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
+        .select("id, client_name, campaign_name, proposal_name, client_logo_url, status, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map, vendor_overview_map_url")
         .eq("id", id)
         .single(),
       supabase
@@ -2189,6 +2189,28 @@ export default function CampaignReview() {
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* Coverage map toggle */}
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Switch
+                    checked={(campaign as any).show_coverage_map !== false}
+                    onCheckedChange={async (v) => {
+                      const prev = (campaign as any).show_coverage_map !== false;
+                      setCampaign({ ...campaign, show_coverage_map: v } as any);
+                      const { error } = await supabase.from("campaigns").update({ show_coverage_map: v } as any).eq("id", campaign.id);
+                      if (error) {
+                        toast({ title: "Couldn't update", description: error.message, variant: "destructive" });
+                        setCampaign({ ...campaign, show_coverage_map: prev } as any);
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-medium">Show Campaign Coverage Map</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {(campaign as any).vendor_overview_map_url ? "Map uploaded" : "No map uploaded yet"}
+                </span>
               </div>
             </section>
           )}
