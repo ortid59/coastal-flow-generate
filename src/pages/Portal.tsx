@@ -745,28 +745,58 @@ function NextSteps() {
           <span className="mx-auto mt-5 block h-[3px] w-16 rounded-full" style={{ background: "hsl(var(--accent-gold))" }} />
         </motion.div>
 
-        <ol className="mx-auto mt-12 max-w-3xl space-y-4">
-          {steps.map((text, i) => (
-            <motion.li
-              key={i}
-              initial={{ opacity: 0, y: 12 }}
+        {(() => {
+          const mid = Math.ceil(steps.length / 2);
+          const cols = [steps.slice(0, mid), steps.slice(mid)];
+          const renderChip = (text: string, idx: number) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 8 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.04 }}
-              className="flex items-start gap-4 rounded-lg border border-white/10 bg-white/[0.04] px-5 py-4"
+              transition={{ duration: 0.35, delay: idx * 0.03 }}
+              className="flex items-center gap-3 rounded-full border border-white/15 bg-white/[0.05] px-4 py-2.5"
             >
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-heading text-sm font-bold"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-heading text-xs font-bold"
                 style={{ border: "2px solid hsl(var(--accent-gold))", color: "hsl(var(--accent-gold))" }}
               >
-                {i + 1}
+                {idx + 1}
               </span>
-              <p className="text-base md:text-lg leading-relaxed" style={{ color: "#ffffff" }}>
-                {text}
-              </p>
-            </motion.li>
-          ))}
-        </ol>
+              <span className="text-sm md:text-[15px] leading-snug" style={{ color: "#ffffff" }}>{text}</span>
+            </motion.div>
+          );
+          return (
+            <div className="mx-auto mt-12 grid max-w-4xl gap-x-8 gap-y-3 md:grid-cols-[1fr_auto_1fr] items-start relative">
+              <div className="flex flex-col gap-3">
+                {cols[0].map((t, i) => (
+                  <div key={i} className="flex flex-col items-stretch gap-2">
+                    {renderChip(t, i)}
+                    {i < cols[0].length - 1 && (
+                      <ArrowDown className="mx-auto h-4 w-4" style={{ color: "hsl(var(--accent-gold))" }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:flex items-center justify-center pt-6">
+                <ArrowRight className="h-5 w-5" style={{ color: "hsl(var(--accent-gold))" }} />
+              </div>
+              <div className="md:hidden flex justify-center">
+                <ArrowDown className="h-5 w-5" style={{ color: "hsl(var(--accent-gold))" }} />
+              </div>
+              <div className="flex flex-col gap-3">
+                {cols[1].map((t, i) => (
+                  <div key={i} className="flex flex-col items-stretch gap-2">
+                    {renderChip(t, cols[0].length + i)}
+                    {i < cols[1].length - 1 && (
+                      <ArrowDown className="mx-auto h-4 w-4" style={{ color: "hsl(var(--accent-gold))" }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </section>
   );
