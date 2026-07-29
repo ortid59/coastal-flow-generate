@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import heatherImg from "@/assets/team-heather.jpg";
+import viaImg from "@/assets/team-via.webp";
+import roxieImg from "@/assets/team-roxie.jpg";
 
 export type TeamMember = {
   name: string;
@@ -24,9 +27,9 @@ export type ProposalSettings = {
 };
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
-  { name: "Heather", role: "Founder & CEO", photo_url: null },
-  { name: "Via", role: "Creative Media Coordinator", photo_url: null },
-  { name: "Roxie", role: "Chief Happiness Officer", photo_url: null },
+  { name: "Heather", role: "Founder & CEO", photo_url: heatherImg },
+  { name: "Via", role: "Creative Media Coordinator", photo_url: viaImg },
+  { name: "Roxie", role: "Chief Happiness Officer", photo_url: roxieImg },
 ];
 
 export const DEFAULT_PROPOSAL_SETTINGS: ProposalSettings = {
