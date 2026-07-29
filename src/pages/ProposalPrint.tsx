@@ -234,8 +234,9 @@ export default function ProposalPrint() {
     );
   }
 
-  const heroPhoto =
-    campaign.cover_image_url ?? units.find((u) => u.billboard_photo_url)?.billboard_photo_url ?? null;
+  // Cover image is ONLY the explicitly uploaded campaign.cover_image_url.
+  // Never fall back to a unit's billboard photo.
+  const heroPhoto = campaign.cover_image_url ?? null;
   const flightLabel = `${fmtDateShort(campaign.flight_start)} – ${fmtDateShort(campaign.flight_end)}`;
   const primaryMarket = campaign.markets?.[0] ?? "—";
 
