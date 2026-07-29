@@ -513,7 +513,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                               <span className="font-semibold">
                                 {totalPeriods > 0 && (
                                   <span className="text-muted-foreground font-normal">
-                                    {totalPeriods} {totalPeriods === 1 ? 'period' : 'periods'} ·{' '}
+                                    {fmtPeriods(totalPeriods)} ·{' '}
                                   </span>
                                 )}
                                 ${totalCampaignCost.toLocaleString()} total
