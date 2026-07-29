@@ -11,6 +11,8 @@ type ChipUnit = {
   weekly_impressions?: number | null;
   four_week_impressions?: number | null;
   total_cost: number | null;
+  negotiated_rate_4wk?: number | null;
+  four_week_periods?: number | null;
   format?: string | null;
   market?: string | null;
   recommended?: boolean | null;
@@ -18,7 +20,9 @@ type ChipUnit = {
 
 type Props = {
   units: ChipUnit[];
+  marginMult?: number;
 };
+
 
 /**
  * Portal "Index" — proper table-of-contents style section listing,
