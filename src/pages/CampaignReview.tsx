@@ -1357,7 +1357,7 @@ export default function CampaignReview() {
                   // First unmatched page in this run + vendor profile expects a
                   // campaign overview map → render the whole page and save as
                   // vendor_overview_map_url. Never assigned to any unit.
-                  const effVendor = (file.vendor || '').trim();
+                  const effVendor = (effectiveVendor || file.vendor || '').trim();
                   if (effVendor && !overviewSavedVendors.has(effVendor) && profile?.hasMap) {
                     try {
                       const viewport = page.getViewport({ scale: 1.5 });
