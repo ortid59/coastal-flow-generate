@@ -1345,6 +1345,8 @@ export default function CampaignReview() {
                     const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
                     if (found) { matchedUnit = found; break; }
                   }
+                } else if (profile?.matchStrategy === "geo") {
+                  matchedUnit = matchUnitByGeo(text, vendorUnits);
                 } else {
                   matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
                 }
