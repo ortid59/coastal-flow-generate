@@ -1466,6 +1466,18 @@ function PrintableQuote({
             <Row k="Install" v={fmtMoney(unit.install_cost)} grey={GREY} />
           )}
           <Row k="4-Week Rate" v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)))} grey={GREY} bold />
+          {(unit.four_week_periods ?? 0) > 0 && (
+            <>
+              <Row k="Flight" v={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} grey={GREY} />
+              <Row
+                k="Flight Investment"
+                v={fmtMoney((unit.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 0) / 100)) * (unit.four_week_periods ?? 0))}
+                grey={GREY}
+                bold
+              />
+            </>
+          )}
+
         </DetailBlock>
       </div>
 
