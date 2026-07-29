@@ -156,6 +156,7 @@ const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Tasty Media":   { matchStrategy: "district_text", crop: "full_bleed", hasMap: false },
   "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true, aliases: ["Clear Channel Outdoor", "Clear Channel", "ClearChannel"] },
   "Lamar":         { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Lamar Advertising"] },
+  "Adams Outdoor": { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Adams", "Adams Outdoor Advertising"] },
   "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, pagesPerUnit: 2, aliases: ["BeSeen", "Be Seen Media"] },
   "OFM":           { matchStrategy: "manual" },
   "New Tradition": { matchStrategy: "unit_number_partial", crop: "full_bleed", hasMap: false, aliases: ["New Tradition Media"] },
