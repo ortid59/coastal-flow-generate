@@ -1,0 +1,1 @@
+ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS show_coverage_map boolean NOT NULL DEFAULT true;

@@ -148,7 +148,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
       const [c, u] = await Promise.all([
         supabase
           .from("campaigns")
-          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct")
+          .select("id, client_name, campaign_name, proposal_name, client_logo_url, cover_image_url, vendor_overview_map_url, flight_start, flight_end, markets, show_tier_a, show_tier_b, show_tier_c, option_a_start, option_a_end, option_b_start, option_b_end, option_c_start, option_c_end, margin_pct, show_coverage_map")
           .eq("id", campaignId)
           .single(),
         supabase
@@ -493,7 +493,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           <div className="container-app py-20 md:py-28">
 
             {/* Campaign Coverage Map */}
-            {campaign?.vendor_overview_map_url && (
+            {campaign?.vendor_overview_map_url && (campaign as any)?.show_coverage_map !== false && (
               <div data-pdf-page className="mb-10 mt-16">
                 <div className="text-center mb-8">
                   <div className="eyebrow">Coverage</div>
