@@ -1256,8 +1256,19 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
           <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
           <DetailStat icon={<DollarSign className="h-4 w-4" />} label="4-Week Rate" value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)} />
+          {(unit.four_week_periods ?? 0) > 0 && (
+            <>
+              <DetailStat icon={<DollarSign className="h-4 w-4" />} label="Flight" value={`${Math.round((unit.four_week_periods ?? 0) * 4)} weeks`} />
+              <DetailStat
+                icon={<DollarSign className="h-4 w-4" />}
+                label="Flight Investment"
+                value={fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
+              />
+            </>
+          )}
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
+
             label="CPM"
             value={unit.cpm == null ? "—" : `$${unit.cpm.toFixed(2)}`}
           />
