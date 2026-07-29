@@ -24,6 +24,24 @@ export const fmtCompactImpressions = (n: number | null | undefined): string => {
 export const fmtRateShort = (n: number | null | undefined): string =>
   n == null ? "—" : `${fmtMoney(n)} flight total`;
 
+/** Dynamic flight-rate label based on # of 4-week periods, e.g. "2-Week Rate". */
+export const flightWeeks = (fourWeekPeriods: number | null | undefined): number => {
+  const p = fourWeekPeriods && fourWeekPeriods > 0 ? fourWeekPeriods : 1;
+  return Math.max(1, Math.round(p * 4));
+};
+
+export const flightRateLabel = (fourWeekPeriods: number | null | undefined): string =>
+  `${flightWeeks(fourWeekPeriods)}-Week Rate`;
+
+export const flightRateValue = (
+  negotiatedRate4wk: number | null | undefined,
+  marginMult: number,
+  fourWeekPeriods: number | null | undefined,
+): number => {
+  const p = fourWeekPeriods && fourWeekPeriods > 0 ? fourWeekPeriods : 1;
+  return (negotiatedRate4wk ?? 0) * marginMult * p;
+};
+
 
 /** "Production: Included" when 0/null, "Production: $672" otherwise. */
 export const fmtCostLine = (label: string, n: number | null | undefined): string => {
