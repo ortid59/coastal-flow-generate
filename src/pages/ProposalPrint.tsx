@@ -705,6 +705,7 @@ function PrintableQuote({
           gridTemplateColumns: unit.inset_map_url ? "1fr 1fr" : "1fr",
           gap: 10,
           marginBottom: 12,
+          alignItems: "start",
         }}
       >
         <PhotoBox label="Location photo" src={unit.billboard_photo_url} />
@@ -786,20 +787,14 @@ function PrintableQuote({
 
 function PhotoBox({ src, label }: { src: string | null; label: string }) {
   return (
-    <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, overflow: "hidden", background: "#F3F4F6" }}>
-      {src ? (
-        <img
-          src={src}
-          alt={label}
-          loading="eager"
-          crossOrigin="anonymous"
-          style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
-        />
-      ) : (
-        <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>
-          No image available
-        </div>
-      )}
+    <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, overflow: "hidden", background: "#ffffff" }}>
+      <div style={{ height: 200, overflow: "hidden", background: "#F3F4F6" }}>
+        {src ? (
+          <img src={src} alt={label} loading="eager" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        ) : (
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>No image available</div>
+        )}
+      </div>
       <div style={{ padding: "4px 8px", fontSize: 9, letterSpacing: "0.18em", color: Q_GREY, fontWeight: 600, textTransform: "uppercase" as const, background: "#fff" }}>
         {label}
       </div>
