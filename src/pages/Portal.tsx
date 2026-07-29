@@ -465,7 +465,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
                     const marginMult = 1 + ((campaign.margin_pct ?? 0) / 100);
                     const fourWeekRate = tierUnits.reduce((sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
-                    const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
+                    const totalImpressions = tierUnits.reduce((sum, u) => sum + flightImpressionsValue(u.four_week_impressions, u.four_week_periods), 0);
                     const totalPeriods = tierUnits.reduce((sum, u) => sum + (u.four_week_periods ?? 0), 0);
                     const totalCampaignCost = tierUnits.reduce(
                       (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
