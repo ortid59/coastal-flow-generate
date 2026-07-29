@@ -494,25 +494,35 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
           <div className="container-app py-20 md:py-28">
 
             {/* Campaign Coverage Map */}
-            {campaign?.vendor_overview_map_url && (campaign as any)?.show_coverage_map !== false && (
-              <div data-pdf-page className="mb-10 mt-16">
-                <div className="text-center mb-8">
-                  <div className="eyebrow">Coverage</div>
-                  <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
-                    Campaign Coverage Map
-                  </h2>
-                  <span className="mx-auto mt-5 gold-rule" />
+            {(() => {
+              const coverageMaps = campaign?.vendor_overview_map_urls?.length
+                ? campaign.vendor_overview_map_urls
+                : (campaign?.vendor_overview_map_url ? [campaign.vendor_overview_map_url] : []);
+              if (!(coverageMaps.length > 0 && (campaign as any)?.show_coverage_map !== false)) return null;
+              return (
+                <div data-pdf-page className="mb-10 mt-16">
+                  <div className="text-center mb-8">
+                    <div className="eyebrow">Coverage</div>
+                    <h2 className="mt-3 font-heading text-2xl md:text-3xl font-bold uppercase tracking-tight text-foreground">
+                      Campaign Coverage Map
+                    </h2>
+                    <span className="mx-auto mt-5 gold-rule" />
+                  </div>
+                  {coverageMaps.length === 1 ? (
+                    <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
+                      <img
+                        src={coverageMaps[0]}
+                        alt="Campaign coverage map"
+                        className="w-full h-auto object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <CoverageMapCarousel maps={coverageMaps} />
+                  )}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-border/40 shadow-elev-sm">
-                  <img
-                    src={campaign.vendor_overview_map_url}
-                    alt="Campaign coverage map"
-                    className="w-full h-auto object-contain"
-                    loading="lazy"
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Campaign Options */}
             {activeTiers.length >= 2 && (
