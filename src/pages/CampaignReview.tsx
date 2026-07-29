@@ -129,8 +129,33 @@ const normalizeMatchText = (value: string | null | undefined) =>
 const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
+// Parse "Latitude: 41.36638" and "Longitude: -85.1097" from PDF page text and
+// match to a vendor unit whose lat/lon are both within ~0.002 absolute diff.
+// Returns null if the page has no lat/lon or no unit is within tolerance.
+const GEO_TOLERANCE = 0.002;
+function matchUnitByGeo(text: string, units: Array<any>): any | null {
+  const latM = /Latitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
+  const lonM = /Longitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
+  if (!latM || !lonM) return null;
+  const lat = parseFloat(latM[1]);
+  const lon = parseFloat(lonM[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  let best: any = null;
+  let bestDist = Infinity;
+  for (const u of units) {
+    if (u.latitude == null || u.longitude == null) continue;
+    const dLat = Math.abs(u.latitude - lat);
+    const dLon = Math.abs(u.longitude - lon);
+    if (dLat <= GEO_TOLERANCE && dLon <= GEO_TOLERANCE) {
+      const d = dLat + dLon;
+      if (d < bestDist) { bestDist = d; best = u; }
+    }
+  }
+  return best;
+}
+
 // ---------- Vendor profile registry ----------
-type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial";
+type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial" | "geo";
 type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions" | "image_regions_left";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
@@ -156,8 +181,8 @@ const VENDOR_PROFILES: Record<string, VendorProfile> = {
   "Adkom":         { matchStrategy: "unit_number", unitRegex: "(IL[-\\u2010-\\u2015\\u2212][0-9]{4,6})", crop: "image_regions_left", hasMap: false },
   "Tasty Media":   { matchStrategy: "district_text", crop: "full_bleed", hasMap: false },
   "CCO":           { matchStrategy: "unit_number", unitRegex: "\\b(\\d{4,6})\\s*[\\u2013\\u2014-]\\s*[A-Za-z]", crop: "image_regions", hasMap: true, orderFallback: true, skipUntilFirstPhotoPage: true, aliases: ["Clear Channel Outdoor", "Clear Channel", "ClearChannel"] },
-  "Lamar":         { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Lamar Advertising"] },
-  "Adams Outdoor": { matchStrategy: "order",      crop: "image_regions", hasMap: true, skipCoverPages: 1, aliases: ["Adams", "Adams Outdoor Advertising"] },
+  "Lamar":         { matchStrategy: "unit_number", unitRegex: "PANEL\\s*#\\s*(\\d+)", crop: "image_regions", hasMap: true, skipCoverPages: 1, orderFallback: true, aliases: ["Lamar Advertising"] },
+  "Adams Outdoor": { matchStrategy: "geo",         crop: "image_regions", hasMap: true, skipCoverPages: 1, orderFallback: true, aliases: ["Adams", "Adams Outdoor Advertising"] },
   "Be Seen":       { matchStrategy: "order",      crop: "full_bleed", hasMap: false, pagesPerUnit: 2, aliases: ["BeSeen", "Be Seen Media"] },
   "OFM":           { matchStrategy: "manual" },
   "New Tradition": { matchStrategy: "unit_number_partial", crop: "full_bleed", hasMap: false, aliases: ["New Tradition Media"] },
@@ -776,7 +801,7 @@ export default function CampaignReview() {
 
       const { data: units, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, market, location_description, billboard_photo_url, inset_map_url, row_index')
+        .select('id, unit_number, vendor, market, location_description, billboard_photo_url, inset_map_url, row_index, latitude, longitude')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!units || units.length === 0) throw new Error('No units found. Parse the Excel file first.');
@@ -1320,6 +1345,8 @@ export default function CampaignReview() {
                     const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
                     if (found) { matchedUnit = found; break; }
                   }
+                } else if (profile?.matchStrategy === "geo") {
+                  matchedUnit = matchUnitByGeo(text, vendorUnits);
                 } else {
                   matchedUnit = findUnitForPage(text, vendorUnits, file.vendor);
                 }
@@ -1541,7 +1568,7 @@ export default function CampaignReview() {
 
       const { data: allUnits, error: uErr } = await supabase
         .from('units')
-        .select('id, unit_number, vendor, market, location_description, highlights, row_index')
+        .select('id, unit_number, vendor, market, location_description, highlights, row_index, latitude, longitude')
         .eq('campaign_id', id);
       if (uErr) throw uErr;
       if (!allUnits?.length) throw new Error('No units found. Parse the Excel file first.');
@@ -1699,6 +1726,8 @@ export default function CampaignReview() {
                   const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
                   if (found) { unit = found; break; }
                 }
+              } else if (profile?.matchStrategy === "geo") {
+                unit = matchUnitByGeo(text, vendorUnits);
               } else if (profile?.matchStrategy === "order") {
                 if (pageNum <= skipCover) { /* cover */ }
                 else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
