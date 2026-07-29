@@ -31,7 +31,7 @@ import { CountUp } from "@/components/CountUp";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { PortalIndexBar } from "@/components/PortalIndexBar";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
-import { fmtCostLine, flightRateLabel, flightRateValue } from "@/lib/format";
+import { fmtCostLine, flightRateLabel, flightRateValue, flightImpressionsLabel, flightImpressionsValue } from "@/lib/format";
 import { exportNodesToPdf, exportNodeToPdf } from "@/lib/pdfExport";
 import { useToast } from "@/hooks/use-toast";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
@@ -187,7 +187,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
   const stats = useMemo(() => {
     const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
-    const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+    const imps = units.reduce((s, u) => s + flightImpressionsValue(u.four_week_impressions, u.four_week_periods), 0);
     const cost = units.reduce(
       (s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
       0,
@@ -393,9 +393,14 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 />
               </>
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                <ImageOff className="h-14 w-14" />
-              </div>
+              <div
+                className="absolute inset-0"
+                aria-hidden
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--ocean)) 100%)",
+                }}
+              />
             )}
             <div
               className="absolute inset-0"
@@ -460,7 +465,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                     const tierUnits = units.filter((u) => u.included && u[tier.key]);
                     const marginMult = 1 + ((campaign.margin_pct ?? 0) / 100);
                     const fourWeekRate = tierUnits.reduce((sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
-                    const totalImpressions = tierUnits.reduce((sum, u) => sum + (u.four_week_impressions ?? 0), 0);
+                    const totalImpressions = tierUnits.reduce((sum, u) => sum + flightImpressionsValue(u.four_week_impressions, u.four_week_periods), 0);
                     const totalPeriods = tierUnits.reduce((sum, u) => sum + (u.four_week_periods ?? 0), 0);
                     const totalCampaignCost = tierUnits.reduce(
                       (sum, u) => sum + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
@@ -1130,8 +1135,8 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
                 )}
                 {unit.four_week_impressions != null && (
                   <div>
-                    <span className="font-semibold text-foreground">4-Week Impressions:</span>{" "}
-                    {fmtNum(unit.four_week_impressions)}
+                    <span className="font-semibold text-foreground">{flightImpressionsLabel(unit.four_week_periods)}:</span>{" "}
+                    {fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))}
                   </div>
                 )}
                 <div>{fmtCostLine("Production", unit.production_cost)}</div>
@@ -1183,11 +1188,11 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
                 className="absolute bottom-6 left-6 rounded-xl bg-card/95 backdrop-blur border-l-[4px] border-[hsl(var(--accent-gold))] px-6 py-4 shadow-elev-md"
               >
                 <CountUp
-                  value={unit.four_week_impressions}
+                  value={flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods)}
                   className="block num-display text-3xl md:text-4xl text-foreground leading-none"
                 />
                 <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--ocean))]">
-                  4-Week Impressions
+                  {flightImpressionsLabel(unit.four_week_periods)}
                 </div>
               </motion.div>
             )}
@@ -1242,7 +1247,7 @@ function UnitDetails({ unit, marginMult }: { unit: Unit; marginMult: number }) {
           Quote details
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-3">
-          <DetailStat icon={<Eye className="h-4 w-4" />} label="4-Week Impressions" value={fmtNum(unit.four_week_impressions)} />
+          <DetailStat icon={<Eye className="h-4 w-4" />} label={flightImpressionsLabel(unit.four_week_periods)} value={fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))} />
           <DetailStat icon={<DollarSign className="h-4 w-4" />} label={flightRateLabel(unit.four_week_periods)} value={fmtMoney(flightRateValue(unit.negotiated_rate_4wk, marginMult, unit.four_week_periods))} />
           <DetailStat
             icon={<TrendingUp className="h-4 w-4" />}
@@ -1433,7 +1438,7 @@ function PrintableQuote({
             <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} grey={GREY} />
           )}
           {unit.four_week_impressions != null && (
-            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} grey={GREY} />
+            <Row k={flightImpressionsLabel(unit.four_week_periods)} v={fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))} grey={GREY} />
           )}
           {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} grey={GREY} />}
           <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 0" }} />

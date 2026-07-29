@@ -11,7 +11,7 @@ import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { useToast } from "@/hooks/use-toast";
-import { flightRateLabel, flightRateValue } from "@/lib/format";
+import { flightRateLabel, flightRateValue, flightImpressionsLabel, flightImpressionsValue } from "@/lib/format";
 
 
 type Campaign = {
@@ -370,7 +370,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: heroPhoto ? NAVY : "linear-gradient(135deg, #0B1E3A 0%, #005080 100%)", color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
 
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
@@ -425,7 +425,7 @@ export default function ProposalPrint() {
                 const tierUnits = units.filter((u) => u.included !== false && u[tier.key]);
                 const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
                 const fourWeekRate = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult, 0);
-                const totalImpressions = tierUnits.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+                const totalImpressions = tierUnits.reduce((s, u) => s + flightImpressionsValue(u.four_week_impressions, u.four_week_periods), 0);
                 const totalPeriods = tierUnits.reduce((s, u) => s + (u.four_week_periods ?? 0), 0);
                 const totalCampaignCost = tierUnits.reduce((s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0), 0);
                 const rowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 8 };
@@ -681,7 +681,7 @@ function PrintableQuote({
             <Row k="Weekly Impressions" v={fmtNum(unit.weekly_impressions)} />
           )}
           {unit.four_week_impressions != null && (
-            <Row k="4-Week Impressions" v={fmtNum(unit.four_week_impressions)} />
+            <Row k={flightImpressionsLabel(unit.four_week_periods)} v={fmtNum(flightImpressionsValue(unit.four_week_impressions, unit.four_week_periods))} />
           )}
           {unit.cpm != null && <Row k="CPM" v={`$${unit.cpm.toFixed(2)}`} />}
           <div style={{ borderTop: `1px solid ${Q_BORDER}`, margin: "6px 0" }} />
