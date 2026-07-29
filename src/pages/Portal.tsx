@@ -300,13 +300,119 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
       {/* ===== SECTION 1 — COVER / HERO ===== */}
       <section data-pdf-page className="relative bg-card">
-        <div className="grid lg:grid-cols-[55%_45%] min-h-[88vh]">
-          {/* Left content */}
-          <div className="relative flex items-center px-6 md:px-12 lg:px-16 py-16 md:py-24 border-l-[4px] border-[hsl(var(--accent-gold))]">
-            <div className="max-w-xl">
+        {heroPhoto ? (
+          <div className="grid lg:grid-cols-[55%_45%] min-h-[88vh]">
+            {/* Left content */}
+            <div className="relative flex items-center px-6 md:px-12 lg:px-16 py-16 md:py-24 border-l-[4px] border-[hsl(var(--accent-gold))]">
+              <div className="max-w-xl">
+                <motion.div
+                  initial={{ opacity: 0, x: -32 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                  className="eyebrow"
+                >
+                  Out-of-Home Proposal
+                </motion.div>
+
+                <motion.h1
+                  initial={{ opacity: 0, x: -32 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                  className="mt-4 font-heading font-bold uppercase leading-[0.95] tracking-tight text-foreground"
+                  style={{ fontSize: "clamp(36px, 4.6vw, 64px)" }}
+                >
+                  {campaign.proposal_name || campaign.campaign_name}
+                </motion.h1>
+
+                <motion.span
+                  initial={{ width: 0 }}
+                  animate={{ width: 64 }}
+                  transition={{ duration: 0.6, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  className="mt-5 block h-[3px] bg-[hsl(var(--accent-gold))] rounded-full"
+                />
+
+                <motion.p
+                  initial={{ opacity: 0, x: -24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.6, delay: 0.55 }}
+                  className="mt-6 text-base md:text-lg text-muted-foreground"
+                >
+                  Prepared for{" "}
+                  <span className="font-semibold text-foreground">{campaign.client_name}</span>
+                </motion.p>
+
+                <div className="mt-10 grid gap-4 sm:grid-cols-2">
+                  <CoverPill icon={<Calendar className="h-4 w-4" />} label="Campaign Dates" value={flightLabel} delay={0.7} />
+                  <CoverPill icon={<MapPin className="h-4 w-4" />} label="Market" value={primaryMarket} delay={0.78} />
+                </div>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6, delay: 1.0 }}
+                  className="mt-12 flex items-center gap-3"
+                >
+                  <Logo size={36} />
+                  <div>
+                    <div className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
+                      {brand.name}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground italic">
+                      Positioned where your audience moves.
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+
+            {/* Right photo — only rendered when an explicit cover image exists */}
+            <div className="relative bg-[hsl(var(--off-white))] min-h-[40vh] lg:min-h-full overflow-hidden">
+              <img
+                src={heroPhoto}
+                alt=""
+                aria-hidden
+                className={`absolute inset-0 h-full w-full object-cover scale-125 blur-2xl opacity-70 transition-opacity ${heroIsLandscape ? "" : "hidden"}`}
+              />
+              <motion.img
+                initial={{ opacity: 0, scale: 1.05 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+                src={heroPhoto}
+                alt="Featured billboard"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setHeroIsLandscape(img.naturalWidth > img.naturalHeight);
+                }}
+                className={`absolute inset-0 h-full w-full ${heroIsLandscape ? "object-contain" : "object-cover"}`}
+                style={{ objectPosition: "center" }}
+              />
+              <div
+                className="absolute inset-0"
+                aria-hidden
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(var(--primary) / 0.30) 0%, transparent 60%)",
+                }}
+              />
+              {campaign.client_logo_url && (
+                <motion.img
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  src={campaign.client_logo_url}
+                  alt={`${campaign.client_name} logo`}
+                  className="absolute top-6 right-6 h-14 w-auto rounded-md bg-card/95 p-2 shadow-elev-md"
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          /* No cover image → single full-width, centered text-only cover */
+          <div className="min-h-[88vh] flex items-center justify-center border-l-[4px] border-[hsl(var(--accent-gold))] px-6 md:px-12 py-16 md:py-24 text-center">
+            <div className="max-w-3xl mx-auto flex flex-col items-center">
               <motion.div
-                initial={{ opacity: 0, x: -32 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                 className="eyebrow"
               >
@@ -314,11 +420,11 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, x: -32 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className="mt-4 font-heading font-bold uppercase leading-[0.95] tracking-tight text-foreground"
-                style={{ fontSize: "clamp(36px, 4.6vw, 64px)" }}
+                style={{ fontSize: "clamp(36px, 5.2vw, 72px)" }}
               >
                 {campaign.proposal_name || campaign.campaign_name}
               </motion.h1>
@@ -331,8 +437,8 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               />
 
               <motion.p
-                initial={{ opacity: 0, x: -24 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.55 }}
                 className="mt-6 text-base md:text-lg text-muted-foreground"
               >
@@ -340,21 +446,30 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
                 <span className="font-semibold text-foreground">{campaign.client_name}</span>
               </motion.p>
 
-              {/* Stat pills — Units pill removed per spec; keep dates + market */}
-              <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              <div className="mt-10 grid gap-4 sm:grid-cols-2 w-full max-w-xl">
                 <CoverPill icon={<Calendar className="h-4 w-4" />} label="Campaign Dates" value={flightLabel} delay={0.7} />
                 <CoverPill icon={<MapPin className="h-4 w-4" />} label="Market" value={primaryMarket} delay={0.78} />
               </div>
 
-              {/* Logo & tagline */}
+              {campaign.client_logo_url && (
+                <motion.img
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  src={campaign.client_logo_url}
+                  alt={`${campaign.client_name} logo`}
+                  className="mt-10 h-16 w-auto rounded-md bg-card p-2 shadow-elev-md"
+                />
+              )}
+
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 1.0 }}
-                className="mt-12 flex items-center gap-3"
+                className="mt-12 flex items-center justify-center gap-3"
               >
                 <Logo size={36} />
-                <div>
+                <div className="text-left">
                   <div className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
                     {brand.name}
                   </div>
@@ -365,64 +480,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
               </motion.div>
             </div>
           </div>
-
-          {/* Right photo */}
-          <div className="relative bg-[hsl(var(--off-white))] min-h-[40vh] lg:min-h-full overflow-hidden">
-            {heroPhoto ? (
-              <>
-                {/* Blurred fill background — visible only when the uploaded
-                 *  image is landscape (width > height) so we don't crop it.
-                 *  Portrait images fill via object-cover and hide this layer. */}
-                <img
-                  src={heroPhoto}
-                  alt=""
-                  aria-hidden
-                  className={`absolute inset-0 h-full w-full object-cover scale-125 blur-2xl opacity-70 transition-opacity ${heroIsLandscape ? "" : "hidden"}`}
-                />
-                <motion.img
-                  initial={{ opacity: 0, scale: 1.05 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-                  src={heroPhoto}
-                  alt="Featured billboard"
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    setHeroIsLandscape(img.naturalWidth > img.naturalHeight);
-                  }}
-                  className={`absolute inset-0 h-full w-full ${heroIsLandscape ? "object-contain" : "object-cover"}`}
-                  style={{ objectPosition: "center" }}
-                />
-              </>
-            ) : (
-              <div
-                className="absolute inset-0"
-                aria-hidden
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--ocean)) 100%)",
-                }}
-              />
-            )}
-            <div
-              className="absolute inset-0"
-              aria-hidden
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(var(--primary) / 0.30) 0%, transparent 60%)",
-              }}
-            />
-            {campaign.client_logo_url && (
-              <motion.img
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                src={campaign.client_logo_url}
-                alt={`${campaign.client_name} logo`}
-                className="absolute top-6 right-6 h-14 w-auto rounded-md bg-card/95 p-2 shadow-elev-md"
-              />
-            )}
-          </div>
-        </div>
+        )}
       </section>
 
       {/* ===== SECTION 2 — WHO WE ARE ===== */}
