@@ -187,7 +187,7 @@ export default function Portal({ token, campaignId }: { token: string; campaignI
 
   const stats = useMemo(() => {
     const marginMult = 1 + ((campaign?.margin_pct ?? 0) / 100);
-    const imps = units.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
+    const imps = units.reduce((s, u) => s + flightImpressionsValue(u.four_week_impressions, u.four_week_periods), 0);
     const cost = units.reduce(
       (s, u) => s + (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0),
       0,
