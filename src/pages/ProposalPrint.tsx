@@ -370,7 +370,7 @@ export default function ProposalPrint() {
         </div>
 
         {/* ===== COVER PAGE ===== */}
-        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: NAVY, color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
+        <section data-pdf-page className="print-section-page print-cover-section" style={{ background: heroPhoto ? NAVY : "linear-gradient(135deg, #0B1E3A 0%, #005080 100%)", color: WHITE, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative", overflow: "hidden" }}>
 
           {heroPhoto && (
             <div style={{ position: "absolute", inset: 0, opacity: 0.15 }}>
