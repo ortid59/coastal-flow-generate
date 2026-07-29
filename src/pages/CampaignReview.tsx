@@ -1726,6 +1726,8 @@ export default function CampaignReview() {
                   const found = vendorUnits.find((u) => fuzzyAddressMatch(line, u.location_description));
                   if (found) { unit = found; break; }
                 }
+              } else if (profile?.matchStrategy === "geo") {
+                unit = matchUnitByGeo(text, vendorUnits);
               } else if (profile?.matchStrategy === "order") {
                 if (pageNum <= skipCover) { /* cover */ }
                 else if (profile.skipUntilFirstPhotoPage && !seenFirstPhotoPage) {
