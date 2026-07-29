@@ -133,7 +133,7 @@ const normalizeVendor = (value: string | null | undefined) =>
 // match to a vendor unit whose lat/lon are both within ~0.002 absolute diff.
 // Returns null if the page has no lat/lon or no unit is within tolerance.
 const GEO_TOLERANCE = 0.002;
-function matchUnitByGeo(text: string, units: Array<{ latitude: number | null; longitude: number | null }>): any | null {
+function matchUnitByGeo(text: string, units: Array<any>): any | null {
   const latM = /Latitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
   const lonM = /Longitude\s*[:\s]\s*(-?\d+(?:\.\d+)?)/i.exec(text);
   if (!latM || !lonM) return null;
