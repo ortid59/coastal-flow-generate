@@ -130,7 +130,7 @@ const normalizeVendor = (value: string | null | undefined) =>
   normalizeMatchText(value).replace(/\b(MEDIA|GROUP|LLC|INC|COMPANY|CO)\b/g, "").replace(/\s+/g, " ").trim();
 
 // ---------- Vendor profile registry ----------
-type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial";
+type VendorMatchStrategy = "unit_number" | "address" | "order" | "manual" | "district_text" | "unit_number_partial" | "geo";
 type VendorCropMode = "single_midband" | "single_left" | "full_bleed" | "photo_plus_map" | "image_regions" | "image_regions_left";
 type VendorProfile = {
   matchStrategy: VendorMatchStrategy;
