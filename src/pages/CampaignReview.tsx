@@ -2179,6 +2179,8 @@ export default function CampaignReview() {
                         <col className="min-w-[180px]" />
                         <col className="w-[64px]" />
                     <col className="w-[78px]" />
+                    <col className="w-[52px]" />
+                    <col className="w-[78px]" />
                     <col className="w-[56px]" />
                     <col className="w-[72px]" />
                     <col className="w-[88px]" />
@@ -2196,6 +2198,7 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-left">Highlights</th>
                       <th className="px-2 py-2.5 text-right">4wk Imp</th>
                       <th className="px-2 py-2.5 text-right">4-Wk Rate</th>
+                      <th className="px-2 py-2.5 text-right">Flight</th>
                       <th className="px-2 py-2.5 text-right">Total</th>
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
