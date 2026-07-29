@@ -69,6 +69,7 @@ type Unit = {
   four_week_impressions: number | null;
   total_cost: number | null;
   negotiated_rate_4wk: number | null;
+  four_week_periods: number | null;
   cpm: number | null;
   recommended: boolean | null;
   included: boolean | null;
@@ -595,7 +596,7 @@ export default function CampaignReview() {
       supabase
         .from("units")
         .select(
-          "id, unit_number, market, vendor, format, size, location_description, address, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
+          "id, unit_number, market, vendor, format, size, location_description, address, insight_bullets, highlights, four_week_impressions, total_cost, negotiated_rate_4wk, four_week_periods, cpm, recommended, included, billboard_photo_url, inset_map_url, low_res_flag, latitude, longitude, tier_a, tier_b, tier_c",
         )
         .eq("campaign_id", id)
         .order("recommended", { ascending: false })
@@ -1817,23 +1818,26 @@ export default function CampaignReview() {
   };
 
   const stats = useMemo(() => {
+    const marginMult = 1 + ((campaign?.margin_pct ?? 20) / 100);
+    const flightTotal = (u: Unit) =>
+      (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1);
     const included = units.filter((u) => u.included !== false);
     const recs = included.filter((u) => u.recommended).length;
     const imps = included.reduce((s, u) => s + (u.four_week_impressions ?? 0), 0);
-    const cost = included.reduce((s, u) => s + (u.total_cost ?? 0), 0);
+    const cost = included.reduce((s, u) => s + flightTotal(u), 0);
     const photos = included.filter((u) => u.billboard_photo_url).length;
     const tierTotals: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
     const tierCounts: Record<TierKey, number> = { tier_a: 0, tier_b: 0, tier_c: 0 };
     for (const u of included) {
       for (const t of TIERS) {
         if (u[t.key]) {
-          tierTotals[t.key] += u.total_cost ?? 0;
+          tierTotals[t.key] += flightTotal(u);
           tierCounts[t.key] += 1;
         }
       }
     }
     return { total: units.length, included: included.length, recs, imps, cost, photos, tierTotals, tierCounts };
-  }, [units]);
+  }, [units, campaign?.margin_pct]);
 
 
   if (loading) {
@@ -2175,6 +2179,8 @@ export default function CampaignReview() {
                         <col className="min-w-[180px]" />
                         <col className="w-[64px]" />
                     <col className="w-[78px]" />
+                    <col className="w-[52px]" />
+                    <col className="w-[78px]" />
                     <col className="w-[56px]" />
                     <col className="w-[72px]" />
                     <col className="w-[88px]" />
@@ -2192,6 +2198,7 @@ export default function CampaignReview() {
                       <th className="px-2 py-2.5 text-left">Highlights</th>
                       <th className="px-2 py-2.5 text-right">4wk Imp</th>
                       <th className="px-2 py-2.5 text-right">4-Wk Rate</th>
+                      <th className="px-2 py-2.5 text-right">Flight</th>
                       <th className="px-2 py-2.5 text-right">Total</th>
                       <th className="px-2 py-2.5 text-right">CPM</th>
                       <th className="px-2 py-2.5 text-center bg-muted/60">Include</th>
@@ -2207,7 +2214,7 @@ export default function CampaignReview() {
                       return (
                       <Fragment key={vendor}>
                         <tr className="bg-muted/60 sticky">
-                          <td colSpan={15} className="px-3 py-2">
+                          <td colSpan={16} className="px-3 py-2">
                             <button
                               type="button"
                               onClick={() => toggleVendorCollapse(vendor)}
@@ -2366,8 +2373,11 @@ export default function CampaignReview() {
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="4-week rate shown in the client Portal (negotiated × margin)">
                             {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}
                           </td>
-                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Total campaign cost from the Excel (all periods + production + install)">
-                            {fmtMoney(u.total_cost)}
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Flight length in weeks (four_week_periods × 4)">
+                            {`${Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4)} wks`}
+                          </td>
+                          <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="Margin-applied flight total (matches the client proposal)">
+                            {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)) * (u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1))}
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
                             {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
