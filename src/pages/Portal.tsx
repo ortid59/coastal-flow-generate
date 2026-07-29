@@ -798,7 +798,7 @@ function NextSteps() {
     .filter(Boolean);
 
   return (
-    <section className="text-[hsl(var(--primary-foreground))]" style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)" }}>
+    <section className="text-[hsl(var(--primary-foreground))]" style={{ background: "#005c99" }}>
       <div className="container-app py-20 md:py-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -876,7 +876,7 @@ function ClosingCTA({ clientName }: { clientName: string }) {
   const s = useProposalSettings();
   const email = s.company_email || "heather.waisanen@gmail.com";
   return (
-    <section style={{ background: "linear-gradient(160deg, #0B2547 0%, #081A30 100%)" }}>
+    <section style={{ background: "#005c99" }}>
       <div className="grid lg:grid-cols-[40%_60%]">
         {/* Navy panel */}
         <motion.div
