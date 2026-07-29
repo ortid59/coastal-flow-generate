@@ -125,8 +125,13 @@ export function PortalIndexBar({ units, marginMult = 1 }: Props) {
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span className="tabular-nums">{fmtCompactImpressions(weekly)}</span>
                       <span aria-hidden>·</span>
-                      <span className="tabular-nums">{fmtRateShort(u.total_cost)}</span>
+                      <span className="tabular-nums">
+                        {fmtRateShort(
+                          (u.negotiated_rate_4wk ?? 0) * marginMult * (u.four_week_periods ?? 0) || null,
+                        )}
+                      </span>
                     </div>
+
                   </div>
 
                   {/* Page indicator */}
