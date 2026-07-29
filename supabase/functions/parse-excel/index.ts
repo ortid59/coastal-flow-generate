@@ -797,6 +797,35 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ---- Vendor auto-rename: overwrite the card's user-typed
+      // vendor_files.vendor with the dominant Vendor value parsed from THIS
+      // file's Excel. Prevents a mistyped card name (e.g. "Lamar - ...") from
+      // matching the wrong VENDOR_PROFILES entry for its PDF sibling. ----
+      try {
+        const vendorCounts = new Map<string, number>();
+        for (const row of inserts) {
+          const v = String(row.vendor ?? "").trim();
+          if (!v) continue;
+          vendorCounts.set(v, (vendorCounts.get(v) ?? 0) + 1);
+        }
+        let dominantVendor: string | null = null;
+        let best = 0;
+        for (const [v, c] of vendorCounts) {
+          if (c > best) { best = c; dominantVendor = v; }
+        }
+        const originalVendor = f.vendor ?? null;
+        if (dominantVendor && originalVendor && dominantVendor !== originalVendor) {
+          const upd = supabase.from("vendor_files").update({ vendor: dominantVendor })
+            .eq("campaign_id", campaignId).eq("vendor", originalVendor);
+          const { error: vErr } = await upd;
+          if (vErr) console.warn("[parse-excel] vendor rename failed", vErr);
+          else console.info(`[parse-excel] renamed vendor_files.vendor "${originalVendor}" → "${dominantVendor}"`);
+        }
+      } catch (e) {
+        console.warn("[parse-excel] vendor auto-rename skipped", e);
+      }
+
+
 
       // ---- Change 2: extract embedded vendor images from this workbook ----
       // We do this after upsert so unit ids exist. Per-board images go to
