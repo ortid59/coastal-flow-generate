@@ -11,6 +11,7 @@ import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
 import { useProposalSettings } from "@/hooks/useProposalSettings";
 import { cleanHighlight } from "@/lib/cleanHighlight";
 import { useToast } from "@/hooks/use-toast";
+import { flightRateLabel, flightRateValue } from "@/lib/format";
 
 
 type Campaign = {
