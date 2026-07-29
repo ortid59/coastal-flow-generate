@@ -1119,20 +1119,8 @@ function UnitCard({ unit, indexLabel, activeTiers, marginMult }: { unit: Unit; i
           <div className="mt-8 space-y-5">
             <div>
               <div className="inline-flex items-center rounded-full bg-[hsl(var(--accent-gold))] text-[hsl(var(--accent-gold-foreground))] px-5 py-2 font-heading text-sm font-bold uppercase tracking-[0.12em]">
-                4-Week Rate: {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult)}
+                {flightRateLabel(unit.four_week_periods)}: {fmtMoney(flightRateValue(unit.negotiated_rate_4wk, marginMult, unit.four_week_periods))}
               </div>
-              {(unit.four_week_periods ?? 0) > 0 && (
-                <div className="mt-2 grid gap-0.5 text-xs">
-                  <div>
-                    <span className="font-semibold text-foreground">Flight:</span>{" "}
-                    {Math.round((unit.four_week_periods ?? 0) * 4)} weeks
-                  </div>
-                  <div>
-                    <span className="font-semibold text-foreground">Flight Investment:</span>{" "}
-                    {fmtMoney((unit.negotiated_rate_4wk ?? 0) * marginMult * (unit.four_week_periods ?? 0))}
-                  </div>
-                </div>
-              )}
               <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
                 {unit.weekly_impressions != null && (
                   <div>
