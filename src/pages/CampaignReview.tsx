@@ -2592,6 +2592,7 @@ export default function CampaignReview() {
                               <EditableCell
                                 unitId={u.id}
                                 column="unit_number"
+                                label="Unit"
                                 raw={u.unit_number ?? ""}
                                 display={<span className="block truncate">{u.unit_number || "—"}</span>}
                                 onSaved={(v) => patchUnit(u.id, { unit_number: v })}
@@ -2608,6 +2609,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="vendor"
+                              label="Vendor"
                               raw={u.vendor ?? ""}
                               display={<span className="block truncate text-[10px] text-muted-foreground">{u.vendor || "—"}</span>}
                               onSaved={(v) => patchUnit(u.id, { vendor: v })}
@@ -2617,6 +2619,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="market"
+                              label="Market"
                               raw={u.market ?? ""}
                               display={<span className="block truncate">{u.market ?? "—"}</span>}
                               onSaved={(v) => patchUnit(u.id, { market: v })}
@@ -2626,6 +2629,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="format"
+                              label="Format"
                               raw={u.format ?? ""}
                               display={<span className="block truncate">{u.format ?? "—"}</span>}
                               onSaved={(v) => patchUnit(u.id, { format: v })}
@@ -2633,6 +2637,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="size"
+                              label="Size"
                               raw={u.size ?? ""}
                               display={<span className="block truncate text-[10px] text-muted-foreground">{u.size || "—"}</span>}
                               onSaved={(v) => patchUnit(u.id, { size: v })}
@@ -2642,6 +2647,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="address"
+                              label="Address"
                               raw={u.address ?? displayAddress(u) ?? ""}
                               title="Address line shown on the proposal"
                               display={
@@ -2654,6 +2660,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="location_description"
+                              label="Location description"
                               raw={u.location_description ?? ""}
                               multiline
                               title="Location description — Enter for a new line, Ctrl+Enter to save"
@@ -2689,6 +2696,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="four_week_impressions"
+                              label="4-week impressions"
                               raw={u.four_week_impressions == null ? "" : String(u.four_week_impressions)}
                               align="right"
                               parse={parseNumber}
@@ -2700,6 +2708,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="negotiated_rate_4wk"
+                              label="4-week rate (what the client sees)"
                               raw={
                                 u.negotiated_rate_4wk == null
                                   ? ""
@@ -2721,6 +2730,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="four_week_periods"
+                              label="Flight (weeks)"
                               raw={String(Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4))}
                               align="right"
                               title="Flight length in weeks"
@@ -2745,6 +2755,7 @@ export default function CampaignReview() {
                             <EditableCell
                               unitId={u.id}
                               column="cpm"
+                              label="CPM"
                               raw={u.cpm == null ? "" : String(u.cpm)}
                               align="right"
                               parse={parseNumber}

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { parseNumber } from "@/lib/parseNumber";
 
 export { parseNumber };
@@ -10,13 +12,13 @@ type Props = {
   unitId: string;
   /** Column on `units` this cell writes to. */
   column: string;
-  /** Text shown in the input when editing starts. */
+  /** Text shown in the editor when editing starts. */
   raw: string;
   /** What the cell renders when it is not being edited. */
   display: React.ReactNode;
   /**
    * Turn the typed text into the value stored on the row. Return `undefined`
-   * to reject the edit (the cell stays open so the entry can be corrected).
+   * to reject the edit (the editor stays open so the entry can be corrected).
    * Defaults to a trimmed string, or null when blank.
    */
   parse?: (text: string) => unknown;
@@ -24,6 +26,8 @@ type Props = {
   align?: "left" | "right";
   placeholder?: string;
   title?: string;
+  /** Heading shown at the top of the editor. Falls back to the column name. */
+  label?: string;
   className?: string;
   /** Apply the saved value to local state so the grid updates immediately. */
   onSaved: (dbValue: any) => void;
@@ -34,9 +38,16 @@ const defaultParse = (text: string) => {
   return t === "" ? null : t;
 };
 
+const prettyColumn = (c: string) => c.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+
 /**
- * Click-to-edit grid cell. Enter (or blur) commits, Escape cancels — the same
- * gesture everywhere, so every column behaves the way Highlights already did.
+ * Click-to-edit grid cell.
+ *
+ * The editor opens in a popover rather than turning the cell into a one-line
+ * input: grid columns are narrow, and a location description or long unit name
+ * was unreadable through a 120px box — you had to scroll the caret along to
+ * read your own text. The popover is wide enough to see the whole value, the
+ * same way the Highlights editor works.
  */
 export function EditableCell({
   unitId,
@@ -48,42 +59,35 @@ export function EditableCell({
   align = "left",
   placeholder,
   title,
+  label,
   className = "",
   onSaved,
 }: Props) {
   const { toast } = useToast();
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState(raw);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  // Guards against blur firing a second save after Enter or Escape.
-  const doneRef = useRef(false);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  // Set when the user cancels, so the close handler doesn't also save.
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
-    if (!editing) setText(raw);
-  }, [raw, editing]);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select?.();
-    }
-  }, [editing]);
+    if (!open) setText(raw);
+  }, [raw, open]);
 
   const commit = async () => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-
     const next = parse(text);
     if (next === undefined) {
-      doneRef.current = false;
-      toast({ title: "Not a valid value", description: "Check the format and try again.", variant: "destructive" });
+      toast({
+        title: "Not a valid value",
+        description: "Check the format and try again.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const unchanged = (next ?? "") === (defaultParse(raw) ?? "");
-    if (unchanged) {
-      setEditing(false);
+    if ((next ?? "") === (defaultParse(raw) ?? "")) {
+      setOpen(false);
       return;
     }
 
@@ -95,45 +99,27 @@ export function EditableCell({
     setSaving(false);
 
     if (error) {
-      doneRef.current = false;
       toast({ title: "Couldn't save", description: error.message, variant: "destructive" });
       return;
     }
     onSaved(next);
-    setEditing(false);
+    setOpen(false);
   };
 
   const cancel = () => {
-    doneRef.current = true;
+    cancelledRef.current = true;
     setText(raw);
-    setEditing(false);
+    setOpen(false);
   };
 
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        title={title ?? "Click to edit"}
-        onClick={(e) => {
-          e.stopPropagation();
-          doneRef.current = false;
-          setEditing(true);
-        }}
-        className={`group w-full rounded px-1 -mx-1 text-${align} hover:bg-[hsl(var(--ocean)/0.08)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--ocean))] ${className}`}
-      >
-        {display}
-      </button>
-    );
-  }
+  const hint = multiline ? "Ctrl+Enter to save · Esc to cancel" : "Enter to save · Esc to cancel";
 
-  const shared = {
-    ref: inputRef as any,
+  const fieldProps = {
+    ref: fieldRef as any,
     value: text,
     placeholder,
     disabled: saving,
-    onClick: (e: React.MouseEvent) => e.stopPropagation(),
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setText(e.target.value),
-    onBlur: commit,
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -143,15 +129,65 @@ export function EditableCell({
         void commit();
       }
     },
-    className: `w-full rounded border border-[hsl(var(--ocean))] bg-background px-1 py-0.5 text-${align} text-[11px] outline-none ${className}`,
+    className:
+      "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm leading-snug outline-none focus:border-[hsl(var(--ocean))] focus:ring-1 focus:ring-[hsl(var(--ocean))]",
   };
 
   return (
-    <div className="relative" onClick={(e) => e.stopPropagation()}>
-      {multiline ? <textarea rows={3} {...shared} /> : <input type="text" {...shared} />}
-      {saving && (
-        <Loader2 className="absolute right-1 top-1 h-3 w-3 animate-spin text-muted-foreground" />
-      )}
-    </div>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          cancelledRef.current = false;
+          setOpen(true);
+          return;
+        }
+        // Closing: clicking away saves, cancelling discards.
+        if (cancelledRef.current) {
+          cancelledRef.current = false;
+          setText(raw);
+          setOpen(false);
+        } else {
+          void commit();
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={title ?? "Click to edit"}
+          onClick={(e) => e.stopPropagation()}
+          className={`w-full rounded px-1 -mx-1 text-${align} hover:bg-[hsl(var(--ocean)/0.08)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--ocean))] ${className}`}
+        >
+          {display}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[460px] max-w-[92vw] p-3"
+        onClick={(e) => e.stopPropagation()}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          fieldRef.current?.focus();
+          fieldRef.current?.select?.();
+        }}
+      >
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label ?? title ?? prettyColumn(column)}
+        </div>
+        {multiline ? <textarea rows={6} {...fieldProps} /> : <input type="text" {...fieldProps} />}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-muted-foreground">{hint}</span>
+          <div className="flex gap-1.5">
+            <Button type="button" size="sm" variant="ghost" onClick={cancel} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" onClick={() => void commit()} disabled={saving}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
