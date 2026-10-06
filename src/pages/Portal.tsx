@@ -1618,13 +1618,26 @@ function PhotoBox({
   grey: string;
 }) {
   return (
-    <div style={{ border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden", background: "#F3F4F6" }}>
+    // Same rule as the print proposal: show the whole unit, never a crop.
+    // The tile sizes to the photo rather than slicing it to a fixed height.
+    <div
+      style={{
+        border: `1px solid ${border}`,
+        borderRadius: 6,
+        overflow: "hidden",
+        background: "#F3F4F6",
+        minHeight: 120,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       {src ? (
         <img
           src={src}
           alt={label}
           crossOrigin="anonymous"
-          style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+          style={{ maxWidth: "100%", maxHeight: 300, objectFit: "contain", display: "block" }}
         />
       ) : (
         <div

@@ -788,18 +788,35 @@ function PrintableQuote({
   );
 }
 
-// objectFit is "contain", not "cover": billboard and airport units run at
-// extreme aspect ratios (a wall wrap is roughly 4:1), and "cover" filled the
-// fixed-height tile by cropping most of the image away. "contain" letterboxes
-// against the tile background instead, so the whole unit stays visible.
+// Never crop a unit photo. These run at extreme aspect ratios (a wall wrap is
+// roughly 4:1) and a fixed-height tile with objectFit "cover" sliced most of
+// the image away — the baggage claim shot came out as a strip of ceiling with
+// the screens cut off. The tile now sizes to the image instead: full width when
+// the photo is wide, capped at MAX_PHOTO_H when it is tall, centred either way.
+const MAX_PHOTO_H = 300;
+
 function PhotoBox({ src, label }: { src: string | null; label: string }) {
   return (
     <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, overflow: "hidden", background: "#ffffff" }}>
-      <div style={{ height: 200, overflow: "hidden", background: "#F3F4F6" }}>
+      <div
+        style={{
+          minHeight: 120,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#F3F4F6",
+        }}
+      >
         {src ? (
-          <img src={src} alt={label} loading="eager" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+          <img
+            src={src}
+            alt={label}
+            loading="eager"
+            crossOrigin="anonymous"
+            style={{ maxWidth: "100%", maxHeight: MAX_PHOTO_H, objectFit: "contain", display: "block" }}
+          />
         ) : (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>No image available</div>
+          <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>No image available</div>
         )}
       </div>
       <div style={{ padding: "4px 8px", fontSize: 9, letterSpacing: "0.18em", color: Q_GREY, fontWeight: 600, textTransform: "uppercase" as const, background: "#fff" }}>
