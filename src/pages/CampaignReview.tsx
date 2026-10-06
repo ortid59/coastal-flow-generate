@@ -523,6 +523,7 @@ export default function CampaignReview() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [reparsing, setReparsing] = useState(false);
+  const [skippedFiles, setSkippedFiles] = useState<{ name: string; reason: string }[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
   const [extractionPaused, setExtractionPaused] = useState(false);
@@ -776,8 +777,9 @@ export default function CampaignReview() {
   const reparse = async () => {
     if (!id) return;
     setReparsing(true);
-    const { error } = await supabase.functions.invoke("parse-excel", { body: { campaign_id: id } });
+    const { data, error } = await supabase.functions.invoke("parse-excel", { body: { campaign_id: id } });
     setReparsing(false);
+    setSkippedFiles(Array.isArray(data?.skippedFiles) ? data.skippedFiles : []);
     if (error) toast({ title: "Parse failed", description: error.message, variant: "destructive" });
     else {
       toast({ title: "Parsing started" });
@@ -2046,6 +2048,19 @@ export default function CampaignReview() {
 
 
 
+      {skippedFiles.length > 0 && (
+        <div className="mb-6 flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="space-y-1">
+            {skippedFiles.map((f, i) => (
+              <p key={`${f.name}-${i}`} className="text-muted-foreground">
+                <span className="font-medium text-foreground">Could not read {f.name} - no recognised header row.</span>{" "}
+                Its column names do not match a format the parser knows.
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
       {campaign?.status === "parsing" && units.length === 0 ? (
         <div className="surface-card flex flex-col items-center gap-3 p-12 text-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />

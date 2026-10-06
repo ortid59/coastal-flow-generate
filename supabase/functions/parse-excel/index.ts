@@ -49,6 +49,14 @@ const COLUMN_MAP: Record<string, string> = {
   "# of Four week Periods": "four_week_periods",
   "Artwork Due Date": "artwork_due_date",
   "Notes": "notes",
+  "Media Owner Unit #": "unit_number",
+  "Size (H x W)": "size",
+  "4-Week Net Media Cost": "negotiated_rate_4wk",
+  "4 Week Net Media Cost": "negotiated_rate_4wk",
+  "% SOV": "sov_pct",
+  "# of ad spots in loop": "loop_length",
+  "Qty": "unit_count",
+  "Environment": "format",
   // Tasty Media supplies a clean street address in a dedicated column while
   // "Location Description" holds marketing prose. Prefer this for the
   // displayed address line downstream.
@@ -540,6 +548,7 @@ Deno.serve(async (req) => {
       total_overview_images: 0,
     };
 
+    const skippedFiles: { name: string; reason: string }[] = [];
     for (const f of files) {
       const { data: blob, error: dlErr } = await supabase.storage
         .from("uploads")
@@ -618,6 +627,7 @@ Deno.serve(async (req) => {
 
       if (!chosen) {
         console.warn(`[parse-excel] No usable sheet in ${f.original_name}`);
+        skippedFiles.push({ name: f.original_name, reason: "No recognised header row" });
         continue;
       }
       console.info(`[parse-excel] ${f.original_name}: detected format ${formatKind}, header row ${headerRow}, mapped fields:`, Object.keys(headerIdx));
@@ -949,7 +959,7 @@ Deno.serve(async (req) => {
       }).eq("id", jobId);
     }
 
-    return new Response(JSON.stringify({ ok: true, summary }), {
+    return new Response(JSON.stringify({ ok: true, summary, skippedFiles }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
