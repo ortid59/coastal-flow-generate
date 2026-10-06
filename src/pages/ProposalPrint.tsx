@@ -788,12 +788,16 @@ function PrintableQuote({
   );
 }
 
+// objectFit is "contain", not "cover": billboard and airport units run at
+// extreme aspect ratios (a wall wrap is roughly 4:1), and "cover" filled the
+// fixed-height tile by cropping most of the image away. "contain" letterboxes
+// against the tile background instead, so the whole unit stays visible.
 function PhotoBox({ src, label }: { src: string | null; label: string }) {
   return (
     <div style={{ border: `1px solid ${Q_BORDER}`, borderRadius: 6, overflow: "hidden", background: "#ffffff" }}>
       <div style={{ height: 200, overflow: "hidden", background: "#F3F4F6" }}>
         {src ? (
-          <img src={src} alt={label} loading="eager" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <img src={src} alt={label} loading="eager" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
         ) : (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: Q_GREY, fontSize: 11 }}>No image available</div>
         )}

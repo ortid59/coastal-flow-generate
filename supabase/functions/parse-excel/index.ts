@@ -175,34 +175,7 @@ const TEXT_FIELDS_NULLABLE_NUMERIC = new Set(["spot_length", "loop_length"]);
 // Recommended detection: green family (D9EAD3 is the spec; allow close variants)
 const GREEN_HEXES = new Set(["D9EAD3", "C6EFCE", "B6D7A8", "93C47D"]);
 
-// Normalize: strip surrounding whitespace, collapse internal whitespace
-// (including embedded newlines), unify hyphens & non-breaking spaces, lowercase.
-const norm = (s: string) =>
-  s
-    .replace(/\u00a0/g, " ")
-    .replace(/[\u2010-\u2015\u2212]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-
-// Fuzzy fallback for headers that don't match an exact dictionary key.
-// PRIORITY ORDER is critical: a header containing "total" NEVER maps to a
-// rate field; "negotiated" beats "rate card" beats "net rate".
-function fuzzyFieldFor(headerNorm: string): string | null {
-  const h = headerNorm;
-  const hasTotal = h.includes("total");
-  if (!hasTotal && h.includes("proposed price")) return "negotiated_rate_4wk";
-  if (!hasTotal && h.includes("negotiated")) return "negotiated_rate_4wk";
-  if (!hasTotal && h.includes("rate card")) return "rate_card_4wk";
-  if (!hasTotal && h.includes("net rate")) return "negotiated_rate_4wk";
-  if (hasTotal && (h.includes("cost") || h.includes("investment") || h.includes("gross") || /\btotal\b/.test(h))) return "total_cost";
-  const isImpr = h.includes("impression") || /\bimp\b/.test(h) || h.includes("a18+") || h.includes("18+");
-  if (isImpr) {
-    if ((h.includes("4") || h.includes("four")) && (h.includes("week") || h.includes("wk"))) return "four_week_impressions";
-    if (h.includes("week") || h.includes("wk") || h.includes("weekly")) return "weekly_impressions";
-  }
-  return null;
-}
+import { norm, fuzzyFieldFor } from "./headerMatch.ts";
 
 function buildHeaderIndexFrom(row: any[], map: Record<string, string>): Record<string, number> {
   const lookup: Record<string, string> = {};
@@ -560,7 +533,7 @@ Deno.serve(async (req) => {
       const wb = XLSX.read(buf, { type: "array", cellStyles: true, cellDates: false });
 
       // Detect the workbook format:
-      //   Type A — standard "RFP Template" (≥8 standard headers in rows 0-4)
+      //   Type A — standard "RFP Template" (≥8 standard headers in rows 0-11)
       //   Type B — CCO: header row contains "Panel ID" + "Display Size (h x w)"
       //   Type C — OFM: sheet named "Location List" OR header row (rows 0-11)
       //                  with "Inventory #" + "Location Description"
@@ -574,7 +547,9 @@ Deno.serve(async (req) => {
       for (const sn of wb.SheetNames) {
         const ws = wb.Sheets[sn];
         const grid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: null });
-        for (let r = 0; r < Math.min(grid.length, 5); r++) {
+        // Scan 12 rows, not 5 — vendor sheets often carry a logo/title block
+        // above the real header row.
+        for (let r = 0; r < Math.min(grid.length, 12); r++) {
           const idx = buildHeaderIndex(grid[r]);
           if (Object.keys(idx).length >= 8) {
             chosen = ws; headerRow = r; headerIdx = idx; formatKind = "A";

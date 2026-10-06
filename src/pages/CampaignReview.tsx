@@ -2144,8 +2144,16 @@ export default function CampaignReview() {
           </p>
         </div>
       ) : units.length === 0 ? (
-        <div className="surface-card p-12 text-center">
-          <p className="text-sm text-muted-foreground">No units parsed yet.</p>
+        <div className="surface-card flex flex-col items-center gap-3 p-12 text-center">
+          <AlertTriangle className="h-6 w-6 text-amber-600" />
+          <h3 className="font-heading">No units were read from this campaign</h3>
+          {/* The skip reason only comes back on the response from a manual
+              re-parse, so an empty campaign has to point the user at it —
+              otherwise this screen says nothing about what went wrong. */}
+          <p className="max-w-md text-sm text-muted-foreground">
+            Click <span className="font-medium text-foreground">Re-parse</span> above to see which
+            file could not be read and why.
+          </p>
         </div>
       ) : (
         <>

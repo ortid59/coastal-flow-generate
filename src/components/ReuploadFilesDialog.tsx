@@ -131,8 +131,11 @@ export function ReuploadFilesDialog({ open, onOpenChange, campaignId, onDone }: 
       // backend memory limits.
       (async () => {
         try {
-          if (excels.length) {
-            setStep("Re-parsing Excel quotes…");
+          // Run on ANY re-upload, not just Excel. Photos added on their own
+          // still need the parse pass to match them to units by filename —
+          // gating this on excels.length left photo-only uploads unattached.
+          if (records.length) {
+            setStep(excels.length ? "Re-parsing Excel quotes…" : "Matching photos to units…");
             await supabase.functions.invoke("parse-excel", { body: { campaign_id: campaignId } });
           }
         } finally {

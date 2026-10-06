@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload } from "lucide-react";
+import { pdfFirstPageToPng } from "@/lib/pdfFirstPage";
 
 type Props = {
   campaignId: string;
@@ -11,7 +12,7 @@ type Props = {
   onUploaded: () => void;
 };
 
-async function getImageWidth(file: File): Promise<number> {
+async function getImageWidth(file: Blob): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -36,8 +37,8 @@ export function UnitPhotoUpload({ campaignId, unitId, unitNumber, onUploaded }: 
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
-      toast({ title: "Unsupported file", description: "JPG, PNG, or WEBP only.", variant: "destructive" });
+    if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name)) {
+      toast({ title: "Unsupported file", description: "JPG, PNG, WEBP, or PDF.", variant: "destructive" });
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
@@ -46,16 +47,20 @@ export function UnitPhotoUpload({ campaignId, unitId, unitNumber, onUploaded }: 
     }
     setBusy(true);
     try {
-      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      // A photo supplied as a one-page PDF is rendered to PNG first so it
+      // stores, signs and prints exactly like a JPG would.
+      const isPdf = /\.pdf$/i.test(file.name);
+      const body: Blob = isPdf ? await pdfFirstPageToPng(file) : file;
+      const safe = file.name.replace(/\.pdf$/i, ".png").replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${campaignId}/manual/${unitId}/${Date.now()}-${safe}`;
-      const up = await supabase.storage.from("photos").upload(path, file, { upsert: true });
+      const up = await supabase.storage.from("photos").upload(path, body, { upsert: true });
       if (up.error) throw up.error;
 
       // Sign for 1 year
       const signed = await supabase.storage.from("photos").createSignedUrl(path, 60 * 60 * 24 * 365);
       if (signed.error || !signed.data?.signedUrl) throw signed.error ?? new Error("Couldn't sign URL");
 
-      const width = await getImageWidth(file);
+      const width = await getImageWidth(body);
       const lowRes = width > 0 && width < 800;
 
       const { error: updErr } = await supabase
@@ -81,7 +86,7 @@ export function UnitPhotoUpload({ campaignId, unitId, unitNumber, onUploaded }: 
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         onChange={onFile}
       />

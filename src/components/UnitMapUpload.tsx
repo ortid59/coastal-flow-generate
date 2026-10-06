@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, MapPin } from "lucide-react";
+import { pdfFirstPageToPng } from "@/lib/pdfFirstPage";
 
 type Props = {
   campaignId: string;
@@ -20,8 +21,8 @@ export function UnitMapUpload({ campaignId, unitId, unitNumber, onUploaded }: Pr
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
-      toast({ title: "Unsupported file", description: "JPG, PNG, or WEBP only.", variant: "destructive" });
+    if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name)) {
+      toast({ title: "Unsupported file", description: "JPG, PNG, WEBP, or PDF.", variant: "destructive" });
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -30,9 +31,13 @@ export function UnitMapUpload({ campaignId, unitId, unitNumber, onUploaded }: Pr
     }
     setBusy(true);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      // Media owners often send the unit map as a one-page PDF. Render page 1
+      // to PNG so it stores and prints like any other map image.
+      const isPdf = /\.pdf$/i.test(file.name);
+      const body: Blob = isPdf ? await pdfFirstPageToPng(file) : file;
+      const ext = isPdf ? "png" : (file.name.split(".").pop()?.toLowerCase() || "jpg");
       const path = `${campaignId}/${unitId}/map-${Date.now()}.${ext}`;
-      const up = await supabase.storage.from("minimaps").upload(path, file, { upsert: true });
+      const up = await supabase.storage.from("minimaps").upload(path, body, { upsert: true });
       if (up.error) throw up.error;
       const { data: pub } = supabase.storage.from("minimaps").getPublicUrl(path);
 
@@ -56,7 +61,7 @@ export function UnitMapUpload({ campaignId, unitId, unitNumber, onUploaded }: Pr
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         onChange={onFile}
       />
