@@ -112,7 +112,15 @@ export function EditableCell({
     setOpen(false);
   };
 
-  const hint = multiline ? "Ctrl+Enter to save · Esc to cancel" : "Enter to save · Esc to cancel";
+  // Only the numeric columns are genuinely one line. Everything else holds
+  // prose — the address falls back to the location description, which runs to
+  // a full paragraph — so it gets a wrapped, multi-row box you can read.
+  const useTextarea = multiline || align !== "right";
+  const hint = multiline
+    ? "Ctrl+Enter to save · Esc to cancel"
+    : useTextarea
+      ? "Enter to save · Shift+Enter for a new line · Esc to cancel"
+      : "Enter to save · Esc to cancel";
 
   const fieldProps = {
     ref: fieldRef as any,
@@ -124,7 +132,7 @@ export function EditableCell({
       if (e.key === "Escape") {
         e.preventDefault();
         cancel();
-      } else if (e.key === "Enter" && (!multiline || e.metaKey || e.ctrlKey)) {
+      } else if (e.key === "Enter" && !e.shiftKey && (!multiline || e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         void commit();
       }
@@ -164,7 +172,7 @@ export function EditableCell({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[460px] max-w-[92vw] p-3"
+        className="w-[620px] max-w-[94vw] p-3"
         onClick={(e) => e.stopPropagation()}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -175,7 +183,11 @@ export function EditableCell({
         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           {label ?? title ?? prettyColumn(column)}
         </div>
-        {multiline ? <textarea rows={6} {...fieldProps} /> : <input type="text" {...fieldProps} />}
+        {useTextarea ? (
+          <textarea rows={multiline ? 8 : 3} {...fieldProps} className={`${fieldProps.className} resize-y`} />
+        ) : (
+          <input type="text" {...fieldProps} className={`${fieldProps.className} text-right`} />
+        )}
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-[10px] text-muted-foreground">{hint}</span>
           <div className="flex gap-1.5">

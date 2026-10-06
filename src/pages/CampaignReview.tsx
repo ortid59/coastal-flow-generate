@@ -2648,6 +2648,7 @@ export default function CampaignReview() {
                               unitId={u.id}
                               column="address"
                               label="Address"
+                              multiline
                               raw={u.address ?? displayAddress(u) ?? ""}
                               title="Address line shown on the proposal"
                               display={
