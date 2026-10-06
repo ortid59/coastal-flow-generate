@@ -42,6 +42,7 @@ import { cleanHighlight } from "@/lib/cleanHighlight";
 import { LogoReplace } from "@/components/LogoReplace";
 import { Progress } from "@/components/ui/progress";
 import { parseShortAddress, displayAddress } from "@/lib/shortAddress";
+import { EditableCell, parseNumber } from "@/components/EditableCell";
 
 type Campaign = {
   id: string;
@@ -539,6 +540,10 @@ export default function CampaignReview() {
   // row is mid-write. Both are unit ids.
   const [dragOverUnit, setDragOverUnit] = useState<string | null>(null);
   const [photoBusyUnit, setPhotoBusyUnit] = useState<string | null>(null);
+
+  // Apply an inline edit to local state so the grid updates without a reload.
+  const patchUnit = (unitId: string, patch: Partial<Unit>) =>
+    setUnits((prev) => prev.map((x) => (x.id === unitId ? { ...x, ...patch } : x)));
 
   const handlePhotoDrop = async (e: React.DragEvent, target: Unit) => {
     const hasFiles = dragHasFiles(e.dataTransfer);
@@ -2584,7 +2589,13 @@ export default function CampaignReview() {
                           </td>
                           <td className="px-2 py-2 align-top font-medium">
                             <div className="flex items-center gap-1 flex-wrap">
-                              <span className="truncate">{u.unit_number}</span>
+                              <EditableCell
+                                unitId={u.id}
+                                column="unit_number"
+                                raw={u.unit_number ?? ""}
+                                display={<span className="block truncate">{u.unit_number || "—"}</span>}
+                                onSaved={(v) => patchUnit(u.id, { unit_number: v })}
+                              />
                               {u.recommended && (
                                 <Badge className="bg-success/15 text-success border border-success/30 gap-0.5 px-1 py-0 text-[9px]">
                                   <Sparkles className="h-2.5 w-2.5" /> Rec
@@ -2594,32 +2605,73 @@ export default function CampaignReview() {
                                 <MapPin className="h-2.5 w-2.5 text-[hsl(var(--accent-gold))]" />
                               )}
                             </div>
-                            <div className="text-[10px] text-muted-foreground truncate">{u.vendor}</div>
+                            <EditableCell
+                              unitId={u.id}
+                              column="vendor"
+                              raw={u.vendor ?? ""}
+                              display={<span className="block truncate text-[10px] text-muted-foreground">{u.vendor || "—"}</span>}
+                              onSaved={(v) => patchUnit(u.id, { vendor: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top text-muted-foreground">
-                            <span className="block truncate">{u.market ?? "—"}</span>
+                            <EditableCell
+                              unitId={u.id}
+                              column="market"
+                              raw={u.market ?? ""}
+                              display={<span className="block truncate">{u.market ?? "—"}</span>}
+                              onSaved={(v) => patchUnit(u.id, { market: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top">
-                            <div className="truncate">{u.format ?? "—"}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              {u.size ?? ""}
-                            </div>
+                            <EditableCell
+                              unitId={u.id}
+                              column="format"
+                              raw={u.format ?? ""}
+                              display={<span className="block truncate">{u.format ?? "—"}</span>}
+                              onSaved={(v) => patchUnit(u.id, { format: v })}
+                            />
+                            <EditableCell
+                              unitId={u.id}
+                              column="size"
+                              raw={u.size ?? ""}
+                              display={<span className="block truncate text-[10px] text-muted-foreground">{u.size || "—"}</span>}
+                              onSaved={(v) => patchUnit(u.id, { size: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top">
-                            <div className="font-medium text-foreground break-words leading-snug">
-                              {displayAddress(u) || "—"}
-                            </div>
-                            <div
-                              className="mt-0.5 text-[10px] text-muted-foreground leading-snug break-words"
-                              style={{
-                                display: "-webkit-box",
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: "vertical",
-                                overflow: "hidden",
-                              }}
-                            >
-                              {u.location_description ?? ""}
-                            </div>
+                            <EditableCell
+                              unitId={u.id}
+                              column="address"
+                              raw={u.address ?? displayAddress(u) ?? ""}
+                              title="Address line shown on the proposal"
+                              display={
+                                <span className="block font-medium text-foreground break-words leading-snug">
+                                  {displayAddress(u) || "—"}
+                                </span>
+                              }
+                              onSaved={(v) => patchUnit(u.id, { address: v })}
+                            />
+                            <EditableCell
+                              unitId={u.id}
+                              column="location_description"
+                              raw={u.location_description ?? ""}
+                              multiline
+                              title="Location description — Enter for a new line, Ctrl+Enter to save"
+                              display={
+                                <span
+                                  className="mt-0.5 block text-[10px] text-muted-foreground leading-snug break-words"
+                                  style={{
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {u.location_description || "Click to add a description"}
+                                </span>
+                              }
+                              onSaved={(v) => patchUnit(u.id, { location_description: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top max-w-[200px]" onClick={(e) => e.stopPropagation()}>
                             <HighlightsCell
@@ -2634,19 +2686,71 @@ export default function CampaignReview() {
                             />
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
-                            {fmtNum(u.four_week_impressions)}
+                            <EditableCell
+                              unitId={u.id}
+                              column="four_week_impressions"
+                              raw={u.four_week_impressions == null ? "" : String(u.four_week_impressions)}
+                              align="right"
+                              parse={parseNumber}
+                              display={<span>{fmtNum(u.four_week_impressions)}</span>}
+                              onSaved={(v) => patchUnit(u.id, { four_week_impressions: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="4-week rate shown in the client Portal (negotiated × margin)">
-                            {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}
+                            <EditableCell
+                              unitId={u.id}
+                              column="negotiated_rate_4wk"
+                              raw={
+                                u.negotiated_rate_4wk == null
+                                  ? ""
+                                  : String(Math.round((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100))))
+                              }
+                              align="right"
+                              title="Client-facing 4-week rate. Type what the client should see — the negotiated rate is back-calculated from the campaign margin."
+                              parse={(t) => {
+                                const n = parseNumber(t);
+                                if (n === undefined) return undefined;
+                                if (n === null) return null;
+                                return Math.round(Number(n) / (1 + ((campaign?.margin_pct ?? 20) / 100)));
+                              }}
+                              display={<span>{fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)))}</span>}
+                              onSaved={(v) => patchUnit(u.id, { negotiated_rate_4wk: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px] text-muted-foreground" title="Flight length in weeks (four_week_periods × 4)">
-                            {`${Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4)} wks`}
+                            <EditableCell
+                              unitId={u.id}
+                              column="four_week_periods"
+                              raw={String(Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4))}
+                              align="right"
+                              title="Flight length in weeks"
+                              parse={(t) => {
+                                const n = parseNumber(t);
+                                if (n === undefined) return undefined;
+                                if (n === null) return null;
+                                const weeks = Number(n);
+                                if (weeks <= 0) return undefined;
+                                return weeks / 4;
+                              }}
+                              display={
+                                <span>{`${Math.round((u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1) * 4)} wks`}</span>
+                              }
+                              onSaved={(v) => patchUnit(u.id, { four_week_periods: v })}
+                            />
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]" title="Margin-applied flight total (matches the client proposal)">
                             {fmtMoney((u.negotiated_rate_4wk ?? 0) * (1 + ((campaign?.margin_pct ?? 20) / 100)) * (u.four_week_periods && u.four_week_periods > 0 ? u.four_week_periods : 1))}
                           </td>
                           <td className="px-2 py-2 align-top text-right tabular-nums text-[11px]">
-                            {u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}
+                            <EditableCell
+                              unitId={u.id}
+                              column="cpm"
+                              raw={u.cpm == null ? "" : String(u.cpm)}
+                              align="right"
+                              parse={parseNumber}
+                              display={<span>{u.cpm == null ? "—" : `$${u.cpm.toFixed(2)}`}</span>}
+                              onSaved={(v) => patchUnit(u.id, { cpm: v })}
+                            />
                           </td>
                           <td
                             className={`px-2 py-2 align-top text-center border-l border-border ${isHighlighted ? "bg-[hsl(var(--accent-gold)/0.10)]" : "bg-muted/30"}`}
