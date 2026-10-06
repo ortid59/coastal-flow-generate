@@ -24,6 +24,15 @@ import {
 } from "lucide-react";
 import { UnitPhotoUpload } from "@/components/UnitPhotoUpload";
 import { UnitMapUpload } from "@/components/UnitMapUpload";
+import {
+  PHOTO_DND_TYPE,
+  dragHasFiles,
+  dragHasPhoto,
+  isSupportedPhoto,
+  moveUnitPhoto,
+  readDraggedPhoto,
+  uploadUnitPhoto,
+} from "@/lib/unitPhoto";
 import { SharePortalDialog } from "@/components/SharePortalDialog";
 import { ReuploadFilesDialog } from "@/components/ReuploadFilesDialog";
 import { CampaignFilesHistory } from "@/components/CampaignFilesHistory";
@@ -526,6 +535,65 @@ export default function CampaignReview() {
   const [skippedFiles, setSkippedFiles] = useState<{ name: string; reason: string }[]>([]);
   const [unmatchedImages, setUnmatchedImages] = useState<{ name: string; path: string; signedUrl: string | null }[]>([]);
   const [assigningImage, setAssigningImage] = useState<string | null>(null);
+  // Drag-and-drop photo assignment: which row is under the cursor, and which
+  // row is mid-write. Both are unit ids.
+  const [dragOverUnit, setDragOverUnit] = useState<string | null>(null);
+  const [photoBusyUnit, setPhotoBusyUnit] = useState<string | null>(null);
+
+  const handlePhotoDrop = async (e: React.DragEvent, target: Unit) => {
+    const hasFiles = dragHasFiles(e.dataTransfer);
+    const hasPhoto = dragHasPhoto(e.dataTransfer);
+    if (!hasFiles && !hasPhoto) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverUnit(null);
+    if (!id) return;
+
+    setPhotoBusyUnit(target.id);
+    try {
+      if (hasFiles) {
+        const file = Array.from(e.dataTransfer.files).find(isSupportedPhoto);
+        if (!file) {
+          toast({
+            title: "Unsupported file",
+            description: "Drop a JPG, PNG, WEBP, or single-page PDF.",
+            variant: "destructive",
+          });
+          return;
+        }
+        const { lowRes } = await uploadUnitPhoto(id, target.id, file);
+        toast({
+          title: `Photo set for ${target.unit_number}`,
+          description: lowRes ? "Marked low-res — under 800px wide." : undefined,
+        });
+      } else {
+        const dragged = readDraggedPhoto(e.dataTransfer);
+        if (!dragged || dragged.unitId === target.id) return;
+        const result = await moveUnitPhoto(dragged, {
+          unitId: target.id,
+          url: target.billboard_photo_url,
+          lowRes: !!target.low_res_flag,
+        });
+        toast({
+          title: result === "swapped" ? "Photos swapped" : `Photo moved to ${target.unit_number}`,
+          description:
+            result === "swapped"
+              ? `${target.unit_number} and the other unit traded photos.`
+              : undefined,
+        });
+      }
+      await load();
+    } catch (err: any) {
+      toast({
+        title: "Could not set photo",
+        description: err?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoBusyUnit(null);
+    }
+  };
+
   const assignUnmatchedImage = async (img: { name: string; path: string }, unitId: string) => {
     if (!id) return;
     setAssigningImage(img.path);
@@ -2337,7 +2405,13 @@ export default function CampaignReview() {
                   </colgroup>
                   <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-2 py-2.5 text-left">Photo · Map</th>
+                      <th
+                        className="px-2 py-2.5 text-left"
+                        title="Drop an image file onto a row to set its photo, or drag a photo from one row to another to re-assign it. Dropping onto a row that already has a photo swaps the two."
+                      >
+                        Photo · Map
+                        <span className="ml-1 normal-case tracking-normal text-muted-foreground/70">— drag to re-assign</span>
+                      </th>
                       <th className="px-2 py-2.5 text-left">Unit</th>
                       <th className="px-2 py-2.5 text-left">Market</th>
                       <th className="px-2 py-2.5 text-left">Format</th>
@@ -2382,7 +2456,26 @@ export default function CampaignReview() {
                         <tr
                           key={u.id}
                           onClick={() => setHighlightedId(u.id)}
-                          className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${isHighlighted ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]" : "hover:bg-muted/30"}`}
+                          onDragOver={(e) => {
+                            if (!dragHasFiles(e.dataTransfer) && !dragHasPhoto(e.dataTransfer)) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = dragHasFiles(e.dataTransfer) ? "copy" : "move";
+                            if (dragOverUnit !== u.id) setDragOverUnit(u.id);
+                          }}
+                          onDragLeave={(e) => {
+                            // Only clear when the cursor actually leaves the row,
+                            // not when it crosses between cells inside it.
+                            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                            setDragOverUnit((cur) => (cur === u.id ? null : cur));
+                          }}
+                          onDrop={(e) => handlePhotoDrop(e, u)}
+                          className={`cursor-pointer transition-colors ${u.recommended && !excluded ? "bg-success/5" : ""} ${excluded ? "opacity-50" : ""} ${
+                            dragOverUnit === u.id
+                              ? "ring-2 ring-inset ring-[hsl(var(--ocean))] bg-[hsl(var(--ocean)/0.08)]"
+                              : isHighlighted
+                                ? "ring-2 ring-inset ring-[hsl(var(--accent-gold))] bg-[hsl(var(--accent-gold)/0.06)]"
+                                : "hover:bg-muted/30"
+                          }`}
                         >
                           <td className="px-2 py-2 align-top">
                             <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -2390,11 +2483,26 @@ export default function CampaignReview() {
                                 {/* Billboard photo */}
                                 <div className="flex flex-col items-center gap-0.5">
                                   {u.billboard_photo_url ? (
-                                    <div className="relative h-10 w-14 overflow-hidden rounded bg-muted">
+                                    <div
+                                      draggable={!photoBusyUnit}
+                                      onDragStart={(e) => {
+                                        e.dataTransfer.setData(
+                                          PHOTO_DND_TYPE,
+                                          JSON.stringify({
+                                            unitId: u.id,
+                                            url: u.billboard_photo_url,
+                                            lowRes: !!u.low_res_flag,
+                                          }),
+                                        );
+                                        e.dataTransfer.effectAllowed = "move";
+                                      }}
+                                      title="Drag onto another unit to move this photo"
+                                      className="relative h-10 w-14 cursor-grab overflow-hidden rounded bg-muted active:cursor-grabbing"
+                                    >
                                       <img
                                         src={u.billboard_photo_url}
                                         alt={`Unit ${u.unit_number}`}
-                                        className="h-full w-full object-cover"
+                                        className="pointer-events-none h-full w-full object-cover"
                                         loading="lazy"
                                       />
                                       {u.low_res_flag && (
@@ -2405,13 +2513,24 @@ export default function CampaignReview() {
                                           <AlertCircle className="h-2 w-2" />
                                         </span>
                                       )}
+                                      {photoBusyUnit === u.id && (
+                                        <span className="absolute inset-0 flex items-center justify-center bg-background/70">
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        </span>
+                                      )}
                                     </div>
                                   ) : (
                                     <div
-                                      className="flex h-10 w-14 items-center justify-center rounded bg-muted text-muted-foreground"
-                                      title="No photo"
+                                      className={`flex h-10 w-14 items-center justify-center rounded border border-dashed text-muted-foreground ${
+                                        dragOverUnit === u.id ? "border-[hsl(var(--ocean))] bg-[hsl(var(--ocean)/0.12)]" : "border-transparent bg-muted"
+                                      }`}
+                                      title="No photo — drop an image here, or drag one from another unit"
                                     >
-                                      <ImageOff className="h-3 w-3" />
+                                      {photoBusyUnit === u.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <ImageOff className="h-3 w-3" />
+                                      )}
                                     </div>
                                   )}
                                   <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Photo</span>
