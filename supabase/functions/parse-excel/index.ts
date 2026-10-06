@@ -680,12 +680,15 @@ Deno.serve(async (req) => {
           unit_number: trimmedUnit,
           recommended,
           included: true,
-          vendor: (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null,
           // Position of this row within its sheet (0-based, in Excel order).
           // Used by photo extraction for order-strategy vendors (CCO / Lamar /
           // Be Seen) so page N of the deck maps to the Nth Excel row.
           row_index: i,
         };
+        // Only set vendor when we actually have one — never overwrite a stored
+        // vendor with null (e.g. a duplicate upload whose card had no vendor).
+        const resolvedVendor = (headerIdx["vendor"] != null && r[headerIdx["vendor"]]) || f.vendor || null;
+        if (resolvedVendor) row.vendor = resolvedVendor;
 
         for (const [field, idx] of Object.entries(headerIdx)) {
           if (field === "unit_number" || field === "vendor") continue;
@@ -797,13 +800,19 @@ Deno.serve(async (req) => {
         // admin edits because we match on (campaign_id, unit_number).
         for (let i = 0; i < deduped.length; i += 200) {
           const chunk = deduped.slice(i, i + 200);
-          const { error: insErr } = await supabase
-            .from("units")
-            .upsert(chunk, {
-              onConflict: "campaign_id,unit_number",
-              ignoreDuplicates: false,
-            });
-          if (insErr) throw insErr;
+          // Split so rows without a vendor key are upserted separately; a mixed
+          // batch would make the client send vendor=null for those rows.
+          const groups = [chunk.filter((x: any) => "vendor" in x), chunk.filter((x: any) => !("vendor" in x))];
+          for (const g of groups) {
+            if (!g.length) continue;
+            const { error: insErr } = await supabase
+              .from("units")
+              .upsert(g, {
+                onConflict: "campaign_id,unit_number",
+                ignoreDuplicates: false,
+              });
+            if (insErr) throw insErr;
+          }
         }
       }
 
@@ -951,6 +960,77 @@ Deno.serve(async (req) => {
       summary.total_overview_images += overviewImages;
     }
 
+    // ---- Attach standalone uploaded images to units by filename. ----
+    // Never deletes anything: files are only read and copied.
+    const unmatchedImages: { name: string; path: string; signedUrl: string | null }[] = [];
+    let standaloneMatched = 0;
+    try {
+      const { data: imgFiles } = await supabase
+        .from("vendor_files")
+        .select("storage_path, original_name")
+        .eq("campaign_id", campaignId)
+        .eq("kind", "image");
+      if (imgFiles && imgFiles.length) {
+        const { data: unitRows } = await supabase
+          .from("units")
+          .select("id, unit_number, billboard_photo_url")
+          .eq("campaign_id", campaignId);
+        const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const codesOf = (v: string) =>
+          (v.match(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g) ?? []).map(norm).filter((c) => c.length >= 3);
+        const units = (unitRows ?? []).map((u: any) => ({ ...u, n: norm(String(u.unit_number ?? "")) }));
+        for (const img of imgFiles) {
+          const name = img.original_name ?? img.storage_path.split("/").pop() ?? "";
+          const extMatch = name.match(/\.([A-Za-z0-9]+)$/);
+          const ext = (extMatch?.[1] ?? "jpg").toLowerCase();
+          const stem = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/(\s*\(\d+\))+\s*$/, "");
+          const ni = norm(stem);
+          const imgCodes = codesOf(stem);
+          const hit = ni
+            ? units.find((u: any) => {
+                if (!u.n) return false;
+                if (u.n === ni || ni.includes(u.n) || u.n.includes(ni)) return true;
+                return imgCodes.some((c) => ni.includes(c) && u.n.includes(c));
+              })
+            : undefined;
+          let placed = false;
+          if (hit) {
+            placed = true; // matched a unit
+            if (!hit.billboard_photo_url) {
+              try {
+                const dl = await supabase.storage.from("uploads").download(img.storage_path);
+                if (dl.error || !dl.data) throw dl.error ?? new Error("download failed");
+                const dest = `${campaignId}/${hit.id}.${ext}`;
+                const up = await supabase.storage.from("photos").upload(dest, dl.data, {
+                  upsert: true,
+                  contentType: ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg",
+                });
+                if (up.error) throw up.error;
+                // The photos bucket is private, so use a long-lived signed URL.
+                const signed = await supabase.storage.from("photos").createSignedUrl(dest, 60 * 60 * 24 * 365);
+                const url = signed.data?.signedUrl;
+                if (url) {
+                  await supabase.from("units").update({ billboard_photo_url: url }).eq("id", hit.id).is("billboard_photo_url", null);
+                  hit.billboard_photo_url = url;
+                }
+              } catch (e) {
+                console.warn(`[parse-excel] attach image ${name} failed`, e);
+              }
+            }
+          }
+          if (placed) standaloneMatched++;
+          else {
+            const s = await supabase.storage.from("uploads").createSignedUrl(img.storage_path, 3600);
+            unmatchedImages.push({ name, path: img.storage_path, signedUrl: s.data?.signedUrl ?? null });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[parse-excel] standalone image matching failed", e);
+    }
+    (summary as any).standalone_images_matched = standaloneMatched;
+    (summary as any).standalone_images_unmatched = unmatchedImages.length;
+
     await supabase.from("campaigns").update({ status: "ready" }).eq("id", campaignId);
     if (jobId) {
       await supabase.from("jobs").update({
@@ -959,7 +1039,7 @@ Deno.serve(async (req) => {
       }).eq("id", jobId);
     }
 
-    return new Response(JSON.stringify({ ok: true, summary, skippedFiles }), {
+    return new Response(JSON.stringify({ ok: true, summary, skippedFiles, unmatchedImages }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {

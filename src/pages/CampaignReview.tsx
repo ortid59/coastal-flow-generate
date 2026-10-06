@@ -524,6 +524,34 @@ export default function CampaignReview() {
   const [loading, setLoading] = useState(true);
   const [reparsing, setReparsing] = useState(false);
   const [skippedFiles, setSkippedFiles] = useState<{ name: string; reason: string }[]>([]);
+  const [unmatchedImages, setUnmatchedImages] = useState<{ name: string; path: string; signedUrl: string | null }[]>([]);
+  const [assigningImage, setAssigningImage] = useState<string | null>(null);
+  const assignUnmatchedImage = async (img: { name: string; path: string }, unitId: string) => {
+    if (!id) return;
+    setAssigningImage(img.path);
+    try {
+      const dl = await supabase.storage.from("uploads").download(img.path);
+      if (dl.error || !dl.data) throw dl.error ?? new Error("Download failed");
+      const ext = (img.name.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "jpg").toLowerCase();
+      const dest = `${id}/${unitId}.${ext}`;
+      const up = await supabase.storage.from("photos").upload(dest, dl.data, {
+        upsert: true,
+        contentType: ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg",
+      });
+      if (up.error) throw up.error;
+      const signed = await supabase.storage.from("photos").createSignedUrl(dest, 60 * 60 * 24 * 365);
+      if (signed.error || !signed.data?.signedUrl) throw signed.error ?? new Error("Couldn't sign URL");
+      const { error: updErr } = await supabase.from("units").update({ billboard_photo_url: signed.data.signedUrl }).eq("id", unitId);
+      if (updErr) throw updErr;
+      setUnmatchedImages((prev) => prev.filter((x) => x.path !== img.path));
+      toast({ title: "Photo assigned" });
+      await load();
+    } catch (err: any) {
+      toast({ title: "Assignment failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    } finally {
+      setAssigningImage(null);
+    }
+  };
   const [extracting, setExtracting] = useState(false);
   const [extractingHl, setExtractingHl] = useState(false);
   const [extractionPaused, setExtractionPaused] = useState(false);
@@ -780,6 +808,7 @@ export default function CampaignReview() {
     const { data, error } = await supabase.functions.invoke("parse-excel", { body: { campaign_id: id } });
     setReparsing(false);
     setSkippedFiles(Array.isArray(data?.skippedFiles) ? data.skippedFiles : []);
+    setUnmatchedImages(Array.isArray(data?.unmatchedImages) ? data.unmatchedImages : []);
     if (error) toast({ title: "Parse failed", description: error.message, variant: "destructive" });
     else {
       toast({ title: "Parsing started" });
@@ -2057,6 +2086,43 @@ export default function CampaignReview() {
                 <span className="font-medium text-foreground">Could not read {f.name} - no recognised header row.</span>{" "}
                 Its column names do not match a format the parser knows.
               </p>
+            ))}
+          </div>
+        </div>
+      )}
+      {unmatchedImages.length > 0 && (
+        <div className="mb-6 rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+          <div className="mb-3 flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="font-medium text-foreground">
+              {unmatchedImages.length} uploaded photo{unmatchedImages.length === 1 ? "" : "s"} could not be matched to a unit. Pick the right unit for each:
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {unmatchedImages.map((img) => (
+              <div key={img.path} className="flex w-64 items-center gap-2 rounded-md border border-border bg-card p-2">
+                {img.signedUrl ? (
+                  <img src={img.signedUrl} alt={img.name} className="h-12 w-12 shrink-0 rounded object-cover" />
+                ) : (
+                  <div className="h-12 w-12 shrink-0 rounded bg-muted" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] text-muted-foreground" title={img.name}>{img.name}</p>
+                  <select
+                    className="mt-1 w-full rounded border border-input bg-background px-1 py-0.5 text-[11px] text-foreground"
+                    defaultValue=""
+                    disabled={assigningImage === img.path}
+                    onChange={(e) => e.target.value && assignUnmatchedImage(img, e.target.value)}
+                  >
+                    <option value="" disabled>{assigningImage === img.path ? "Assigning…" : "Assign to unit…"}</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.unit_number} - {u.location_description ?? ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             ))}
           </div>
         </div>
