@@ -53,6 +53,8 @@ function normalizeUnitToken(s: string): string {
 }
 
 // ---------- helpers ----------
+// deno-lint-ignore no-explicit-any
+declare const OffscreenCanvas: any;
 
 async function renderPageToPng(page: any, scaleFactor = RENDER_SCALE): Promise<{ png: Uint8Array; width: number; height: number }> {
   const viewport = page.getViewport({ scale: scaleFactor });
@@ -194,7 +196,7 @@ async function cropPng(
   pageW: number,
   pageH: number,
 ): Promise<Uint8Array> {
-  const img = await createImageBitmap(new Blob([fullPng], { type: "image/png" }));
+  const img = await createImageBitmap(new Blob([fullPng as BlobPart], { type: "image/png" }));
   const sx = Math.max(0, Math.round(pageW * crop.x));
   const sy = Math.max(0, Math.round(pageH * crop.y));
   const sw = Math.max(1, Math.round(pageW * crop.w));
